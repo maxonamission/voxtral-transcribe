@@ -3,18 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>Voxtral Transcribe</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icon-192.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icon-192.svg">
+    <link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
     <div class="container">
         <header>
             <div class="status">
+                <button id="btn-help" class="btn btn-icon" title="Stemcommando's">?</button>
                 <label class="toggle" title="Realtime of opname modus">
                     <input type="checkbox" id="mode-toggle" checked>
                     <span class="toggle-slider"></span>
                 </label>
                 <span id="status-text">Realtime</span>
+                <label class="toggle diarize-toggle" title="Sprekerherkenning (alleen opname)">
+                    <input type="checkbox" id="diarize-toggle">
+                    <span class="toggle-slider diarize-slider"></span>
+                </label>
+                <span id="diarize-label" class="diarize-label">Sprekers</span>
             </div>
             <div class="header-right">
                 <select id="delay-select" class="delay-select" title="Streaming delay">
@@ -23,6 +35,7 @@
                     <option value="1000" selected>1000ms (nauwkeurig)</option>
                     <option value="2400">2400ms (zeer nauwkeurig)</option>
                 </select>
+                <button id="btn-correct" class="btn" title="Controleer tekst">Controleer</button>
                 <button id="btn-copy" class="btn" title="Kopieer tekst">Kopieer</button>
                 <button id="btn-clear" class="btn" title="Wis tekst">Wis</button>
                 <button id="btn-settings" class="btn" title="Instellingen">&#9881;</button>
@@ -36,12 +49,51 @@
         </main>
 
         <footer>
-            <div id="replace-hint" class="replace-hint hidden">Selectie wordt vervangen</div>
-            <button id="btn-record" class="btn btn-record">Opnemen</button>
+            <div class="footer-left">
+                <button id="btn-record" class="btn btn-record">Opnemen</button>
+                <div id="replace-hint" class="replace-hint hidden">Selectie wordt vervangen</div>
+            </div>
             <div id="queue-info" class="queue-info hidden">
                 <span id="queue-count">0</span> opname(s) in wachtrij
             </div>
         </footer>
+    </div>
+
+    <!-- Help panel -->
+    <div id="help-panel" class="help-panel">
+        <div class="help-header">
+            <h2>Stemcommando's</h2>
+            <button id="btn-close-help" class="btn btn-icon">&#10005;</button>
+        </div>
+        <div class="help-content">
+            <h3>Structuur</h3>
+            <dl>
+                <dt>"nieuwe alinea" / "paragraaf"</dt><dd>Nieuwe paragraaf</dd>
+                <dt>"nieuwe regel"</dt><dd>Regelbreuk</dd>
+            </dl>
+            <h3>Koppen</h3>
+            <dl>
+                <dt>"kop een"</dt><dd># Heading 1</dd>
+                <dt>"kop twee"</dt><dd>## Heading 2</dd>
+                <dt>"kop drie"</dt><dd>### Heading 3</dd>
+            </dl>
+            <h3>Lijst</h3>
+            <dl>
+                <dt>"nieuw punt"</dt><dd>- Lijstitem</dd>
+                <dt>"nieuw to-do item"</dt><dd>- [ ] To-do item</dd>
+            </dl>
+            <h3>Bediening</h3>
+            <dl>
+                <dt>"beëindig opname"</dt><dd>Stopt de opname</dd>
+                <dt>"verwijder laatste alinea"</dt><dd>Verwijdert laatste paragraaf</dd>
+                <dt>"verwijder laatste regel"</dt><dd>Verwijdert laatste zin</dd>
+                <dt>"herstel"</dt><dd>Maakt laatste wis ongedaan</dd>
+            </dl>
+            <h3>Sneltoets</h3>
+            <dl>
+                <dt id="help-shortcut-display">Ctrl + Space</dt><dd>Start / stop opname</dd>
+            </dl>
+        </div>
     </div>
 
     <!-- Settings modal -->
@@ -55,6 +107,27 @@
             </div>
             <p id="settings-status" class="modal-status"></p>
             <p class="modal-hint">Maak een key aan op <a href="https://console.mistral.ai/api-keys" target="_blank">console.mistral.ai</a></p>
+
+            <label class="modal-label modal-label-spaced">Tekstcorrectie</label>
+            <label class="toggle-row">
+                <input type="checkbox" id="toggle-autocorrect">
+                <span>Automatisch corrigeren per alinea</span>
+            </label>
+            <label class="modal-label modal-label-spaced" for="input-system-prompt">Systeemprompt (jargon/context)</label>
+            <textarea id="input-system-prompt" class="modal-input modal-textarea" placeholder="Bijv: Gebruik 'AI' niet als 'ik'. Medische termen: anamnese, dyspneu, tachycardie..." rows="3"></textarea>
+            <p class="modal-hint">Extra instructies voor de tekstcorrector, bijv. vaktermen die niet gecorrigeerd mogen worden</p>
+
+            <label class="modal-label modal-label-spaced" for="select-microphone">Microfoon</label>
+            <select id="select-microphone" class="modal-input modal-select"></select>
+            <p class="modal-hint">Selecteer de microfoon voor opname</p>
+
+            <label class="modal-label modal-label-spaced" for="input-shortcut">Sneltoets opnemen</label>
+            <div class="modal-key-row">
+                <input type="text" id="input-shortcut" class="modal-input" placeholder="Druk gewenste toetscombinatie..." readonly>
+                <button id="btn-reset-shortcut" class="btn btn-small" title="Reset naar Ctrl+Space">&#8634;</button>
+            </div>
+            <p class="modal-hint">Klik in het veld en druk de gewenste toetscombinatie</p>
+
             <div class="modal-buttons">
                 <button id="btn-save-key" class="btn btn-primary">Opslaan</button>
                 <button id="btn-close-settings" class="btn">Sluiten</button>
@@ -64,6 +137,6 @@
 
     <div id="toast" class="toast hidden">Gekopieerd</div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=18"></script>
 </body>
 </html>

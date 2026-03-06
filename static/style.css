@@ -10,12 +10,15 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     height: 100vh;
     overflow: hidden;
+    display: flex;
 }
 
 .container {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    flex: 1;
+    min-width: 0;
     max-width: 900px;
     margin: 0 auto;
     padding: 1.5rem;
@@ -80,6 +83,37 @@ header {
 .toggle input:checked + .toggle-slider::before {
     transform: translateX(16px);
     background: #4ade80;
+}
+
+/* Diarize toggle — blue accent, hidden in realtime mode */
+.diarize-toggle,
+.diarize-label {
+    transition: opacity 0.25s, width 0.25s;
+}
+
+.diarize-toggle.hidden-toggle,
+.diarize-label.hidden-toggle {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.diarize-label {
+    font-size: 0.85rem;
+    color: #888;
+}
+
+.diarize-slider {
+    background: #333 !important;
+}
+
+.toggle input:checked + .diarize-slider {
+    background: rgba(99, 102, 241, 0.2) !important;
+}
+
+.toggle input:checked + .diarize-slider::before {
+    background: #6366f1 !important;
 }
 
 .header-right {
@@ -157,6 +191,7 @@ main {
     word-wrap: break-word;
     outline: none;
     min-height: 100%;
+    padding-bottom: 50vh; /* Keep active text in upper half, not stuck at bottom */
 }
 
 .transcript .placeholder {
@@ -176,6 +211,13 @@ main {
 .transcript .replacing {
     background: rgba(99, 102, 241, 0.15);
     border-bottom: 1px dashed #6366f1;
+}
+
+/* Speaker labels */
+.speaker-label {
+    color: #6366f1;
+    font-weight: 600;
+    font-size: 0.85em;
 }
 
 /* Replace hint */
@@ -198,14 +240,42 @@ main::-webkit-scrollbar-thumb {
     border-radius: 2px;
 }
 
+/* Header help button */
+.btn-icon {
+    background: none;
+    border: 1px solid #333;
+    color: #666;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.btn-icon:hover {
+    color: #f0f0f0;
+    border-color: #555;
+}
+
 /* Footer */
 footer {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.75rem;
+    justify-content: space-between;
+    align-items: flex-end;
     padding-top: 1rem;
     flex-shrink: 0;
+}
+
+.footer-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
 }
 
 .btn-record {
@@ -235,6 +305,83 @@ footer {
 
 .queue-info:hover {
     color: #999;
+}
+
+/* Help panel */
+.help-panel {
+    order: -1;
+    flex-shrink: 0;
+    width: 0;
+    height: 100vh;
+    background: #111;
+    border-right: 1px solid transparent;
+    overflow: hidden;
+    transition: width 0.25s ease, padding 0.25s ease, border-color 0.25s ease;
+    padding: 1.5rem 0;
+}
+
+.help-panel.visible {
+    width: 300px;
+    padding: 1.5rem;
+    border-right-color: #333;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #333 transparent;
+}
+
+.help-panel::-webkit-scrollbar {
+    width: 4px;
+}
+
+.help-panel::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.help-panel::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 2px;
+}
+
+.help-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.help-header h2 {
+    font-size: 1rem;
+    font-weight: 500;
+    color: #f0f0f0;
+}
+
+.help-content h3 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #555;
+    margin: 1.25rem 0 0.5rem;
+}
+
+.help-content h3:first-child {
+    margin-top: 0;
+}
+
+.help-content dl {
+    margin: 0;
+}
+
+.help-content dt {
+    font-size: 0.85rem;
+    color: #f0f0f0;
+    font-family: monospace;
+    margin-top: 0.4rem;
+}
+
+.help-content dd {
+    font-size: 0.8rem;
+    color: #666;
+    margin: 0 0 0.2rem;
 }
 
 /* Toast */
@@ -308,6 +455,20 @@ footer {
     border-color: #555;
 }
 
+.modal-select {
+    display: block;
+    width: 100%;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2rem;
+}
+
 .btn-small {
     padding: 0.4rem 0.6rem;
     font-size: 0.8rem;
@@ -326,6 +487,10 @@ footer {
     font-size: 0.8rem;
     color: #555;
     margin-top: 0.5rem;
+}
+
+.modal-label-spaced {
+    margin-top: 1.25rem;
 }
 
 .modal-hint a {
@@ -355,6 +520,86 @@ footer {
     background: #ddd;
     border-color: #ddd;
     color: #0a0a0a;
+}
+
+/* Toggle row (checkbox + label) */
+.toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: #ccc;
+    cursor: pointer;
+    margin-top: 0.4rem;
+}
+
+.toggle-row input[type="checkbox"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1px solid #555;
+    border-radius: 3px;
+    background: #1a1a1a;
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.toggle-row input[type="checkbox"]:checked {
+    background: rgba(74, 222, 128, 0.2);
+    border-color: #4ade80;
+}
+
+.toggle-row input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 5px;
+    height: 9px;
+    border: solid #4ade80;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+/* System prompt textarea */
+.modal-textarea {
+    display: block;
+    width: 100%;
+    resize: vertical;
+    min-height: 60px;
+    max-height: 150px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    scrollbar-width: thin;
+    scrollbar-color: #444 transparent;
+}
+
+.modal-textarea::-webkit-scrollbar {
+    width: 4px;
+}
+
+.modal-textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.modal-textarea::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 2px;
+}
+
+/* Correction flash animation */
+@keyframes correct-flash {
+    0% { background: rgba(74, 222, 128, 0.15); }
+    100% { background: transparent; }
+}
+
+.corrected {
+    animation: correct-flash 1.5s ease-out;
 }
 
 .hidden {

@@ -5,7 +5,54 @@ let audioContext = null;
 let mediaStream = null;
 let processorNode = null;
 let useRealtime = true;
+let useDiarize = false;
 let activeInsert = null; // span where incoming text is inserted
+let isMidSentenceInsert = false; // true when inserting inside a sentence (not after . ! ?)
+
+// ── Correction settings ──
+let autoCorrect = JSON.parse(localStorage.getItem("voxtral-autocorrect") || "false");
+let systemPrompt = localStorage.getItem("voxtral-system-prompt") || "";
+
+// ── Keyboard shortcut ──
+const DEFAULT_SHORTCUT = { ctrl: true, shift: false, alt: false, meta: false, key: " " };
+let recordShortcut = loadShortcut();
+
+function loadShortcut() {
+    try {
+        const stored = localStorage.getItem("voxtral-shortcut");
+        if (stored) return JSON.parse(stored);
+    } catch {}
+    return { ...DEFAULT_SHORTCUT };
+}
+
+function saveShortcut(sc) {
+    recordShortcut = sc;
+    localStorage.setItem("voxtral-shortcut", JSON.stringify(sc));
+    updateShortcutDisplays();
+}
+
+function shortcutLabel(sc) {
+    const parts = [];
+    if (sc.ctrl) parts.push("Ctrl");
+    if (sc.alt) parts.push("Alt");
+    if (sc.shift) parts.push("Shift");
+    if (sc.meta) parts.push("Meta");
+    const keyName = sc.key === " " ? "Space" : sc.key.length === 1 ? sc.key.toUpperCase() : sc.key;
+    parts.push(keyName);
+    return parts.join("+");
+}
+
+function updateShortcutDisplays() {
+    const label = shortcutLabel(recordShortcut);
+    const helpEl = document.getElementById("help-shortcut-display");
+    if (helpEl) helpEl.textContent = label.replace(/\+/g, " + ");
+}
+
+function matchesShortcut(e, sc) {
+    return e.ctrlKey === sc.ctrl && e.shiftKey === sc.shift
+        && e.altKey === sc.alt && e.metaKey === sc.meta
+        && e.key === sc.key;
+}
 
 // ── DOM ──
 const transcript = document.getElementById("transcript");
@@ -15,6 +62,17 @@ const btnClear = document.getElementById("btn-clear");
 const modeToggle = document.getElementById("mode-toggle");
 const statusText = document.getElementById("status-text");
 const delaySelect = document.getElementById("delay-select");
+
+// Restore saved delay from localStorage
+const savedDelay = localStorage.getItem("voxtral-delay");
+if (savedDelay && [...delaySelect.options].some(o => o.value === savedDelay)) {
+    delaySelect.value = savedDelay;
+}
+
+// Persist delay when changed
+delaySelect.addEventListener("change", () => {
+    localStorage.setItem("voxtral-delay", delaySelect.value);
+});
 const replaceHint = document.getElementById("replace-hint");
 const queueInfo = document.getElementById("queue-info");
 const queueCount = document.getElementById("queue-count");
@@ -24,10 +82,17 @@ const inputApiKey = document.getElementById("input-apikey");
 const settingsStatus = document.getElementById("settings-status");
 
 // ── Mode toggle ──
+const diarizeToggle = document.getElementById("diarize-toggle");
+const diarizeLabel = document.getElementById("diarize-label");
+
 function updateModeUI() {
     if (isRecording) return;
     statusText.textContent = useRealtime ? "Realtime" : "Opname";
     delaySelect.disabled = !useRealtime;
+    // Diarize toggle: only visible in opname (batch) mode
+    const showDiarize = !useRealtime;
+    diarizeToggle.closest(".toggle").classList.toggle("hidden-toggle", !showDiarize);
+    diarizeLabel.classList.toggle("hidden-toggle", !showDiarize);
 }
 
 modeToggle.addEventListener("change", () => {
@@ -36,13 +101,21 @@ modeToggle.addEventListener("change", () => {
     updateModeUI();
 });
 
+diarizeToggle.addEventListener("change", () => {
+    if (isRecording) { diarizeToggle.checked = useDiarize; return; }
+    useDiarize = diarizeToggle.checked;
+});
+
 // ── Active insert point management ──
 // This is the core concept: a single span that receives all incoming text.
 // By default it's at the end. Click in the transcript to move it.
 // Select text to replace it.
 
 function ensureInsertPoint() {
-    if (activeInsert && activeInsert.parentNode) return activeInsert;
+    // Must be inside transcript specifically — not just any parentNode
+    if (activeInsert && transcript.contains(activeInsert)) return activeInsert;
+    // If activeInsert exists but escaped transcript, remove it from wherever it is
+    if (activeInsert && activeInsert.parentNode) activeInsert.remove();
     activeInsert = document.createElement("span");
     activeInsert.className = "partial";
     transcript.appendChild(activeInsert);
@@ -112,16 +185,250 @@ function capitalizeAfterSentenceEnd(node) {
 
 function finalizeInsertPoint() {
     if (activeInsert) {
-        // Auto-space: add trailing space if needed before next text
-        if (activeInsert.textContent && needsSpaceAfter(activeInsert)) {
-            activeInsert.textContent += " ";
+        if (activeInsert.textContent) {
+            // Mid-sentence: strip trailing punctuation added by the API
+            if (isMidSentenceInsert) {
+                activeInsert.textContent = activeInsert.textContent.replace(/[.!?]+\s*$/, "");
+            }
+            // Auto-space: add trailing space if needed before next text
+            if (needsSpaceAfter(activeInsert)) {
+                activeInsert.textContent += " ";
+            }
+            // Auto-capitalize: uppercase first letter of next text after . ! ?
+            if (!isMidSentenceInsert) {
+                capitalizeAfterSentenceEnd(activeInsert);
+            }
         }
-        // Auto-capitalize: uppercase first letter of next text after . ! ?
-        capitalizeAfterSentenceEnd(activeInsert);
         activeInsert.classList.remove("partial", "replacing");
         activeInsert = null;
+        isMidSentenceInsert = false;
     }
     replaceHint.classList.add("hidden");
+}
+
+// ── Voice commands ──
+const VOICE_COMMANDS = [
+    // Structuur
+    { patterns: ["nieuwe alinea", "nieuw alinea", "nieuwe paragraaf", "nieuwe linie", "new paragraph"], insert: "\n\n", toast: "¶ Nieuwe alinea" },
+    { patterns: ["nieuwe regel", "new line", "volgende regel"], insert: "\n", toast: "↵ Nieuwe regel" },
+    // Headings
+    { patterns: ["kop 1", "kop een", "heading 1", "heading one", "kop 1", "kop één"], insert: "\n\n# ", toast: "# H1" },
+    { patterns: ["kop 2", "kop twee", "heading 2", "heading two"], insert: "\n\n## ", toast: "## H2" },
+    { patterns: ["kop 3", "kop drie", "heading 3", "heading three"], insert: "\n\n### ", toast: "### H3" },
+    // Lijst
+    { patterns: ["nieuw punt", "nieuw lijstitem", "lijst punt", "bullet", "bullet point", "volgend punt"], insert: "\n- ", toast: "• Lijstitem" },
+    // To-do
+    { patterns: ["nieuw to-do item", "nieuw todo item", "nieuw todo", "nieuwe taak", "new todo", "to-do item", "todo item"], insert: "\n- [ ] ", toast: "☐ To-do" },
+    // Bediening
+    { patterns: ["beëindig opname", "beëindig de opname", "beëindigt opname", "beëindigt de opname", "beëindigde opname", "beëindigde de opname", "beeindig opname", "beeindig de opname", "beeindigt opname", "beeindigt de opname", "beeindigde opname", "beeindigde de opname", "stop opname", "stopopname", "stop de opname", "stop recording"], action: "stopRecording", toast: "⏹ Stop" },
+    // Wissen
+    { patterns: ["verwijder laatste alinea", "verwijder laatste paragraaf", "wis laatste alinea", "delete last paragraph"], action: "deleteLastParagraph", toast: "Alinea gewist" },
+    { patterns: ["verwijder laatste regel", "verwijder laatste zin", "wis laatste regel", "wist laatste regel", "delete last line"], action: "deleteLastLine", toast: "Regel gewist" },
+    // Ongedaan maken
+    { patterns: ["herstel", "ongedaan maken", "undo"], action: "undo", toast: "↩ Hersteld" },
+];
+
+// Strip diacritics: ë→e, é→e, ï→i etc.
+function stripDiacritics(str) {
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+// Normalize spoken text for command matching
+function normalizeCommand(text) {
+    let norm = text.toLowerCase().trim();
+    norm = stripDiacritics(norm);
+    // Strip punctuation including all dash/hyphen variants (ASCII, Unicode hyphen, en-dash, em-dash)
+    norm = norm.replace(/[,;:'"…\u002D\u2010\u2011\u2012\u2013\u2014\u2015]/g, "");
+    // Common Voxtral mishearings
+    norm = norm.replace(/\bniveau\b/g, "nieuwe");
+    return norm.trim();
+}
+
+function findCommand(normalized) {
+    for (const cmd of VOICE_COMMANDS) {
+        for (const pattern of cmd.patterns) {
+            // Normalize pattern the same way as input (strip diacritics, hyphens, etc.)
+            const p = normalizeCommand(pattern);
+            // Match exact OR as suffix (e.g. "dan nieuwe paragraaf" ends with "nieuwe paragraaf")
+            if (normalized === p || normalized.endsWith(" " + p)) return cmd;
+        }
+    }
+    return null;
+}
+
+function checkForCommand() {
+    if (!activeInsert || !activeInsert.textContent) return false;
+    const raw = activeInsert.textContent.replace(/[.!?]/g, "");
+    const norm = normalizeCommand(raw);
+    if (!norm) return false;
+    const cmd = findCommand(norm);
+    if (cmd) {
+        executeCommand(cmd);
+        return true;
+    }
+    return false;
+}
+
+// Process completed sentences in real-time as periods arrive in deltas.
+// This is essential because the Mistral realtime API may not send "done"
+// events between sentences during continuous speech.
+function processCompletedSentences() {
+    if (!activeInsert || !activeInsert.textContent) return;
+
+    const text = activeInsert.textContent;
+
+    // Match complete sentences: text followed by sentence-ending punctuation
+    const parts = text.match(/\s*[^.!?]+[.!?]+/g);
+    if (!parts) return; // no complete sentence yet
+
+    // Calculate remainder (incomplete text after the last matched sentence)
+    const matchedLength = parts.join("").length;
+    const remainder = text.substring(matchedLength);
+
+    // First pass: classify each part as command or text
+    const actions = parts.map(part => {
+        const trimmedPart = part.trim();
+        const textOnly = trimmedPart.replace(/[.!?]+$/, "").trim();
+        const norm = normalizeCommand(textOnly);
+        const cmd = findCommand(norm);
+        // Log hex codes for debugging hyphen issues
+        const hexCodes = [...textOnly].map(c => c.charCodeAt(0) > 127 ? `U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}` : c).join("");
+        console.debug(`[voice] "${textOnly}" [${hexCodes}] → norm="${norm}" → ${cmd ? "CMD: " + cmd.toast : "text"}`);
+        return { trimmedPart, cmd };
+    });
+
+    // Save undo state BEFORE modifying the transcript — but ONLY if there are
+    // actual text parts being committed. Pure command sentences (like "Herstel.")
+    // should NOT save undo, otherwise restoreUndo() pops the wrong state.
+    // (Destructive commands like deleteLastBlock already call saveUndo() internally.)
+    const hasTextParts = actions.some(a => !a.cmd);
+    if (hasTextParts) {
+        saveUndo();
+    }
+
+    // Clear command text from activeInsert BEFORE executing commands
+    // so deleteLastBlock/restoreUndo won't see command text in transcript
+    activeInsert.textContent = remainder;
+
+    // Second pass: execute actions
+    let stopRequested = false;
+    for (const { trimmedPart, cmd } of actions) {
+        // After destructive commands (delete/undo), activeInsert may be detached
+        // Re-attach it so subsequent text insertions work — must be inside transcript
+        if (!transcript.contains(activeInsert)) {
+            if (activeInsert.parentNode) activeInsert.remove();
+            transcript.appendChild(activeInsert);
+        }
+
+        if (cmd) {
+            if (cmd.insert) {
+                const span = document.createElement("span");
+                span.textContent = cmd.insert;
+                activeInsert.parentNode.insertBefore(span, activeInsert);
+            }
+            if (cmd.action === "stopRecording") stopRequested = true;
+            if (cmd.action === "deleteLastParagraph") deleteLastBlock("paragraph");
+            if (cmd.action === "deleteLastLine") deleteLastBlock("line");
+            if (cmd.action === "undo") restoreUndo();
+            showToast(cmd.toast);
+        } else {
+            // Finalize as regular text (white, not gray)
+            const span = document.createElement("span");
+            span.textContent = trimmedPart + " ";
+            activeInsert.parentNode.insertBefore(span, activeInsert);
+        }
+    }
+
+    isMidSentenceInsert = false; // after a sentence boundary, next text starts fresh
+
+    if (stopRequested) {
+        setTimeout(() => { if (isRecording) btnRecord.click(); }, 0);
+    }
+}
+
+function executeCommand(cmd) {
+    // Single command: clear text and execute
+    if (activeInsert) {
+        activeInsert.textContent = "";
+    }
+
+    if (cmd.insert) {
+        if (activeInsert) {
+            activeInsert.textContent = cmd.insert;
+            activeInsert.classList.remove("partial", "replacing");
+            activeInsert = null;
+        }
+    } else if (cmd.action === "stopRecording") {
+        if (activeInsert) { activeInsert.remove(); activeInsert = null; }
+        if (isRecording) btnRecord.click();
+    } else if (cmd.action === "deleteLastParagraph") {
+        if (activeInsert) { activeInsert.remove(); activeInsert = null; }
+        deleteLastBlock("paragraph");
+    } else if (cmd.action === "deleteLastLine") {
+        if (activeInsert) { activeInsert.remove(); activeInsert = null; }
+        deleteLastBlock("line");
+    } else if (cmd.action === "undo") {
+        if (activeInsert) { activeInsert.remove(); activeInsert = null; }
+        restoreUndo();
+    }
+
+    isMidSentenceInsert = false;
+    replaceHint.classList.add("hidden");
+    showToast(cmd.toast);
+}
+
+// ── Undo stack ──
+let undoStack = [];
+
+function saveUndo() {
+    undoStack.push(transcript.innerHTML);
+    if (undoStack.length > 20) undoStack.shift(); // max 20 states
+}
+
+function restoreUndo() {
+    if (undoStack.length === 0) return false;
+    transcript.innerHTML = undoStack.pop();
+    return true;
+}
+
+function deleteLastBlock(type) {
+    const fullText = transcript.innerText;
+    if (!fullText || !fullText.trim()) return;
+
+    saveUndo();
+
+    let newText;
+    if (type === "paragraph") {
+        // Delete everything after the last double newline
+        const idx = fullText.lastIndexOf("\n\n");
+        newText = idx > 0 ? fullText.substring(0, idx) : "";
+    } else {
+        // Delete last sentence: find the last sentence-ending punctuation before the final one
+        const trimmed = fullText.trimEnd();
+        // Find second-to-last sentence boundary (. ! ?)
+        let cutIdx = -1;
+        for (let i = trimmed.length - 2; i >= 0; i--) {
+            const ch = trimmed[i];
+            if (ch === "." || ch === "!" || ch === "?") {
+                cutIdx = i + 1; // keep the period
+                break;
+            }
+            if (ch === "\n") {
+                cutIdx = i + 1; // keep the newline as boundary
+                break;
+            }
+        }
+        newText = cutIdx > 0 ? fullText.substring(0, cutIdx) : "";
+    }
+
+    transcript.innerHTML = "";
+    if (newText && newText.trim()) {
+        const span = document.createElement("span");
+        span.textContent = newText;
+        transcript.appendChild(span);
+    } else {
+        transcript.innerHTML = '<span class="placeholder">Druk op opnemen om te beginnen...</span>';
+    }
 }
 
 function isAfterSentenceEnd(node) {
@@ -130,7 +437,8 @@ function isAfterSentenceEnd(node) {
     const trimmed = before.trimEnd();
     if (!trimmed) return true;
     const last = trimmed[trimmed.length - 1];
-    return last === "." || last === "!" || last === "?";
+    // Also treat markdown markers (#, -, \n) as sentence starts (after voice command inserts)
+    return last === "." || last === "!" || last === "?" || last === "#" || last === "\n" || last === "-";
 }
 
 function lowercaseFirstLetter(text) {
@@ -163,13 +471,26 @@ function feedText(text) {
         }
     }
 
-    // Auto-case: lowercase first letter unless after sentence-ending punctuation
-    if (target.textContent.replace(/ /g, "") === "" && !isAfterSentenceEnd(target)) {
-        text = lowercaseFirstLetter(text);
+    // On first real text: determine if this is a mid-sentence or new-sentence insertion
+    if (target.textContent.replace(/ /g, "") === "") {
+        isMidSentenceInsert = !isAfterSentenceEnd(target);
+        if (isMidSentenceInsert) {
+            text = lowercaseFirstLetter(text);
+        }
     }
 
     target.textContent += text;
-    scrollToBottom();
+
+    // Safety: if target somehow escaped transcript, move it back
+    if (!transcript.contains(target)) {
+        if (target.parentNode) target.remove();
+        transcript.appendChild(target);
+    }
+
+    scrollToInsertPoint();
+
+    // Process completed sentences in real-time (commands + finalize text)
+    processCompletedSentences();
 }
 
 // ── Click-to-move cursor — works during AND before recording ──
@@ -180,14 +501,29 @@ transcript.addEventListener("mouseup", () => {
     setTimeout(() => {
         const sel = window.getSelection();
         if (!sel || sel.rangeCount === 0) return;
+        // Both anchor and focus must be inside transcript
         if (!transcript.contains(sel.anchorNode)) return;
+        if (!transcript.contains(sel.focusNode)) return;
 
         // Finalize current insert point
         finalizeInsertPoint();
 
         if (!sel.isCollapsed) {
             // ── Selection: replace mode ──
+            // Clamp range to stay within transcript
             const range = sel.getRangeAt(0);
+            const transcriptRange = document.createRange();
+            transcriptRange.selectNodeContents(transcript);
+
+            // If selection extends beyond transcript, clamp it
+            if (range.compareBoundaryPoints(Range.START_TO_START, transcriptRange) < 0) {
+                range.setStart(transcriptRange.startContainer, transcriptRange.startOffset);
+            }
+            if (range.compareBoundaryPoints(Range.END_TO_END, transcriptRange) > 0) {
+                range.setEnd(transcriptRange.endContainer, transcriptRange.endOffset);
+            }
+
+            saveUndo(); // save state before text is replaced/cleared
             const marker = document.createElement("span");
             marker.className = "replacing";
             try {
@@ -198,6 +534,13 @@ transcript.addEventListener("mouseup", () => {
                 range.insertNode(marker);
             }
             marker.textContent = "";
+
+            // Safety: ensure marker ended up inside transcript
+            if (!transcript.contains(marker)) {
+                marker.remove();
+                transcript.appendChild(marker);
+            }
+
             activeInsert = marker;
             replaceHint.classList.remove("hidden");
             sel.removeAllRanges();
@@ -207,6 +550,13 @@ transcript.addEventListener("mouseup", () => {
             const newInsert = document.createElement("span");
             newInsert.className = "partial";
             range.insertNode(newInsert);
+
+            // Safety: ensure insert ended up inside transcript
+            if (!transcript.contains(newInsert)) {
+                newInsert.remove();
+                transcript.appendChild(newInsert);
+            }
+
             activeInsert = newInsert;
             sel.removeAllRanges();
         }
@@ -315,12 +665,47 @@ function appendFinalText(text) {
     const span = document.createElement("span");
     span.textContent = text;
     transcript.appendChild(span);
-    scrollToBottom();
+    scrollToInsertPoint();
 }
 
-function scrollToBottom() {
+function appendDiarizedText(segments) {
+    for (const seg of segments) {
+        const label = document.createElement("span");
+        label.className = "speaker-label";
+        label.textContent = seg.speaker + ": ";
+        transcript.appendChild(label);
+
+        const text = document.createElement("span");
+        text.textContent = seg.text + "\n\n";
+        transcript.appendChild(text);
+    }
+    scrollToInsertPoint();
+}
+
+function scrollToInsertPoint() {
     const main = transcript.closest("main");
-    main.scrollTop = main.scrollHeight;
+    if (!main) return;
+
+    if (activeInsert && transcript.contains(activeInsert)) {
+        const mainRect = main.getBoundingClientRect();
+        const insertRect = activeInsert.getBoundingClientRect();
+
+        // How far down is the insert point in the visible area? (0 = top, 1 = bottom)
+        const relativePos = (insertRect.top - mainRect.top) / mainRect.height;
+
+        if (relativePos < 0 || relativePos > 0.5) {
+            // Insert point is off-screen above, or in the lower half of the viewport.
+            // Scroll so insert point sits at ~35% from the top — keeps the 50vh
+            // padding visible as black space below the active text.
+            const targetOffset = mainRect.height * 0.35;
+            const insertOffsetInMain = insertRect.top - mainRect.top + main.scrollTop;
+            main.scrollTo({ top: insertOffsetInMain - targetOffset, behavior: "smooth" });
+        }
+        // If already in the upper half (0–50%), don't scroll — position is fine.
+    } else {
+        // Fallback: scroll to bottom (e.g. when appending without active insert)
+        main.scrollTop = main.scrollHeight;
+    }
 }
 
 // ── Audio: PCM s16le 16kHz mono ──
@@ -360,10 +745,11 @@ async function startRealtime() {
         if (msg.type === "delta") {
             feedText(msg.text);
         } else if (msg.type === "done") {
-            finalizeInsertPoint();
+            if (!checkForCommand()) finalizeInsertPoint();
         } else if (msg.type === "error") {
-            console.error("Transcription error:", msg.message);
-            appendFinalText("[Fout: " + msg.message + "]\n");
+            console.error("Transcription error (full):", msg.message);
+            // Show short user-friendly message, not the full gRPC stack trace
+            showToast("Serverfout — herverbinden...");
         }
     };
 
@@ -371,12 +757,26 @@ async function startRealtime() {
 
     ws.onclose = () => {
         if (isRecording) {
+            // Transient error: try to reconnect automatically
+            console.log("WebSocket closed while recording — attempting reconnect...");
             stopAudioCapture();
-            isRecording = false;
-            btnRecord.classList.remove("active");
-            btnRecord.textContent = "Opnemen";
             finalizeInsertPoint();
-            updateModeUI();
+            showToast("Verbinding verbroken — herverbinden...");
+            // Brief delay then reconnect
+            setTimeout(async () => {
+                if (!isRecording) return; // user stopped in the meantime
+                try {
+                    await startRealtime();
+                    showToast("Herverbonden");
+                } catch (err) {
+                    console.error("Reconnect failed:", err);
+                    isRecording = false;
+                    btnRecord.classList.remove("active");
+                    btnRecord.textContent = "Opnemen";
+                    updateModeUI();
+                    showToast("Herverbinden mislukt");
+                }
+            }, 1500);
         }
     };
 
@@ -385,9 +785,9 @@ async function startRealtime() {
         ws.addEventListener("error", reject, { once: true });
     });
 
-    mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, sampleRate: 16000 },
-    });
+    const audioConstraints = { channelCount: 1, sampleRate: 16000 };
+    if (selectedMicId) audioConstraints.deviceId = { exact: selectedMicId };
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
     audioContext = new AudioContext({ sampleRate: 16000 });
     const source = audioContext.createMediaStreamSource(mediaStream);
 
@@ -417,9 +817,9 @@ let offlineChunks = [];
 async function startOffline() {
     statusText.textContent = "Opnemen...";
 
-    mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1 },
-    });
+    const audioConstraints = { channelCount: 1 };
+    if (selectedMicId) audioConstraints.deviceId = { exact: selectedMicId };
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 
     offlineChunks = [];
     mediaRecorder = new MediaRecorder(mediaStream, { mimeType: "audio/webm;codecs=opus" });
@@ -435,12 +835,18 @@ async function startOffline() {
             try {
                 const formData = new FormData();
                 formData.append("file", blob, "recording.webm");
+                if (useDiarize) formData.append("diarize", "true");
                 const resp = await fetch("/api/transcribe", { method: "POST", body: formData });
                 if (resp.ok) {
                     const data = await resp.json();
-                    if (data.text) {
+                    if (data.segments && data.segments.length > 0) {
+                        // Diarized output: show speaker labels
+                        clearPlaceholder();
+                        appendDiarizedText(data.segments);
+                    } else if (data.text) {
                         clearPlaceholder();
                         feedText(data.text);
+                        checkForCommand();
                     }
                 } else {
                     await saveToQueue(blob);
@@ -451,7 +857,8 @@ async function startOffline() {
             updateModeUI();
         }
         offlineChunks = [];
-        finalizeInsertPoint();
+        finalizeInsertPoint(); // no-op if command already handled
+        autoCorrectAfterStop().then(() => copyTranscript()); // correct then copy
     };
 
     mediaRecorder.start(1000);
@@ -479,9 +886,11 @@ btnRecord.addEventListener("click", async () => {
         if (useRealtime && ws) {
             stopRealtime();
             finalizeInsertPoint();
+            autoCorrectAfterStop().then(() => copyTranscript()); // correct then copy
         } else {
             stopOffline();
             // Don't finalize here — onstop handler does it after inserting text
+            // Auto-correct + copy happens in onstop handler after transcription
         }
 
         updateModeUI();
@@ -507,10 +916,12 @@ btnRecord.addEventListener("click", async () => {
     }
 });
 
-// ── Copy button ──
-btnCopy.addEventListener("click", async () => {
-    const text = transcript.innerText.trim();
+// ── Copy helpers ──
+async function copyTranscript() {
+    let text = transcript.innerText.trim();
     if (!text || text === "Druk op opnemen om te beginnen...") return;
+    // Normalize line endings: use \r\n for Windows compatibility
+    text = text.replace(/\r?\n/g, "\r\n");
     try {
         await navigator.clipboard.writeText(text);
         showToast("Gekopieerd");
@@ -523,13 +934,94 @@ btnCopy.addEventListener("click", async () => {
         document.body.removeChild(textarea);
         showToast("Gekopieerd");
     }
+}
+
+btnCopy.addEventListener("click", copyTranscript);
+
+// ── Text correction ──
+const btnCorrect = document.getElementById("btn-correct");
+
+async function correctText(text) {
+    const resp = await fetch("/api/correct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, system_prompt: systemPrompt }),
+    });
+    const raw = await resp.text();
+    let data;
+    try {
+        data = JSON.parse(raw);
+    } catch {
+        throw new Error(`Server fout (${resp.status}): ${raw.substring(0, 120)}`);
+    }
+    if (!resp.ok) throw new Error(data.error || `Server fout ${resp.status}`);
+    return data.corrected;
+}
+
+// Manual: correct entire transcript
+btnCorrect.addEventListener("click", async () => {
+    const text = transcript.innerText.trim();
+    if (!text || text === "Druk op opnemen om te beginnen...") return;
+    if (isRecording) return;
+
+    btnCorrect.textContent = "...";
+    btnCorrect.disabled = true;
+
+    try {
+        const corrected = await correctText(text);
+        if (corrected && corrected !== text) {
+            transcript.innerHTML = "";
+            const span = document.createElement("span");
+            span.textContent = corrected;
+            span.classList.add("corrected");
+            transcript.appendChild(span);
+            showToast("Tekst gecorrigeerd");
+        } else {
+            showToast("Geen correcties nodig");
+        }
+    } catch (err) {
+        showToast("Correctie mislukt: " + err.message);
+    } finally {
+        btnCorrect.textContent = "Controleer";
+        btnCorrect.disabled = false;
+    }
 });
+
+// Auto-correct: correct full transcript after recording stops
+async function autoCorrectAfterStop() {
+    console.debug(`[autocorrect] autoCorrect=${autoCorrect}, called after stop`);
+    if (!autoCorrect) return;
+
+    const text = transcript.innerText.trim();
+    if (!text || text === "Druk op opnemen om te beginnen...") return;
+
+    btnCorrect.textContent = "...";
+    btnCorrect.disabled = true;
+
+    try {
+        const corrected = await correctText(text);
+        if (corrected && corrected.trim() !== text) {
+            transcript.innerHTML = "";
+            const span = document.createElement("span");
+            span.textContent = corrected;
+            span.classList.add("corrected");
+            transcript.appendChild(span);
+            showToast("Tekst gecorrigeerd");
+        }
+    } catch {
+        // Silent fail for auto-correct
+    } finally {
+        btnCorrect.textContent = "Controleer";
+        btnCorrect.disabled = false;
+    }
+}
 
 // ── Clear button ──
 btnClear.addEventListener("click", () => {
     if (isRecording) return;
     transcript.innerHTML = '<span class="placeholder">Druk op opnemen om te beginnen...</span>';
     activeInsert = null;
+    undoStack = []; // clear undo history — deliberate wipe shouldn't be undoable
 });
 
 // ── Toast ──
@@ -559,6 +1051,34 @@ queueInfo.addEventListener("click", () => {
 });
 
 // ── Settings modal ──
+const toggleAutocorrect = document.getElementById("toggle-autocorrect");
+const inputSystemPrompt = document.getElementById("input-system-prompt");
+const selectMicrophone = document.getElementById("select-microphone");
+let selectedMicId = localStorage.getItem("voxtral-mic") || "";
+
+async function loadMicrophones() {
+    try {
+        // Request permission first (needed to get device labels)
+        await navigator.mediaDevices.getUserMedia({ audio: true }).then(s => s.getTracks().forEach(t => t.stop()));
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const mics = devices.filter(d => d.kind === "audioinput");
+        selectMicrophone.innerHTML = "";
+        for (const mic of mics) {
+            const opt = document.createElement("option");
+            opt.value = mic.deviceId;
+            opt.textContent = mic.label || `Microfoon ${selectMicrophone.options.length + 1}`;
+            if (mic.deviceId === selectedMicId) opt.selected = true;
+            selectMicrophone.appendChild(opt);
+        }
+        // If no saved selection, default is the first (system default)
+        if (!selectedMicId && mics.length > 0) {
+            selectedMicId = mics[0].deviceId;
+        }
+    } catch {
+        selectMicrophone.innerHTML = '<option>Geen toegang tot microfoon</option>';
+    }
+}
+
 function openSettings() {
     settingsOverlay.classList.remove("hidden");
     settingsStatus.textContent = "";
@@ -568,6 +1088,11 @@ function openSettings() {
     fetch("/api/settings").then(r => r.json()).then(data => {
         inputApiKey.placeholder = data.has_key ? data.masked_key : "Plak je API key hier...";
     }).catch(() => {});
+    // Load correction settings
+    toggleAutocorrect.checked = autoCorrect;
+    inputSystemPrompt.value = systemPrompt;
+    // Load microphone list
+    loadMicrophones();
 }
 
 function closeSettings() {
@@ -587,10 +1112,20 @@ document.getElementById("btn-toggle-key").addEventListener("click", () => {
 
 // Save key
 document.getElementById("btn-save-key").addEventListener("click", async () => {
+    // Always save all settings
+    autoCorrect = toggleAutocorrect.checked;
+    localStorage.setItem("voxtral-autocorrect", JSON.stringify(autoCorrect));
+    systemPrompt = inputSystemPrompt.value;
+    localStorage.setItem("voxtral-system-prompt", systemPrompt);
+    selectedMicId = selectMicrophone.value;
+    localStorage.setItem("voxtral-mic", selectedMicId);
+
+    // Only validate/save API key if a new one was entered
     const key = inputApiKey.value.trim();
     if (!key) {
-        settingsStatus.textContent = "Voer een API key in";
-        settingsStatus.className = "modal-status error";
+        settingsStatus.textContent = "Instellingen opgeslagen";
+        settingsStatus.className = "modal-status success";
+        setTimeout(closeSettings, 1500);
         return;
     }
     settingsStatus.textContent = "Valideren...";
@@ -603,7 +1138,7 @@ document.getElementById("btn-save-key").addEventListener("click", async () => {
         });
         const data = await resp.json();
         if (resp.ok) {
-            settingsStatus.textContent = "API key opgeslagen en gevalideerd";
+            settingsStatus.textContent = "Opgeslagen en gevalideerd";
             settingsStatus.className = "modal-status success";
             setTimeout(closeSettings, 1500);
         } else {
@@ -616,10 +1151,82 @@ document.getElementById("btn-save-key").addEventListener("click", async () => {
     }
 });
 
+// ── Keyboard shortcut for recording ──
+document.addEventListener("keydown", (e) => {
+    // Don't trigger while typing in inputs or settings modal
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+    if (!settingsOverlay.classList.contains("hidden")) return;
+
+    if (matchesShortcut(e, recordShortcut)) {
+        e.preventDefault();
+        btnRecord.click();
+    }
+});
+
+// ── Help panel ──
+const helpPanel = document.getElementById("help-panel");
+const btnHelp = document.getElementById("btn-help");
+const btnCloseHelp = document.getElementById("btn-close-help");
+
+btnHelp.addEventListener("click", () => {
+    updateShortcutDisplays(); // refresh shortcut label
+    helpPanel.classList.toggle("visible");
+});
+
+btnCloseHelp.addEventListener("click", () => {
+    helpPanel.classList.remove("visible");
+});
+
+
+// ── Shortcut configuration in settings ──
+const inputShortcut = document.getElementById("input-shortcut");
+const btnResetShortcut = document.getElementById("btn-reset-shortcut");
+let pendingShortcut = null;
+
+inputShortcut.addEventListener("keydown", (e) => {
+    e.preventDefault();
+    // Ignore standalone modifier keys
+    if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
+
+    pendingShortcut = {
+        ctrl: e.ctrlKey,
+        shift: e.shiftKey,
+        alt: e.altKey,
+        meta: e.metaKey,
+        key: e.key
+    };
+    inputShortcut.value = shortcutLabel(pendingShortcut);
+});
+
+btnResetShortcut.addEventListener("click", () => {
+    pendingShortcut = { ...DEFAULT_SHORTCUT };
+    inputShortcut.value = shortcutLabel(pendingShortcut);
+});
+
+// Show current shortcut when settings open
+document.getElementById("btn-settings").addEventListener("click", () => {
+    pendingShortcut = null;
+    inputShortcut.value = shortcutLabel(recordShortcut);
+});
+
+// Save shortcut alongside API key
+document.getElementById("btn-save-key").addEventListener("click", () => {
+    if (pendingShortcut) {
+        saveShortcut(pendingShortcut);
+        pendingShortcut = null;
+    }
+});
+
 // ── Init ──
 updateModeUI();
 updateQueueBadge();
+updateShortcutDisplays();
 processQueue();
+
+// Register service worker for PWA install
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+}
 
 // Check if API key is configured on load
 fetch("/api/health").then(r => r.json()).then(data => {

@@ -3,7 +3,9 @@ import json
 import logging
 import os
 import sys
+import time
 import traceback
+from collections import defaultdict
 from typing import AsyncIterator
 
 from dotenv import load_dotenv
@@ -24,7 +26,7 @@ load_dotenv(os.path.join(_SCRIPT_DIR, ".env"))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("voxtral")
-from fastapi import FastAPI, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Form, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from mistralai import Mistral
@@ -37,6 +39,30 @@ from mistralai.models import (
 )
 
 app = FastAPI()
+
+
+# ── Rate limiting ──
+class RateLimiter:
+    """Simple in-memory sliding window rate limiter."""
+
+    def __init__(self):
+        self._timestamps: dict[str, list[float]] = defaultdict(list)
+
+    def is_allowed(self, key: str, max_requests: int, window_seconds: int) -> bool:
+        """Check if a request is allowed. Returns False if rate limit exceeded."""
+        now = time.monotonic()
+        cutoff = now - window_seconds
+        # Remove expired timestamps
+        self._timestamps[key] = [t for t in self._timestamps[key] if t > cutoff]
+        if len(self._timestamps[key]) >= max_requests:
+            return False
+        self._timestamps[key].append(now)
+        return True
+
+
+rate_limiter = RateLimiter()
+active_ws_count = 0  # Track concurrent WebSocket connections
+MAX_WS_CONNECTIONS = 2  # Allow 1 active + 1 reconnect overlap
 
 REALTIME_MODEL = "voxtral-mini-transcribe-realtime-2602"
 BATCH_MODEL = "voxtral-mini-latest"
@@ -99,6 +125,8 @@ async def get_settings():
 @app.post("/api/settings")
 async def save_settings(body: dict):
     """Save API key to config.json."""
+    if not rate_limiter.is_allowed("settings", max_requests=5, window_seconds=60):
+        return JSONResponse({"error": "Te veel verzoeken, probeer later opnieuw"}, status_code=429)
     api_key = body.get("api_key", "").strip()
     if not api_key:
         return JSONResponse({"error": "Geen API key opgegeven"}, status_code=400)
@@ -114,31 +142,127 @@ async def save_settings(body: dict):
     return {"status": "ok", "message": "API key opgeslagen"}
 
 
+CORRECT_MODEL = "mistral-small-latest"
+
+DEFAULT_CORRECT_PROMPT = (
+    "Je bent een nauwkeurige tekstcorrector voor Nederlands. "
+    "Corrigeer ALLEEN:\n"
+    "- Capitalisatie (hoofdletters aan het begin van zinnen, eigennamen)\n"
+    "- Duidelijk verkeerd geschreven of verminkte woorden (door spraakherkenning)\n"
+    "- Ontbrekende of verkeerde leestekens\n\n"
+    "NIET veranderen:\n"
+    "- Zinsstructuur of woordvolgorde\n"
+    "- Stijl of toon\n"
+    "- Markdown opmaak (# koppen, - lijstjes, - [ ] to-do items)\n\n"
+    "INLINE CORRECTIE-INSTRUCTIES:\n"
+    "De tekst is gedicteerd via spraakherkenning. De spreker geeft soms inline instructies "
+    "of correcties die voor jou bedoeld zijn. Herken deze patronen:\n"
+    "- Expliciete markers: 'voor de correctie', 'voor de controle achteraf', "
+    "'voor de correctie achteraf', 'correctie-instructie', 'noot voor de corrector', "
+    "'voor de automatische correctie'\n"
+    "- Gespelde woorden: 'V-O-X-T-R-A-L' of 'met een x' → voeg samen tot het bedoelde woord\n"
+    "- Zelfcorrecties: 'nee niet X maar Y', 'ik bedoel Y', 'dat moet Z zijn'\n"
+    "- Meta-commentaar over het dicteren: 'dat is een Nederlands woord', 'met een hoofdletter'\n\n"
+    "Als je zulke instructies of meta-commentaar tegenkomt:\n"
+    "1. Volg de instructie op bij het corrigeren van de REST van de tekst\n"
+    "2. Verwijder de instructie/het meta-commentaar zelf volledig uit de output\n"
+    "3. Behoud alle inhoudelijke tekst — verwijder NOOIT gewone zinnen\n\n"
+    "Geef ALLEEN de gecorrigeerde tekst terug, zonder uitleg."
+)
+
+
+@app.post("/api/correct")
+async def correct_text(body: dict):
+    """Correct text using Mistral chat model."""
+    if not rate_limiter.is_allowed("correct", max_requests=10, window_seconds=60):
+        return JSONResponse({"error": "Te veel verzoeken, probeer later opnieuw"}, status_code=429)
+    text = body.get("text", "").strip()
+    if not text:
+        return JSONResponse({"error": "Geen tekst opgegeven"}, status_code=400)
+
+    system_prompt = body.get("system_prompt", "").strip()
+    full_prompt = DEFAULT_CORRECT_PROMPT
+    if system_prompt:
+        full_prompt += f"\n\nExtra context/jargon van de gebruiker:\n{system_prompt}"
+
+    try:
+        client = get_client()
+        response = client.chat.complete(
+            model=CORRECT_MODEL,
+            messages=[
+                {"role": "system", "content": full_prompt},
+                {"role": "user", "content": text},
+            ],
+            temperature=0.1,
+        )
+        corrected = response.choices[0].message.content.strip()
+        return {"corrected": corrected}
+    except Exception as e:
+        logger.error(f"Correction failed:\n{traceback.format_exc()}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @app.post("/api/transcribe")
-async def transcribe_batch(file: UploadFile):
+async def transcribe_batch(file: UploadFile, diarize: bool = Form(False)):
     """Batch transcription for offline-queued recordings."""
+    if not rate_limiter.is_allowed("transcribe", max_requests=10, window_seconds=60):
+        return JSONResponse({"error": "Te veel verzoeken, probeer later opnieuw"}, status_code=429)
     try:
         client = get_client()
         content = await file.read()
-        result = client.audio.transcriptions.complete(
+        kwargs = dict(
             model=BATCH_MODEL,
             file={"content": content, "file_name": file.filename or "audio.webm"},
             language=BATCH_LANGUAGE,
         )
+        if diarize:
+            kwargs["diarize"] = True
+
+        result = client.audio.transcriptions.complete(**kwargs)
+
+        if diarize and hasattr(result, "segments") and result.segments:
+            # Build text with speaker labels
+            segments = []
+            current_speaker = None
+            for seg in result.segments:
+                speaker = getattr(seg, "speaker", None)
+                text = seg.text.strip() if hasattr(seg, "text") else ""
+                if not text:
+                    continue
+                if speaker != current_speaker:
+                    current_speaker = speaker
+                    label = f"Spreker {speaker}" if speaker is not None else "Spreker"
+                    segments.append({"speaker": label, "text": text})
+                else:
+                    segments[-1]["text"] += " " + text
+            return {"text": result.text, "segments": segments}
+
         return {"text": result.text}
     except Exception as e:
+        logger.error(f"Batch transcription failed:\n{traceback.format_exc()}")
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.websocket("/ws/transcribe")
 async def ws_transcribe(websocket: WebSocket):
     """Realtime transcription via WebSocket. Browser sends PCM s16le 16kHz mono chunks."""
+    global active_ws_count
+
+    # Reject if too many concurrent connections
+    if active_ws_count >= MAX_WS_CONNECTIONS:
+        await websocket.close(code=1013, reason="Te veel gelijktijdige verbindingen")
+        logger.warning(f"WebSocket rejected: {active_ws_count} active connections (max {MAX_WS_CONNECTIONS})")
+        return
+
     await websocket.accept()
+    active_ws_count += 1
+    logger.info(f"WebSocket connected ({active_ws_count}/{MAX_WS_CONNECTIONS} active)")
 
     # Read delay from query parameter (default 1000ms)
     delay_ms = int(websocket.query_params.get("delay", "1000"))
 
     audio_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
+    ws_closed = False  # Guard: prevent sending after client disconnects
 
     async def audio_stream() -> AsyncIterator[bytes]:
         while True:
@@ -148,13 +272,16 @@ async def ws_transcribe(websocket: WebSocket):
             yield chunk
 
     async def receive_audio():
+        nonlocal ws_closed
         try:
             while True:
                 data = await websocket.receive_bytes()
                 await audio_queue.put(data)
         except WebSocketDisconnect:
+            ws_closed = True
             await audio_queue.put(None)
         except Exception:
+            ws_closed = True
             await audio_queue.put(None)
 
     receiver = asyncio.create_task(receive_audio())
@@ -168,6 +295,9 @@ async def ws_transcribe(websocket: WebSocket):
             audio_format=AUDIO_FORMAT,
             target_streaming_delay_ms=delay_ms,
         ):
+            if ws_closed:
+                logger.info("Client disconnected, stopping event processing")
+                break
             logger.info(f"Event received: {type(event).__name__}")
             if isinstance(event, TranscriptionStreamTextDelta):
                 await websocket.send_json({"type": "delta", "text": event.text})
@@ -182,11 +312,14 @@ async def ws_transcribe(websocket: WebSocket):
         logger.info("WebSocket disconnected by client")
     except Exception as e:
         logger.error(f"Realtime transcription failed:\n{traceback.format_exc()}")
-        try:
-            await websocket.send_json({"type": "error", "message": str(e)})
-        except Exception:
-            pass
+        if not ws_closed:
+            try:
+                await websocket.send_json({"type": "error", "message": str(e)})
+            except Exception:
+                pass
     finally:
+        active_ws_count -= 1
+        logger.info(f"WebSocket closed ({active_ws_count}/{MAX_WS_CONNECTIONS} active)")
         receiver.cancel()
 
 

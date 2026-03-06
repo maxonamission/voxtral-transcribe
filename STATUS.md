@@ -47,6 +47,12 @@ De app is volledig functioneel voor dagelijks gebruik. Alle kernfuncties werken 
 - [x] Toast notificaties
 - [x] Auto-reconnect bij verbindingsproblemen
 
+### Beveiliging
+- [x] Server luistert alleen op `127.0.0.1` (niet bereikbaar van buitenaf)
+- [x] Rate limiting op API endpoints (sliding window, max 10/min)
+- [x] Concurrent WebSocket limiet (max 2 gelijktijdige verbindingen)
+- [x] API key niet in git (`.gitignore`)
+
 ### Infra
 - [x] PWA (installeerbaar, offline cache)
 - [x] Offline queue (IndexedDB)
@@ -80,12 +86,12 @@ De app is volledig functioneel voor dagelijks gebruik. Alle kernfuncties werken 
 
 - [x] **GitHub repo aanmaken** en code pushen
 - [ ] **Build testen** — `build.bat` draaien en verifiëren dat de executable werkt
-- [x] **`.gitignore` checken** — `*.spec` staat nu in gitignore, maar de spec files zijn wel nuttig voor reproduceerbare builds. Overwegen om ze toe te voegen
+- [x] **`.gitignore` bijgewerkt** — `*.spec` verwijderd zodat spec files mee worden gecommit
 - [ ] **LICENSE bestand** toevoegen (MIT)
 
 ### Opschoning
 
-- [ ] **Debug logging verwijderen** — hex code logging in `processCompletedSentences()` en `[autocorrect]` console.log. Nuttig tijdens development, kan weg voor release
+- [x] **Debug logging** — omgezet naar `console.debug()`, standaard verborgen in browserconsole, zichtbaar via F12 → Verbose
 - [ ] **Service worker cache versie** — sw.js cache versie synchroniseren met HTML cache bust versie, of een automatisch mechanisme
 
 ### Nice-to-have
@@ -102,9 +108,11 @@ De app is volledig functioneel voor dagelijks gebruik. Alle kernfuncties werken 
 
 ## Technische schuld
 
-- `createScriptProcessor` is deprecated — zou vervangen moeten worden door `AudioWorklet` voor betere performance, maar werkt voorlopig prima
-- Undo stack slaat volledige `innerHTML` op — bij zeer grote documenten kan dit geheugenintensief worden
-- `*.spec` bestanden worden gegenereerd door PyInstaller maar staan in `.gitignore` — als ze handmatig aangepast zijn, gaan ze verloren
+### `ScriptProcessorNode` is deprecated (niet actie-nodig)
+`ScriptProcessorNode` is officieel deprecated ten gunste van `AudioWorklet`. In de praktijk wordt het nog door alle browsers ondersteund en zal dat voorlopig zo blijven. De app gebruikt het alleen voor simpele PCM-conversie en doorsturen — de performance-winst van `AudioWorklet` (aparte thread) is hier niet merkbaar. Mocht het ooit verwijderd worden uit browsers, dan is de migratie beperkt (~1 uur werk). **Besluit: niet migreren tenzij er een concrete aanleiding is.**
+
+### Undo stack slaat volledige `innerHTML` op (niet actie-nodig)
+De undo stack bewaart maximaal 20 snapshots van `transcript.innerHTML`. Voor typisch gebruik (een paar duizend woorden per sessie) is dit verwaarloosbaar qua geheugen (enkele honderden KB). Een diff-gebaseerd systeem zou complexer zijn voor nul merkbaar verschil. **Besluit: alleen heroverwegen als de app ooit wordt gebruikt voor zeer lange documenten (boek-lengte in één sessie).**
 
 ---
 
@@ -112,7 +120,7 @@ De app is volledig functioneel voor dagelijks gebruik. Alle kernfuncties werken 
 
 | Versie | Datum | Wijzigingen |
 |---|---|---|
-| v18 | 2026-03-06 | Auto-reconnect, gebruiksvriendelijke foutmeldingen |
+| v18 | 2026-03-06 | Auto-reconnect, gebruiksvriendelijke foutmeldingen, rate limiting, WebSocket limiet |
 | v17 | 2026-03-06 | Scroll padding fix (35%/50% thresholds) |
 | v16 | 2026-03-05 | `scrollToInsertPoint()` vervangt `scrollToBottom()` |
 | v15 | 2026-03-05 | Unicode hyphen fix, to-do items hersteld |
