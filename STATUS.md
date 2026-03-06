@@ -78,9 +78,9 @@ De app is volledig functioneel voor dagelijks gebruik. Alle kernfuncties werken 
 
 ### Prioriteit: GitHub & Build
 
-- [ ] **GitHub repo aanmaken** en code pushen
+- [x] **GitHub repo aanmaken** en code pushen
 - [ ] **Build testen** — `build.bat` draaien en verifiëren dat de executable werkt
-- [ ] **`.gitignore` checken** — `*.spec` staat nu in gitignore, maar de spec files zijn wel nuttig voor reproduceerbare builds. Overwegen om ze toe te voegen
+- [x] **`.gitignore` checken** — `*.spec` staat nu in gitignore, maar de spec files zijn wel nuttig voor reproduceerbare builds. Overwegen om ze toe te voegen
 - [ ] **LICENSE bestand** toevoegen (MIT)
 
 ### Opschoning
