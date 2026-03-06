@@ -66,7 +66,7 @@ MAX_WS_CONNECTIONS = 2  # Allow 1 active + 1 reconnect overlap
 
 REALTIME_MODEL = "voxtral-mini-transcribe-realtime-2602"
 BATCH_MODEL = "voxtral-mini-latest"
-BATCH_LANGUAGE = "nl"  # Default taal voor batch transcriptie (realtime detecteert automatisch)
+BATCH_LANGUAGE_DEFAULT = "nl"
 AUDIO_FORMAT = AudioFormat(encoding="pcm_s16le", sample_rate=16000)
 
 
@@ -95,6 +95,15 @@ def get_api_key() -> str:
     if key:
         return key
     return os.environ.get("MISTRAL_API_KEY", "")
+
+
+def get_language() -> str:
+    """Get batch transcription language: config.json → env var → default 'nl'."""
+    cfg = load_config()
+    lang = cfg.get("language", "")
+    if lang:
+        return lang
+    return os.environ.get("VOXTRAL_LANGUAGE", BATCH_LANGUAGE_DEFAULT)
 
 
 def get_client() -> Mistral:
@@ -213,7 +222,7 @@ async def transcribe_batch(file: UploadFile, diarize: bool = Form(False)):
         kwargs = dict(
             model=BATCH_MODEL,
             file={"content": content, "file_name": file.filename or "audio.webm"},
-            language=BATCH_LANGUAGE,
+            language=get_language(),
         )
         if diarize:
             kwargs["diarize"] = True
