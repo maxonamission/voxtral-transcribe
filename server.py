@@ -64,8 +64,9 @@ rate_limiter = RateLimiter()
 active_ws_count = 0  # Track concurrent WebSocket connections
 MAX_WS_CONNECTIONS = 2  # Allow 1 active + 1 reconnect overlap
 
-REALTIME_MODEL = "voxtral-mini-transcribe-realtime-2602"
-BATCH_MODEL = "voxtral-mini-latest"
+REALTIME_MODEL_DEFAULT = "voxtral-mini-transcribe-realtime-2602"
+BATCH_MODEL_DEFAULT = "voxtral-mini-latest"
+CORRECT_MODEL_DEFAULT = "mistral-small-latest"
 BATCH_LANGUAGE_DEFAULT = "nl"
 AUDIO_FORMAT = AudioFormat(encoding="pcm_s16le", sample_rate=16000)
 
@@ -97,13 +98,29 @@ def get_api_key() -> str:
     return os.environ.get("MISTRAL_API_KEY", "")
 
 
-def get_language() -> str:
-    """Get batch transcription language: config.json → env var → default 'nl'."""
+def _cfg_or_env(cfg_key: str, env_key: str, default: str) -> str:
+    """Read a setting: config.json → env var → default."""
     cfg = load_config()
-    lang = cfg.get("language", "")
-    if lang:
-        return lang
-    return os.environ.get("VOXTRAL_LANGUAGE", BATCH_LANGUAGE_DEFAULT)
+    val = cfg.get(cfg_key, "")
+    if val:
+        return val
+    return os.environ.get(env_key, default)
+
+
+def get_language() -> str:
+    return _cfg_or_env("language", "VOXTRAL_LANGUAGE", BATCH_LANGUAGE_DEFAULT)
+
+
+def get_realtime_model() -> str:
+    return _cfg_or_env("realtime_model", "VOXTRAL_REALTIME_MODEL", REALTIME_MODEL_DEFAULT)
+
+
+def get_batch_model() -> str:
+    return _cfg_or_env("batch_model", "VOXTRAL_BATCH_MODEL", BATCH_MODEL_DEFAULT)
+
+
+def get_correct_model() -> str:
+    return _cfg_or_env("correct_model", "VOXTRAL_CORRECT_MODEL", CORRECT_MODEL_DEFAULT)
 
 
 def get_client() -> Mistral:
@@ -151,7 +168,6 @@ async def save_settings(body: dict):
     return {"status": "ok", "message": "API key opgeslagen"}
 
 
-CORRECT_MODEL = "mistral-small-latest"
 
 DEFAULT_CORRECT_PROMPT = (
     "Je bent een nauwkeurige tekstcorrector voor Nederlands. "
@@ -197,7 +213,7 @@ async def correct_text(body: dict):
     try:
         client = get_client()
         response = client.chat.complete(
-            model=CORRECT_MODEL,
+            model=get_correct_model(),
             messages=[
                 {"role": "system", "content": full_prompt},
                 {"role": "user", "content": text},
@@ -220,7 +236,7 @@ async def transcribe_batch(file: UploadFile, diarize: bool = Form(False)):
         client = get_client()
         content = await file.read()
         kwargs = dict(
-            model=BATCH_MODEL,
+            model=get_batch_model(),
             file={"content": content, "file_name": file.filename or "audio.webm"},
             language=get_language(),
         )
@@ -300,7 +316,7 @@ async def ws_transcribe(websocket: WebSocket):
         logger.info("Starting Mistral realtime transcription stream...")
         async for event in client.audio.realtime.transcribe_stream(
             audio_stream=audio_stream(),
-            model=REALTIME_MODEL,
+            model=get_realtime_model(),
             audio_format=AUDIO_FORMAT,
             target_streaming_delay_ms=delay_ms,
         ):
