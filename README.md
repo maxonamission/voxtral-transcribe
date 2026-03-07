@@ -130,6 +130,12 @@ voxtral-app/
 └── STATUS.md              # Project status & roadmap
 ```
 
+## Steun dit project
+
+Vind je Voxtral Transcribe handig? Overweeg een donatie!
+
+<a href="https://buymeacoffee.com/maxonamission" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"></a>
+
 ## Licentie
 
 MIT
