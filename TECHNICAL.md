@@ -236,10 +236,75 @@ POST /api/transcribe mislukt
 
 ---
 
+## Obsidian Plugin — `obsidian-plugin/`
+
+### Architectuur
+
+De Obsidian plugin is een standalone TypeScript-applicatie die dezelfde Mistral API's aanroept als de web-app, maar direct vanuit Obsidian — zonder de Python backend.
+
+**Stack:** TypeScript + Obsidian Plugin API, gebouwd met esbuild.
+
+### Modules
+
+| Bestand | Functie |
+|---|---|
+| `src/main.ts` | Plugin entry: recording toggle, tap-to-send, commando's, status bar |
+| `src/mistral-api.ts` | Batch transcriptie (fetch), tekstcorrectie (requestUrl), realtime WebSocket (Node.js `https` module) |
+| `src/audio-recorder.ts` | Microfoon capture: MediaRecorder (batch) of ScriptProcessor → PCM s16le (realtime), level metering |
+| `src/voice-commands.ts` | Stemcommando herkenning, normalisatie, text processing, auto-spacing |
+| `src/help-view.ts` | Zijpaneel (ItemView) met stemcommando-overzicht |
+| `src/settings-tab.ts` | Instellingen UI (PluginSettingTab) |
+| `src/types.ts` | Interfaces, constanten, default correctie-prompt |
+
+### Platform-specifiek gedrag
+
+| Feature | Desktop | Mobiel |
+|---|---|---|
+| Transcriptie modus | Realtime (streaming) of batch | Alleen batch |
+| Send-knop (tap-to-send) | Ribbon icon in linkerbalk | View header action (altijd zichtbaar boven toetsenbord) |
+| Stemcommando-zijpaneel | Opent automatisch bij start opname | Niet automatisch (handmatig te openen) |
+| Status bar | Toont opname-indicator + microfoon naam | Niet beschikbaar (Obsidian beperking) |
+| WebSocket | Node.js `https` module (Electron) | Niet beschikbaar |
+
+### Realtime WebSocket (desktop)
+
+De plugin implementeert het WebSocket-protocol handmatig via Node.js `https.request` met een `Upgrade: websocket` header, omdat Obsidian's Electron-omgeving geen `WebSocket` API beschikbaar heeft voor externe URLs. Dit omvat:
+- Handmatige frame encoding/decoding (text, close, ping/pong)
+- Client-side masking (RFC 6455)
+- Keep-alive pings elke 15 seconden
+- Automatische stille herverbinding na `transcription.done` events (normaal API-gedrag)
+- Exponentiële backoff bij echte verbindingsfouten (max 5 pogingen)
+
+### Tekstcorrectie: LLM-commentaar stripping
+
+De correctie-LLM (Mistral Small) voegt soms eigen commentaar toe tussen haakjes, bijv. "(de rest van de tekst ontbreekt)". Dit wordt op twee niveaus voorkomen:
+1. **Prompt**: strikt verbod op toevoegen van eigen tekst/commentaar
+2. **Post-processing**: `stripLlmCommentary()` verwijdert parenthesized blokken (>10 tekens) die niet in de originele transcriptie voorkwamen
+
+### Dataflow
+
+**Batch modus (mobiel + desktop):**
+```
+Microfoon → MediaRecorder (WebM/M4A) → flushChunk()/stop()
+    → Blob → FormData POST api.mistral.ai/v1/audio/transcriptions
+    → JSON response → processText() → Editor insert
+    → [optioneel] correctText() → stripLlmCommentary() → Editor insert
+```
+
+**Realtime modus (desktop):**
+```
+Microfoon → AudioContext (16kHz) → ScriptProcessor → PCM s16le
+    → base64 encode → WebSocket → Mistral Realtime API
+    → transcription.text.delta → handleRealtimeDelta() → buffer
+    → [zins-einde of >120 chars] → processText() → Editor insert
+    → [transcription.done] → flush remaining → auto-reconnect
+    → [na stop, optioneel] correctText() → Editor setValue
+```
+
 ## Bestandsstructuur
 
 ```
-voxtral-app/
+voxtral-transcribe/
 ├── server.py              # FastAPI backend (~400 regels)
 ├── static/
 │   ├── index.html         # UI layout + help panel + settings modal
@@ -249,5 +314,11 @@ voxtral-app/
 │   ├── manifest.json      # PWA manifest
 │   ├── icon-192.svg       # App icoon
 │   └── icon-512.svg       # App icoon (groot)
+├── obsidian-plugin/       # Obsidian plugin
+│   ├── src/               # TypeScript bronbestanden (7 modules)
+│   ├── main.js            # Gebouwde plugin (esbuild output)
+│   ├── manifest.json      # Obsidian plugin manifest
+│   ├── styles.css         # Plugin styling
+│   └── INSTALL.md         # Installatie- en testinstructies
 └── TECHNICAL.md           # Dit bestand
 ```
