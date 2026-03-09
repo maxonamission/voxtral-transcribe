@@ -251,9 +251,9 @@ const VOICE_COMMANDS = [
     { patterns: ["kop 2", "kop twee", "heading 2", "heading two"], insert: "\n\n## ", toast: "## H2" },
     { patterns: ["kop 3", "kop drie", "heading 3", "heading three"], insert: "\n\n### ", toast: "### H3" },
     // Lijst
-    { patterns: ["nieuw punt", "nieuw lijstitem", "lijst punt", "bullet", "bullet point", "volgend punt"], insert: "\n- ", toast: "• Lijstitem" },
+    { patterns: ["nieuw punt", "nieuw lijstitem", "lijst punt", "nieuw item", "nieuwe item", "volgend item", "new item", "next item", "bullet", "bullet point", "volgend punt"], insert: "\n- ", toast: "• Lijstitem" },
     // To-do
-    { patterns: ["nieuw to-do item", "nieuw todo item", "nieuw todo", "nieuwe taak", "nieuw item", "nieuwe item", "volgend item", "new todo", "new item", "next item", "to-do item", "todo item"], insert: "\n- [ ] ", toast: "☐ To-do" },
+    { patterns: ["nieuw to-do item", "nieuw todo item", "nieuw todo", "nieuwe taak", "new todo", "new to-do", "to-do item", "todo item"], insert: "\n- [ ] ", toast: "☐ To-do" },
     // Genummerde lijst
     { patterns: ["nieuw genummerd item", "nieuw genummerd punt", "genummerd punt", "genummerd item", "volgend nummer", "nummer punt", "numbered item", "new numbered item"], insert: "\n1. ", toast: "1. Genummerd item" },
     // Bediening
