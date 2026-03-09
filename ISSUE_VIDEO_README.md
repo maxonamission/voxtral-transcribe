@@ -1,4 +1,4 @@
-# README: introducievideo toevoegen voor nieuwe gebruikers
+# README: introductievideo toevoegen voor nieuwe gebruikers
 
 ## Doel
 
