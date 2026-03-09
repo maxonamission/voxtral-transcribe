@@ -1,8 +1,8 @@
-# Obsidian plugin: introducievideo toevoegen voor nieuwe gebruikers
+# Obsidian plugin: introductievideo toevoegen voor nieuwe gebruikers
 
 ## Doel
 
-Een korte introducievideo opnemen die nieuwe Obsidian-gebruikers een soepele start geeft met de Voxtral Transcribe plugin. De video wordt embedded in de plugin README.
+Een korte introductievideo opnemen die nieuwe Obsidian-gebruikers een soepele start geeft met de Voxtral Transcribe plugin. De video wordt embedded in de plugin README.
 
 ## Waarom
 
