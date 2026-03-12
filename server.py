@@ -145,7 +145,7 @@ async def get_settings():
         masked = key[:4] + "•" * (len(key) - 8) + key[-4:] if len(key) > 8 else "••••"
     else:
         masked = ""
-    return {"has_key": bool(key), "masked_key": masked}
+    return {"has_key": bool(key), "masked_key": masked, "language": get_language()}
 
 
 @app.post("/api/settings")
@@ -153,19 +153,28 @@ async def save_settings(body: dict):
     """Save API key to config.json."""
     if not rate_limiter.is_allowed("settings", max_requests=5, window_seconds=60):
         return JSONResponse({"error": "Te veel verzoeken, probeer later opnieuw"}, status_code=429)
-    api_key = body.get("api_key", "").strip()
-    if not api_key:
-        return JSONResponse({"error": "Geen API key opgegeven"}, status_code=400)
-    # Quick validation: try listing models
-    try:
-        test_client = Mistral(api_key=api_key)
-        test_client.models.list()
-    except Exception as e:
-        return JSONResponse({"error": f"Ongeldige API key: {e}"}, status_code=400)
     cfg = load_config()
-    cfg["api_key"] = api_key
+
+    # Save language if provided
+    language = body.get("language", "").strip()
+    if language:
+        cfg["language"] = language
+
+    # Save API key if provided (with validation)
+    api_key = body.get("api_key", "").strip()
+    if api_key:
+        try:
+            test_client = Mistral(api_key=api_key)
+            test_client.models.list()
+        except Exception as e:
+            return JSONResponse({"error": f"Ongeldige API key: {e}"}, status_code=400)
+        cfg["api_key"] = api_key
+
+    if not api_key and not language:
+        return JSONResponse({"error": "Geen instellingen opgegeven"}, status_code=400)
+
     save_config(cfg)
-    return {"status": "ok", "message": "API key opgeslagen"}
+    return {"status": "ok", "message": "Instellingen opgeslagen"}
 
 
 
@@ -348,10 +357,32 @@ async def ws_transcribe(websocket: WebSocket):
         receiver.cancel()
 
 
+# ── Shutdown endpoint (for windowed/PyInstaller builds) ──
+
+@app.post("/api/shutdown")
+async def shutdown():
+    """Gracefully shut down the server."""
+    if not rate_limiter.is_allowed("shutdown", max_requests=2, window_seconds=60):
+        return JSONResponse({"error": "Te veel verzoeken"}, status_code=429)
+
+    import signal
+    import threading
+
+    logger.info("Shutdown requested via /api/shutdown")
+
+    def _stop():
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    # Delay slightly so the HTTP response can be sent first
+    threading.Timer(0.5, _stop).start()
+    return {"status": "shutting down"}
+
+
 # Serve static files (must be last to not override API routes)
 app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
 
 if __name__ == "__main__":
+    import signal
     import threading
     import webbrowser
 
@@ -368,20 +399,89 @@ if __name__ == "__main__":
     # In windowed mode (no console), redirect crash logs to a file
     _LOG_FILE = os.path.join(_SCRIPT_DIR, "error.log")
 
-    try:
-        port = int(os.environ.get("PORT", 8000))
-        url = f"http://127.0.0.1:{port}"
+    port = int(os.environ.get("PORT", 8000))
+    url = f"http://127.0.0.1:{port}"
 
-        # Open browser after a short delay (gives uvicorn time to start)
-        # Skip if VOXTRAL_NO_BROWSER is set (e.g. launcher .bat handles it)
+    # ── System tray icon ──
+
+    def _create_tray_icon():
+        """Create a system tray icon with Open/Quit menu.
+
+        Falls back gracefully if pystray is not installed (e.g. dev mode
+        without Pillow/pystray) — the server still runs, just without tray.
+        """
+        try:
+            import pystray
+            from PIL import Image, ImageDraw
+        except ImportError as e:
+            logger.info(f"pystray/Pillow not available, skipping tray icon: {e}")
+            return None
+
+        try:
+            # Draw a simple microphone-style icon (green circle)
+            size = 64
+            img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            draw.ellipse([8, 8, size - 8, size - 8], fill=(76, 175, 80))
+            # White mic shape (simplified)
+            cx, cy = size // 2, size // 2
+            draw.rounded_rectangle(
+                [cx - 6, cy - 16, cx + 6, cy + 4],
+                radius=6,
+                fill="white",
+            )
+            draw.rectangle([cx - 1, cy + 4, cx + 1, cy + 12], fill="white")
+            draw.rectangle([cx - 8, cy + 12, cx + 8, cy + 14], fill="white")
+
+            def on_open(_icon, _item):
+                webbrowser.open(url)
+
+            def on_quit(_icon, _item):
+                logger.info("Quit requested from system tray")
+                _icon.stop()
+                os.kill(os.getpid(), signal.SIGTERM)
+
+            icon = pystray.Icon(
+                "voxtral",
+                img,
+                "Voxtral Transcribe",
+                menu=pystray.Menu(
+                    pystray.MenuItem("Openen in browser", on_open, default=True),
+                    pystray.Menu.SEPARATOR,
+                    pystray.MenuItem("Afsluiten", on_quit),
+                ),
+            )
+            return icon
+        except Exception as e:
+            logger.error(f"Failed to create tray icon: {e}")
+            return None
+
+    try:
+        # Start uvicorn in a daemon thread
+        server_config = uvicorn.Config(
+            app, host="127.0.0.1", port=port, log_level="info"
+        )
+        server = uvicorn.Server(server_config)
+
+        server_thread = threading.Thread(target=server.run, daemon=True)
+        server_thread.start()
+
+        # Open browser after a short delay
         if os.environ.get("VOXTRAL_NO_BROWSER") != "1":
             threading.Timer(1.5, webbrowser.open, args=[url]).start()
             logger.info(f"Opening browser at {url}")
 
-        uvicorn.run(app, host="127.0.0.1", port=port)
+        # Run system tray on the main thread (required by Windows)
+        tray_icon = _create_tray_icon()
+        if tray_icon:
+            logger.info("System tray icon active — right-click to quit")
+            tray_icon.run()
+        else:
+            # No tray available — just wait for the server thread
+            server_thread.join()
+
     except Exception:
         traceback.print_exc()
-        # Also write to error.log for windowed mode (no console visible)
         try:
             with open(_LOG_FILE, "a", encoding="utf-8") as f:
                 f.write(f"\n{'='*60}\n")
@@ -389,7 +489,6 @@ if __name__ == "__main__":
                 traceback.print_exc(file=f)
         except Exception:
             pass
-        # If console is available, pause so user can read the error
         try:
             input("\nDruk op Enter om te sluiten...")
         except (EOFError, RuntimeError):

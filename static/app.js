@@ -18,6 +18,9 @@ let userScrolledAway = false; // true when user manually scrolled up
 let autoCorrect = JSON.parse(localStorage.getItem("voxtral-autocorrect") || "false");
 let systemPrompt = localStorage.getItem("voxtral-system-prompt") || "";
 
+// ── Language ──
+let activeLang = localStorage.getItem("voxtral-language") || "nl";
+
 // ── Keyboard shortcut ──
 const DEFAULT_SHORTCUT = { ctrl: true, shift: false, alt: false, meta: false, key: " " };
 let recordShortcut = loadShortcut();
@@ -115,6 +118,16 @@ const toast = document.getElementById("toast");
 const settingsOverlay = document.getElementById("settings-overlay");
 const inputApiKey = document.getElementById("input-apikey");
 const settingsStatus = document.getElementById("settings-status");
+const selectLanguage = document.getElementById("select-language");
+
+// Populate language dropdown
+for (const [code, name] of Object.entries(LANG_NAMES)) {
+    const opt = document.createElement("option");
+    opt.value = code;
+    opt.textContent = `${name} (${code})`;
+    selectLanguage.appendChild(opt);
+}
+selectLanguage.value = activeLang;
 
 // ── Mode toggle ──
 const diarizeToggle = document.getElementById("diarize-toggle");
@@ -241,27 +254,169 @@ function finalizeInsertPoint() {
     replaceHint.classList.add("hidden");
 }
 
-// ── Voice commands ──
-const VOICE_COMMANDS = [
-    // Structuur
-    { patterns: ["nieuwe alinea", "nieuw alinea", "nieuwe paragraaf", "nieuwe linie", "new paragraph"], insert: "\n\n", toast: "¶ Nieuwe alinea" },
-    { patterns: ["nieuwe regel", "new line", "volgende regel"], insert: "\n", toast: "↵ Nieuwe regel" },
-    // Headings
-    { patterns: ["kop 1", "kop een", "heading 1", "heading one", "kop 1", "kop één"], insert: "\n\n# ", toast: "# H1" },
-    { patterns: ["kop 2", "kop twee", "heading 2", "heading two"], insert: "\n\n## ", toast: "## H2" },
-    { patterns: ["kop 3", "kop drie", "heading 3", "heading three"], insert: "\n\n### ", toast: "### H3" },
-    // Lijst
-    { patterns: ["nieuw punt", "nieuw lijstitem", "lijst punt", "bullet", "bullet point", "volgend punt"], insert: "\n- ", toast: "• Lijstitem" },
-    // To-do
-    { patterns: ["nieuw to-do item", "nieuw todo item", "nieuw todo", "nieuwe taak", "new todo", "to-do item", "todo item"], insert: "\n- [ ] ", toast: "☐ To-do" },
-    // Bediening
-    { patterns: ["beëindig opname", "beëindig de opname", "beëindigt opname", "beëindigt de opname", "beëindigde opname", "beëindigde de opname", "beeindig opname", "beeindig de opname", "beeindigt opname", "beeindigt de opname", "beeindigde opname", "beeindigde de opname", "stop opname", "stopopname", "stop de opname", "stop recording"], action: "stopRecording", toast: "⏹ Stop" },
-    // Wissen
-    { patterns: ["verwijder laatste alinea", "verwijder laatste paragraaf", "wis laatste alinea", "delete last paragraph"], action: "deleteLastParagraph", toast: "Alinea gewist" },
-    { patterns: ["verwijder laatste regel", "verwijder laatste zin", "wis laatste regel", "wist laatste regel", "delete last line"], action: "deleteLastLine", toast: "Regel gewist" },
-    // Ongedaan maken
-    { patterns: ["herstel", "ongedaan maken", "undo"], action: "undo", toast: "↩ Hersteld" },
+// ── Voice commands — language-driven ──
+
+const LANG_PATTERNS = {
+    nl: {
+        newParagraph: ["nieuwe alinea", "nieuw alinea", "nieuwe paragraaf", "nieuwe linie"],
+        newLine: ["nieuwe regel", "nieuwe lijn", "volgende regel"],
+        heading1: ["kop een", "kop 1"],
+        heading2: ["kop twee", "kop 2"],
+        heading3: ["kop drie", "kop 3"],
+        bulletPoint: ["nieuw punt", "nieuw lijstitem", "lijst punt", "nieuw item", "nieuwe item", "volgend item", "volgend punt"],
+        todoItem: ["nieuw to-do item", "nieuw todo item", "nieuw todo", "nieuwe taak"],
+        numberedItem: ["nieuw genummerd item", "nieuw genummerd punt", "genummerd punt", "genummerd item", "volgend nummer", "nummer punt"],
+        stopRecording: ["beeindig opname", "beeindig de opname", "stop opname", "stopopname", "stop de opname"],
+        deleteLastParagraph: ["verwijder laatste alinea", "verwijder laatste paragraaf", "wis laatste alinea"],
+        deleteLastLine: ["verwijder laatste regel", "verwijder laatste zin", "wis laatste regel", "wist laatste regel"],
+        undo: ["herstel", "ongedaan maken"],
+        colon: ["dubbele punt", "double punt", "dubbelepunt"],
+    },
+    en: {
+        newParagraph: ["new paragraph"],
+        newLine: ["new line", "next line"],
+        heading1: ["heading one", "heading 1"],
+        heading2: ["heading two", "heading 2"],
+        heading3: ["heading three", "heading 3"],
+        bulletPoint: ["new item", "next item", "bullet", "bullet point", "new bullet"],
+        todoItem: ["new todo", "new to-do", "todo item", "to-do item"],
+        numberedItem: ["numbered item", "new numbered item", "next number"],
+        stopRecording: ["stop recording"],
+        deleteLastParagraph: ["delete last paragraph"],
+        deleteLastLine: ["delete last line", "delete last sentence"],
+        undo: ["undo"],
+        colon: ["colon"],
+    },
+    fr: {
+        newParagraph: ["nouveau paragraphe", "nouvelle section", "nouveau alinea"],
+        newLine: ["nouvelle ligne", "a la ligne", "retour a la ligne"],
+        heading1: ["titre un", "titre 1"],
+        heading2: ["titre deux", "titre 2"],
+        heading3: ["titre trois", "titre 3"],
+        bulletPoint: ["nouveau point", "nouvelle puce", "point suivant", "nouvel element"],
+        todoItem: ["nouvelle tache", "nouveau todo", "nouveau to-do"],
+        numberedItem: ["point numero", "element numero", "nouveau numero"],
+        stopRecording: ["arreter enregistrement", "arreter l enregistrement", "stop enregistrement"],
+        deleteLastParagraph: ["supprimer dernier paragraphe", "effacer dernier paragraphe"],
+        deleteLastLine: ["supprimer derniere ligne", "effacer derniere ligne"],
+        undo: ["annuler"],
+        colon: ["deux points"],
+    },
+    de: {
+        newParagraph: ["neuer absatz", "neuer paragraph"],
+        newLine: ["neue zeile", "nachste zeile"],
+        heading1: ["uberschrift eins", "uberschrift 1"],
+        heading2: ["uberschrift zwei", "uberschrift 2"],
+        heading3: ["uberschrift drei", "uberschrift 3"],
+        bulletPoint: ["neuer punkt", "neuer aufzahlungspunkt", "nachster punkt", "neues element"],
+        todoItem: ["neue aufgabe", "neues todo", "neues to-do"],
+        numberedItem: ["nummerierter punkt", "neuer nummerierter punkt", "nachste nummer"],
+        stopRecording: ["aufnahme beenden", "aufnahme stoppen"],
+        deleteLastParagraph: ["letzten absatz loschen", "absatz loschen"],
+        deleteLastLine: ["letzte zeile loschen", "letzten satz loschen"],
+        undo: ["ruckgangig", "ruckgangig machen"],
+        colon: ["doppelpunkt"],
+    },
+    es: {
+        newParagraph: ["nuevo parrafo", "nueva seccion"],
+        newLine: ["nueva linea", "siguiente linea"],
+        heading1: ["titulo uno", "titulo 1"],
+        heading2: ["titulo dos", "titulo 2"],
+        heading3: ["titulo tres", "titulo 3"],
+        bulletPoint: ["nuevo punto", "nueva vineta", "siguiente punto", "nuevo elemento"],
+        todoItem: ["nueva tarea", "nuevo todo", "nuevo to-do"],
+        numberedItem: ["punto numerado", "nuevo numero", "siguiente numero"],
+        stopRecording: ["parar grabacion", "detener grabacion"],
+        deleteLastParagraph: ["borrar ultimo parrafo", "eliminar ultimo parrafo"],
+        deleteLastLine: ["borrar ultima linea", "eliminar ultima linea"],
+        undo: ["deshacer"],
+        colon: ["dos puntos"],
+    },
+    pt: {
+        newParagraph: ["novo paragrafo", "nova secao"],
+        newLine: ["nova linha", "proxima linha"],
+        heading1: ["titulo um", "titulo 1"],
+        heading2: ["titulo dois", "titulo 2"],
+        heading3: ["titulo tres", "titulo 3"],
+        bulletPoint: ["novo ponto", "novo item", "proximo ponto", "novo elemento"],
+        todoItem: ["nova tarefa", "novo todo", "novo to-do"],
+        numberedItem: ["ponto numerado", "novo numero", "proximo numero"],
+        stopRecording: ["parar gravacao", "encerrar gravacao"],
+        deleteLastParagraph: ["apagar ultimo paragrafo", "excluir ultimo paragrafo"],
+        deleteLastLine: ["apagar ultima linha", "excluir ultima linha"],
+        undo: ["desfazer"],
+        colon: ["dois pontos"],
+    },
+    it: {
+        newParagraph: ["nuovo paragrafo", "nuova sezione", "nuovo capoverso"],
+        newLine: ["nuova riga", "a capo", "riga successiva"],
+        heading1: ["titolo uno", "titolo 1"],
+        heading2: ["titolo due", "titolo 2"],
+        heading3: ["titolo tre", "titolo 3"],
+        bulletPoint: ["nuovo punto", "nuovo elemento", "punto successivo", "nuovo elenco"],
+        todoItem: ["nuovo compito", "nuova attivita", "nuovo todo"],
+        numberedItem: ["punto numerato", "nuovo numero", "numero successivo"],
+        stopRecording: ["ferma registrazione", "interrompi registrazione", "stop registrazione"],
+        deleteLastParagraph: ["cancella ultimo paragrafo", "elimina ultimo paragrafo"],
+        deleteLastLine: ["cancella ultima riga", "elimina ultima riga"],
+        undo: ["annulla"],
+        colon: ["due punti"],
+    },
+};
+
+const LANG_MISHEARINGS = {
+    nl: [[/\bniveau\b/g, "nieuwe"]],
+    fr: [[/\bnouveau ligne\b/g, "nouvelle ligne"], [/\bnouvelle paragraphe\b/g, "nouveau paragraphe"]],
+    de: [[/\bneue absatz\b/g, "neuer absatz"], [/\bneues zeile\b/g, "neue zeile"]],
+};
+
+const LANG_NAMES = {
+    nl: "Nederlands", en: "English", fr: "Français", de: "Deutsch",
+    es: "Español", pt: "Português", it: "Italiano",
+    ru: "Русский", zh: "中文", hi: "हिन्दी", ar: "العربية", ja: "日本語", ko: "한국어",
+};
+
+// Command definitions: id → {insert/action, punctuation, toast}
+const COMMAND_DEFS = [
+    { id: "newParagraph", insert: "\n\n", toast: "¶" },
+    { id: "newLine", insert: "\n", toast: "↵" },
+    { id: "heading1", insert: "\n\n# ", toast: "# H1" },
+    { id: "heading2", insert: "\n\n## ", toast: "## H2" },
+    { id: "heading3", insert: "\n\n### ", toast: "### H3" },
+    { id: "bulletPoint", insert: "\n- ", toast: "•" },
+    { id: "todoItem", insert: "\n- [ ] ", toast: "☐" },
+    { id: "numberedItem", insert: "\n1. ", toast: "1." },
+    { id: "stopRecording", action: "stopRecording", toast: "⏹ Stop" },
+    { id: "deleteLastParagraph", action: "deleteLastParagraph", toast: "🗑" },
+    { id: "deleteLastLine", action: "deleteLastLine", toast: "🗑" },
+    { id: "undo", action: "undo", toast: "↩" },
+    { id: "colon", insert: ": ", punctuation: true, toast: ":" },
 ];
+
+/** Build VOICE_COMMANDS from COMMAND_DEFS + active language patterns + EN fallback */
+function buildVoiceCommands(lang) {
+    const langData = LANG_PATTERNS[lang] || {};
+    const enData = lang === "en" ? {} : (LANG_PATTERNS.en || {});
+    return COMMAND_DEFS.map(def => {
+        const langP = langData[def.id] || [];
+        const enP = enData[def.id] || [];
+        // Merge: active language first, then English fallback, deduplicated
+        const seen = new Set();
+        const patterns = [];
+        for (const p of [...langP, ...enP]) {
+            if (!seen.has(p)) { seen.add(p); patterns.push(p); }
+        }
+        return { ...def, patterns };
+    });
+}
+
+let VOICE_COMMANDS = buildVoiceCommands(activeLang);
+
+// Remove trailing punctuation before inserting a new punctuation mark.
+// E.g. "oké," + ": " → "oké: " (not "oké,: ")
+function stripTrailingPunctuation(str) {
+    return str.replace(/[,;.!?]+\s*$/, "");
+}
 
 // Strip diacritics: ë→e, é→e, ï→i etc.
 function stripDiacritics(str) {
@@ -274,18 +429,27 @@ function normalizeCommand(text) {
     norm = stripDiacritics(norm);
     // Strip punctuation including all dash/hyphen variants (ASCII, Unicode hyphen, en-dash, em-dash)
     norm = norm.replace(/[,;:'"…\u002D\u2010\u2011\u2012\u2013\u2014\u2015]/g, "");
-    // Common Voxtral mishearings
-    norm = norm.replace(/\bniveau\b/g, "nieuwe");
+    // Language-specific mishearing corrections
+    for (const [pattern, replacement] of (LANG_MISHEARINGS[activeLang] || [])) {
+        norm = norm.replace(pattern, replacement);
+    }
     return norm.trim();
 }
 
-function findCommand(normalized) {
+function findCommand(normalized, rawText) {
     for (const cmd of VOICE_COMMANDS) {
         for (const pattern of cmd.patterns) {
             // Normalize pattern the same way as input (strip diacritics, hyphens, etc.)
             const p = normalizeCommand(pattern);
-            // Match exact OR as suffix (e.g. "dan nieuwe paragraaf" ends with "nieuwe paragraaf")
-            if (normalized === p || normalized.endsWith(" " + p)) return cmd;
+            if (normalized === p) return { cmd, textBefore: "" };
+            if (normalized.endsWith(" " + p)) {
+                // Extract raw text before the command by stripping the same
+                // number of words from the end of the raw input
+                const patternWordCount = p.split(/\s+/).length;
+                const rawWords = (rawText || "").trimEnd().split(/\s+/);
+                const textBefore = rawWords.slice(0, -patternWordCount).join(" ");
+                return { cmd, textBefore };
+            }
         }
     }
     return null;
@@ -296,9 +460,24 @@ function checkForCommand() {
     const raw = activeInsert.textContent.replace(/[.!?]/g, "");
     const norm = normalizeCommand(raw);
     if (!norm) return false;
-    const cmd = findCommand(norm);
-    if (cmd) {
-        executeCommand(cmd);
+    const result = findCommand(norm, raw);
+    if (result) {
+        // Insert any text that came before the command
+        if (result.textBefore) {
+            const span = document.createElement("span");
+            if (result.cmd.punctuation) {
+                // Punctuation attaches directly to preceding text
+                // Strip trailing punctuation to avoid ",:" or ".:" combos
+                span.textContent = stripTrailingPunctuation(result.textBefore) + result.cmd.insert;
+                activeInsert.parentNode.insertBefore(span, activeInsert);
+                activeInsert.textContent = "";
+                showToast(result.cmd.toast);
+                return true;
+            }
+            span.textContent = result.textBefore + " ";
+            activeInsert.parentNode.insertBefore(span, activeInsert);
+        }
+        executeCommand(result.cmd);
         return true;
     }
     return false;
@@ -325,18 +504,18 @@ function processCompletedSentences() {
         const trimmedPart = part.trim();
         const textOnly = trimmedPart.replace(/[.!?]+$/, "").trim();
         const norm = normalizeCommand(textOnly);
-        const cmd = findCommand(norm);
+        const result = findCommand(norm, textOnly);
         // Log hex codes for debugging hyphen issues
         const hexCodes = [...textOnly].map(c => c.charCodeAt(0) > 127 ? `U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}` : c).join("");
-        console.debug(`[voice] "${textOnly}" [${hexCodes}] → norm="${norm}" → ${cmd ? "CMD: " + cmd.toast : "text"}`);
-        return { trimmedPart, cmd };
+        console.debug(`[voice] "${textOnly}" [${hexCodes}] → norm="${norm}" → ${result ? "CMD: " + result.cmd.toast : "text"}`);
+        return { trimmedPart, result };
     });
 
     // Save undo state BEFORE modifying the transcript — but ONLY if there are
     // actual text parts being committed. Pure command sentences (like "Herstel.")
     // should NOT save undo, otherwise restoreUndo() pops the wrong state.
     // (Destructive commands like deleteLastBlock already call saveUndo() internally.)
-    const hasTextParts = actions.some(a => !a.cmd);
+    const hasTextParts = actions.some(a => !a.result);
     if (hasTextParts) {
         saveUndo();
     }
@@ -347,7 +526,7 @@ function processCompletedSentences() {
 
     // Second pass: execute actions
     let stopRequested = false;
-    for (const { trimmedPart, cmd } of actions) {
+    for (const { trimmedPart, result } of actions) {
         // After destructive commands (delete/undo), activeInsert may be detached
         // Re-attach it so subsequent text insertions work — must be inside transcript
         if (!transcript.contains(activeInsert)) {
@@ -355,8 +534,30 @@ function processCompletedSentences() {
             transcript.appendChild(activeInsert);
         }
 
-        if (cmd) {
+        if (result) {
+            const { cmd, textBefore } = result;
+            // Insert text that preceded the command
+            if (textBefore) {
+                const prefixSpan = document.createElement("span");
+                if (cmd.punctuation) {
+                    // Punctuation attaches directly (no space before)
+                    // Strip trailing punctuation to avoid ",:" or ".:" combos
+                    prefixSpan.textContent = stripTrailingPunctuation(textBefore) + cmd.insert;
+                    activeInsert.parentNode.insertBefore(prefixSpan, activeInsert);
+                    showToast(cmd.toast);
+                    continue;
+                }
+                prefixSpan.textContent = textBefore + " ";
+                activeInsert.parentNode.insertBefore(prefixSpan, activeInsert);
+            }
             if (cmd.insert) {
+                // For punctuation commands without textBefore, clean the previous span
+                if (cmd.punctuation) {
+                    const prev = activeInsert.previousSibling;
+                    if (prev && prev.textContent) {
+                        prev.textContent = stripTrailingPunctuation(prev.textContent);
+                    }
+                }
                 const span = document.createElement("span");
                 span.textContent = cmd.insert;
                 activeInsert.parentNode.insertBefore(span, activeInsert);
@@ -389,6 +590,13 @@ function executeCommand(cmd) {
 
     if (cmd.insert) {
         if (activeInsert) {
+            // For punctuation, strip trailing punctuation from previous span
+            if (cmd.punctuation) {
+                const prev = activeInsert.previousSibling;
+                if (prev && prev.textContent) {
+                    prev.textContent = stripTrailingPunctuation(prev.textContent);
+                }
+            }
             activeInsert.textContent = cmd.insert;
             activeInsert.classList.remove("partial", "replacing");
             activeInsert = null;
@@ -1204,10 +1412,14 @@ function openSettings() {
     // Load current masked key as placeholder
     fetch("/api/settings").then(r => r.json()).then(data => {
         inputApiKey.placeholder = data.has_key ? data.masked_key : "Plak je API key hier...";
+        if (data.language) {
+            selectLanguage.value = data.language;
+        }
     }).catch(() => {});
     // Load correction settings
     toggleAutocorrect.checked = autoCorrect;
     inputSystemPrompt.value = systemPrompt;
+    selectLanguage.value = activeLang;
     // Load microphone list
     loadMicrophones();
 }
@@ -1237,9 +1449,26 @@ document.getElementById("btn-save-key").addEventListener("click", async () => {
     selectedMicId = selectMicrophone.value;
     localStorage.setItem("voxtral-mic", selectedMicId);
 
-    // Only validate/save API key if a new one was entered
+    // Save language (rebuild commands immediately)
+    const newLang = selectLanguage.value;
+    if (newLang !== activeLang) {
+        activeLang = newLang;
+        localStorage.setItem("voxtral-language", activeLang);
+        VOICE_COMMANDS = buildVoiceCommands(activeLang);
+    }
+
+    // Build the server payload: language always, API key only if entered
     const key = inputApiKey.value.trim();
+    const payload = { language: activeLang };
+    if (key) payload.api_key = key;
+
     if (!key) {
+        // Save language to server (no key validation needed)
+        fetch("/api/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        }).catch(() => {});
         settingsStatus.textContent = "Instellingen opgeslagen";
         settingsStatus.className = "modal-status success";
         setTimeout(closeSettings, 1500);
@@ -1251,7 +1480,7 @@ document.getElementById("btn-save-key").addEventListener("click", async () => {
         const resp = await fetch("/api/settings", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ api_key: key }),
+            body: JSON.stringify(payload),
         });
         const data = await resp.json();
         if (resp.ok) {
@@ -1282,11 +1511,75 @@ document.addEventListener("keydown", (e) => {
 
 // ── Help panel ──
 const helpPanel = document.getElementById("help-panel");
+const helpTitle = document.getElementById("help-title");
+const helpContent = document.getElementById("help-content");
 const btnHelp = document.getElementById("btn-help");
 const btnCloseHelp = document.getElementById("btn-close-help");
 
+const HELP_UI = {
+    nl: { title: "Stemcommando's", shortcutLabel: "Sneltoets", shortcutDesc: "Start / stop opname" },
+    en: { title: "Voice Commands", shortcutLabel: "Shortcut", shortcutDesc: "Start / stop recording" },
+    fr: { title: "Commandes vocales", shortcutLabel: "Raccourci", shortcutDesc: "Démarrer / arrêter" },
+    de: { title: "Sprachbefehle", shortcutLabel: "Tastenkürzel", shortcutDesc: "Aufnahme starten / stoppen" },
+    es: { title: "Comandos de voz", shortcutLabel: "Atajo", shortcutDesc: "Iniciar / detener" },
+    pt: { title: "Comandos de voz", shortcutLabel: "Atalho", shortcutDesc: "Iniciar / parar" },
+    it: { title: "Comandi vocali", shortcutLabel: "Scorciatoia", shortcutDesc: "Avvia / ferma" },
+};
+
+// Command grouping for the help panel
+const HELP_GROUPS = [
+    { ids: ["newParagraph", "newLine"], label: { nl: "Structuur", en: "Structure", fr: "Structure", de: "Struktur", es: "Estructura", pt: "Estrutura", it: "Struttura" } },
+    { ids: ["heading1", "heading2", "heading3"], label: { nl: "Koppen", en: "Headings", fr: "Titres", de: "Überschriften", es: "Títulos", pt: "Títulos", it: "Titoli" } },
+    { ids: ["bulletPoint", "todoItem", "numberedItem"], label: { nl: "Lijst", en: "Lists", fr: "Listes", de: "Listen", es: "Listas", pt: "Listas", it: "Elenchi" } },
+    { ids: ["stopRecording", "deleteLastParagraph", "deleteLastLine", "undo"], label: { nl: "Bediening", en: "Controls", fr: "Contrôles", de: "Steuerung", es: "Controles", pt: "Controles", it: "Controlli" } },
+    { ids: ["colon"], label: { nl: "Leestekens", en: "Punctuation", fr: "Ponctuation", de: "Satzzeichen", es: "Puntuación", pt: "Pontuação", it: "Punteggiatura" } },
+];
+
+function renderHelpPanel() {
+    const lang = activeLang;
+    const ui = HELP_UI[lang] || HELP_UI.en;
+    helpTitle.textContent = ui.title;
+    helpContent.innerHTML = "";
+
+    for (const group of HELP_GROUPS) {
+        const h3 = document.createElement("h3");
+        h3.textContent = group.label[lang] || group.label.en;
+        helpContent.appendChild(h3);
+        const dl = document.createElement("dl");
+        for (const id of group.ids) {
+            const cmd = VOICE_COMMANDS.find(c => c.id === id);
+            if (!cmd || cmd.patterns.length === 0) continue;
+            const dt = document.createElement("dt");
+            dt.textContent = cmd.patterns.slice(0, 2).map(p => `"${p}"`).join(" / ");
+            const dd = document.createElement("dd");
+            dd.textContent = cmd.toast;
+            dl.appendChild(dt);
+            dl.appendChild(dd);
+        }
+        helpContent.appendChild(dl);
+    }
+
+    // Shortcut section
+    const h3 = document.createElement("h3");
+    h3.textContent = ui.shortcutLabel;
+    helpContent.appendChild(h3);
+    const dl = document.createElement("dl");
+    const dt = document.createElement("dt");
+    dt.id = "help-shortcut-display";
+    dt.textContent = shortcutLabel(recordShortcut).replace(/\+/g, " + ");
+    const dd = document.createElement("dd");
+    dd.textContent = ui.shortcutDesc;
+    dl.appendChild(dt);
+    dl.appendChild(dd);
+    helpContent.appendChild(dl);
+}
+
+// Initial render
+renderHelpPanel();
+
 btnHelp.addEventListener("click", () => {
-    updateShortcutDisplays(); // refresh shortcut label
+    renderHelpPanel(); // re-render with current language
+    updateShortcutDisplays();
     helpPanel.classList.toggle("visible");
 });
 

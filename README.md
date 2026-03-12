@@ -108,10 +108,38 @@ De API key kan op twee manieren worden ingesteld:
 | Microfoon | Selecteer de gewenste microfoon |
 | Sneltoets | Configureerbare opname-sneltoets (standaard: Ctrl+Space) |
 
+## Obsidian Plugin
+
+Voxtral Transcribe is ook beschikbaar als **Obsidian plugin** — dicteer direct in je Obsidian notities.
+
+### Features
+
+- **Realtime streaming** op desktop (Windows, macOS, Linux)
+- **Batch modus met tap-to-send** op mobiel (Android, iOS) — verstuur audio chunks terwijl je blijft praten
+- **Stemcommando's** — nieuwe alinea, koppen, lijsten, to-do items, undo
+- **Automatische tekstcorrectie** — spelling, leestekens, capitalisatie via Mistral Small
+- **Inline correctie-instructies** — geef de corrector opdrachten midden in je dictaat
+- **Zijpaneel** met stemcommando-overzicht (desktop)
+
+### Installatie
+
+Zie [`obsidian-plugin/INSTALL.md`](obsidian-plugin/INSTALL.md) voor volledige installatie-instructies.
+
+Kort:
+```bash
+cd obsidian-plugin
+npm install && npm run build
+```
+Kopieer `main.js`, `manifest.json` en `styles.css` naar `.obsidian/plugins/voxtral-transcribe/` in je vault.
+
+### Mobiel
+
+Op mobiel (Android/iOS) wordt automatisch batch modus gebruikt. Een **verzend-knop** verschijnt in de view header wanneer je een opname start, zodat je chunks kunt verzenden zonder te stoppen. Het stemcommando-zijpaneel opent niet automatisch op mobiel om het scherm niet te blokkeren.
+
 ## Projectstructuur
 
 ```
-voxtral-app/
+voxtral-transcribe/
 ├── server.py              # FastAPI backend
 ├── requirements.txt       # Python dependencies
 ├── .env.example           # Voorbeeld environment
@@ -126,9 +154,21 @@ voxtral-app/
 │   ├── sw.js              # Service worker
 │   ├── manifest.json      # PWA manifest
 │   └── icon-*.svg         # App iconen
+├── obsidian-plugin/       # Obsidian plugin
+│   ├── src/               # TypeScript bronbestanden
+│   ├── main.js            # Gebouwde plugin
+│   ├── manifest.json      # Obsidian plugin manifest
+│   ├── styles.css         # Plugin styling
+│   └── INSTALL.md         # Installatie-instructies
 ├── TECHNICAL.md           # Technische documentatie
 └── STATUS.md              # Project status & roadmap
 ```
+
+## Steun dit project
+
+Vind je Voxtral Transcribe handig? Overweeg een donatie!
+
+<a href="https://buymeacoffee.com/maxonamission" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"></a>
 
 ## Licentie
 

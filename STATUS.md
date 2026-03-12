@@ -1,8 +1,8 @@
 # Project Status — Voxtral Transcribe
 
-**Laatste update:** 2026-03-07
+**Laatste update:** 2026-03-08
 
-## Huidige staat: Werkende app (v20)
+## Huidige staat: Werkende app (v20) + Obsidian Plugin
 
 De app is volledig functioneel voor dagelijks gebruik. Alle kernfuncties werken betrouwbaar.
 
@@ -54,6 +54,19 @@ De app is volledig functioneel voor dagelijks gebruik. Alle kernfuncties werken 
 - [x] Rate limiting op API endpoints (sliding window, max 10/min)
 - [x] Concurrent WebSocket limiet (max 2 gelijktijdige verbindingen)
 - [x] API key niet in git (`.gitignore`)
+
+### Obsidian Plugin
+- [x] Realtime streaming transcriptie (desktop, via Node.js WebSocket)
+- [x] Batch modus met tap-to-send (desktop + mobiel)
+- [x] Stemcommando's (nieuwe alinea, koppen, lijsten, to-do, undo, etc.)
+- [x] Automatische tekstcorrectie via Mistral Small
+- [x] Inline correctie-instructies
+- [x] Post-processing: strip LLM-commentaar dat niet in originele transcriptie stond
+- [x] Zijpaneel met stemcommando-overzicht (desktop, niet automatisch op mobiel)
+- [x] Send-knop in view header op mobiel (altijd zichtbaar boven toetsenbord)
+- [x] Send-knop als ribbon icon op desktop
+- [x] Microfoon selectie
+- [x] Configureerbare instellingen (API key, taal, modellen, streaming delay, systeemprompt)
 
 ### Infra
 - [x] PWA (installeerbaar, offline cache)
@@ -122,6 +135,7 @@ De undo stack bewaart maximaal 20 snapshots van `transcript.innerHTML`. Voor typ
 
 | Versie | Datum | Wijzigingen |
 |---|---|---|
+| v21 | 2026-03-08 | Obsidian plugin: realtime + batch, stemcommando's, correctie, mobiele send in view header, LLM-commentaar stripping |
 | v20 | 2026-03-07 | Microfoon statuslampje, slim scrollen, PyInstaller windowed mode fix, start.bat verbeteringen |
 | v18 | 2026-03-06 | Auto-reconnect, gebruiksvriendelijke foutmeldingen, rate limiting, WebSocket limiet |
 | v17 | 2026-03-06 | Scroll padding fix (35%/50% thresholds) |

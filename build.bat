@@ -9,6 +9,25 @@ echo.
 
 cd /d "%~dp0"
 
+:: Pull latest from GitHub
+echo  [~] Laatste versie ophalen van GitHub...
+git pull
+if %errorlevel% neq 0 (
+    echo  [!] Git pull mislukt. Controleer je verbinding of los merge conflicts op.
+    pause
+    exit /b 1
+)
+echo  [OK] Repository is up-to-date.
+echo.
+
+:: Stop running instance if it exists
+tasklist /FI "IMAGENAME eq VoxtralTranscribe.exe" 2>nul | find /I "VoxtralTranscribe.exe" >nul
+if %errorlevel% equ 0 (
+    echo  [~] VoxtralTranscribe.exe draait nog, wordt afgesloten...
+    taskkill /IM VoxtralTranscribe.exe /F >nul 2>&1
+    timeout /t 2 /nobreak >nul
+)
+
 :: Clean previous build artifacts
 if exist "build\VoxtralTranscribe" rmdir /s /q "build\VoxtralTranscribe"
 if exist "dist\VoxtralTranscribe" rmdir /s /q "dist\VoxtralTranscribe"
@@ -59,6 +78,8 @@ pyinstaller ^
     --hidden-import uvicorn.lifespan.on ^
     --hidden-import uvicorn.lifespan.off ^
     --collect-all mistralai ^
+    --collect-all pystray ^
+    --collect-all PIL ^
     server.py
 
 if %errorlevel% neq 0 (
