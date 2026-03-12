@@ -267,6 +267,12 @@ const VOICE_COMMANDS = [
     { patterns: ["dubbele punt", "double punt", "dubbelepunt", "colon"], insert: ": ", punctuation: true, toast: ": Dubbele punt" },
 ];
 
+// Remove trailing punctuation before inserting a new punctuation mark.
+// E.g. "oké," + ": " → "oké: " (not "oké,: ")
+function stripTrailingPunctuation(str) {
+    return str.replace(/[,;.!?]+\s*$/, "");
+}
+
 // Strip diacritics: ë→e, é→e, ï→i etc.
 function stripDiacritics(str) {
     return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -314,7 +320,8 @@ function checkForCommand() {
             const span = document.createElement("span");
             if (result.cmd.punctuation) {
                 // Punctuation attaches directly to preceding text
-                span.textContent = result.textBefore + result.cmd.insert;
+                // Strip trailing punctuation to avoid ",:" or ".:" combos
+                span.textContent = stripTrailingPunctuation(result.textBefore) + result.cmd.insert;
                 activeInsert.parentNode.insertBefore(span, activeInsert);
                 activeInsert.textContent = "";
                 showToast(result.cmd.toast);
@@ -387,7 +394,8 @@ function processCompletedSentences() {
                 const prefixSpan = document.createElement("span");
                 if (cmd.punctuation) {
                     // Punctuation attaches directly (no space before)
-                    prefixSpan.textContent = textBefore + cmd.insert;
+                    // Strip trailing punctuation to avoid ",:" or ".:" combos
+                    prefixSpan.textContent = stripTrailingPunctuation(textBefore) + cmd.insert;
                     activeInsert.parentNode.insertBefore(prefixSpan, activeInsert);
                     showToast(cmd.toast);
                     continue;
@@ -396,6 +404,13 @@ function processCompletedSentences() {
                 activeInsert.parentNode.insertBefore(prefixSpan, activeInsert);
             }
             if (cmd.insert) {
+                // For punctuation commands without textBefore, clean the previous span
+                if (cmd.punctuation) {
+                    const prev = activeInsert.previousSibling;
+                    if (prev && prev.textContent) {
+                        prev.textContent = stripTrailingPunctuation(prev.textContent);
+                    }
+                }
                 const span = document.createElement("span");
                 span.textContent = cmd.insert;
                 activeInsert.parentNode.insertBefore(span, activeInsert);
@@ -428,6 +443,13 @@ function executeCommand(cmd) {
 
     if (cmd.insert) {
         if (activeInsert) {
+            // For punctuation, strip trailing punctuation from previous span
+            if (cmd.punctuation) {
+                const prev = activeInsert.previousSibling;
+                if (prev && prev.textContent) {
+                    prev.textContent = stripTrailingPunctuation(prev.textContent);
+                }
+            }
             activeInsert.textContent = cmd.insert;
             activeInsert.classList.remove("partial", "replacing");
             activeInsert = null;
