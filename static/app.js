@@ -263,6 +263,8 @@ const VOICE_COMMANDS = [
     { patterns: ["verwijder laatste regel", "verwijder laatste zin", "wis laatste regel", "wist laatste regel", "delete last line"], action: "deleteLastLine", toast: "Regel gewist" },
     // Ongedaan maken
     { patterns: ["herstel", "ongedaan maken", "undo"], action: "undo", toast: "↩ Hersteld" },
+    // Leestekens
+    { patterns: ["dubbele punt", "double punt", "dubbelepunt", "colon"], insert: ": ", punctuation: true, toast: ": Dubbele punt" },
 ];
 
 // Strip diacritics: ë→e, é→e, ï→i etc.
@@ -281,13 +283,20 @@ function normalizeCommand(text) {
     return norm.trim();
 }
 
-function findCommand(normalized) {
+function findCommand(normalized, rawText) {
     for (const cmd of VOICE_COMMANDS) {
         for (const pattern of cmd.patterns) {
             // Normalize pattern the same way as input (strip diacritics, hyphens, etc.)
             const p = normalizeCommand(pattern);
-            // Match exact OR as suffix (e.g. "dan nieuwe paragraaf" ends with "nieuwe paragraaf")
-            if (normalized === p || normalized.endsWith(" " + p)) return cmd;
+            if (normalized === p) return { cmd, textBefore: "" };
+            if (normalized.endsWith(" " + p)) {
+                // Extract raw text before the command by stripping the same
+                // number of words from the end of the raw input
+                const patternWordCount = p.split(/\s+/).length;
+                const rawWords = (rawText || "").trimEnd().split(/\s+/);
+                const textBefore = rawWords.slice(0, -patternWordCount).join(" ");
+                return { cmd, textBefore };
+            }
         }
     }
     return null;
@@ -298,9 +307,23 @@ function checkForCommand() {
     const raw = activeInsert.textContent.replace(/[.!?]/g, "");
     const norm = normalizeCommand(raw);
     if (!norm) return false;
-    const cmd = findCommand(norm);
-    if (cmd) {
-        executeCommand(cmd);
+    const result = findCommand(norm, raw);
+    if (result) {
+        // Insert any text that came before the command
+        if (result.textBefore) {
+            const span = document.createElement("span");
+            if (result.cmd.punctuation) {
+                // Punctuation attaches directly to preceding text
+                span.textContent = result.textBefore + result.cmd.insert;
+                activeInsert.parentNode.insertBefore(span, activeInsert);
+                activeInsert.textContent = "";
+                showToast(result.cmd.toast);
+                return true;
+            }
+            span.textContent = result.textBefore + " ";
+            activeInsert.parentNode.insertBefore(span, activeInsert);
+        }
+        executeCommand(result.cmd);
         return true;
     }
     return false;
@@ -327,18 +350,18 @@ function processCompletedSentences() {
         const trimmedPart = part.trim();
         const textOnly = trimmedPart.replace(/[.!?]+$/, "").trim();
         const norm = normalizeCommand(textOnly);
-        const cmd = findCommand(norm);
+        const result = findCommand(norm, textOnly);
         // Log hex codes for debugging hyphen issues
         const hexCodes = [...textOnly].map(c => c.charCodeAt(0) > 127 ? `U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}` : c).join("");
-        console.debug(`[voice] "${textOnly}" [${hexCodes}] → norm="${norm}" → ${cmd ? "CMD: " + cmd.toast : "text"}`);
-        return { trimmedPart, cmd };
+        console.debug(`[voice] "${textOnly}" [${hexCodes}] → norm="${norm}" → ${result ? "CMD: " + result.cmd.toast : "text"}`);
+        return { trimmedPart, result };
     });
 
     // Save undo state BEFORE modifying the transcript — but ONLY if there are
     // actual text parts being committed. Pure command sentences (like "Herstel.")
     // should NOT save undo, otherwise restoreUndo() pops the wrong state.
     // (Destructive commands like deleteLastBlock already call saveUndo() internally.)
-    const hasTextParts = actions.some(a => !a.cmd);
+    const hasTextParts = actions.some(a => !a.result);
     if (hasTextParts) {
         saveUndo();
     }
@@ -349,7 +372,7 @@ function processCompletedSentences() {
 
     // Second pass: execute actions
     let stopRequested = false;
-    for (const { trimmedPart, cmd } of actions) {
+    for (const { trimmedPart, result } of actions) {
         // After destructive commands (delete/undo), activeInsert may be detached
         // Re-attach it so subsequent text insertions work — must be inside transcript
         if (!transcript.contains(activeInsert)) {
@@ -357,7 +380,21 @@ function processCompletedSentences() {
             transcript.appendChild(activeInsert);
         }
 
-        if (cmd) {
+        if (result) {
+            const { cmd, textBefore } = result;
+            // Insert text that preceded the command
+            if (textBefore) {
+                const prefixSpan = document.createElement("span");
+                if (cmd.punctuation) {
+                    // Punctuation attaches directly (no space before)
+                    prefixSpan.textContent = textBefore + cmd.insert;
+                    activeInsert.parentNode.insertBefore(prefixSpan, activeInsert);
+                    showToast(cmd.toast);
+                    continue;
+                }
+                prefixSpan.textContent = textBefore + " ";
+                activeInsert.parentNode.insertBefore(prefixSpan, activeInsert);
+            }
             if (cmd.insert) {
                 const span = document.createElement("span");
                 span.textContent = cmd.insert;
