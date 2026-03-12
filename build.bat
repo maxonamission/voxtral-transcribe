@@ -100,6 +100,14 @@ echo timeout /t 2 /nobreak ^>nul
 echo start "" http://127.0.0.1:8000
 ) > "dist\VoxtralTranscribe\Start Voxtral Transcribe.bat"
 
+:: Create stop script
+(
+echo @echo off
+echo taskkill /IM VoxtralTranscribe.exe /F ^>nul 2^>^&1
+echo echo Voxtral Transcribe is afgesloten.
+echo timeout /t 2 /nobreak ^>nul
+) > "dist\VoxtralTranscribe\Stop Voxtral Transcribe.bat"
+
 echo.
 echo  ╔══════════════════════════════════════╗
 echo  ║          Build geslaagd!             ║

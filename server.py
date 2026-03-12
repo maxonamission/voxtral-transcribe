@@ -348,6 +348,25 @@ async def ws_transcribe(websocket: WebSocket):
         receiver.cancel()
 
 
+# ── Shutdown endpoint (for windowed/PyInstaller builds) ──
+
+@app.post("/api/shutdown")
+@limiter(max_calls=2, period=60)
+async def shutdown():
+    """Gracefully shut down the server. Only works on localhost."""
+    import signal
+    import threading
+
+    logger.info("Shutdown requested via /api/shutdown")
+
+    def _stop():
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    # Delay slightly so the HTTP response can be sent first
+    threading.Timer(0.5, _stop).start()
+    return {"status": "shutting down"}
+
+
 # Serve static files (must be last to not override API routes)
 app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
 
