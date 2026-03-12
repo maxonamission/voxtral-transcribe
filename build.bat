@@ -9,6 +9,17 @@ echo.
 
 cd /d "%~dp0"
 
+:: Pull latest from GitHub
+echo  [~] Laatste versie ophalen van GitHub...
+git pull
+if %errorlevel% neq 0 (
+    echo  [!] Git pull mislukt. Controleer je verbinding of los merge conflicts op.
+    pause
+    exit /b 1
+)
+echo  [OK] Repository is up-to-date.
+echo.
+
 :: Clean previous build artifacts
 if exist "build\VoxtralTranscribe" rmdir /s /q "build\VoxtralTranscribe"
 if exist "dist\VoxtralTranscribe" rmdir /s /q "dist\VoxtralTranscribe"
