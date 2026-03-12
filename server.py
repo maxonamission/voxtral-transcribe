@@ -145,7 +145,7 @@ async def get_settings():
         masked = key[:4] + "•" * (len(key) - 8) + key[-4:] if len(key) > 8 else "••••"
     else:
         masked = ""
-    return {"has_key": bool(key), "masked_key": masked}
+    return {"has_key": bool(key), "masked_key": masked, "language": get_language()}
 
 
 @app.post("/api/settings")
@@ -153,19 +153,28 @@ async def save_settings(body: dict):
     """Save API key to config.json."""
     if not rate_limiter.is_allowed("settings", max_requests=5, window_seconds=60):
         return JSONResponse({"error": "Te veel verzoeken, probeer later opnieuw"}, status_code=429)
-    api_key = body.get("api_key", "").strip()
-    if not api_key:
-        return JSONResponse({"error": "Geen API key opgegeven"}, status_code=400)
-    # Quick validation: try listing models
-    try:
-        test_client = Mistral(api_key=api_key)
-        test_client.models.list()
-    except Exception as e:
-        return JSONResponse({"error": f"Ongeldige API key: {e}"}, status_code=400)
     cfg = load_config()
-    cfg["api_key"] = api_key
+
+    # Save language if provided
+    language = body.get("language", "").strip()
+    if language:
+        cfg["language"] = language
+
+    # Save API key if provided (with validation)
+    api_key = body.get("api_key", "").strip()
+    if api_key:
+        try:
+            test_client = Mistral(api_key=api_key)
+            test_client.models.list()
+        except Exception as e:
+            return JSONResponse({"error": f"Ongeldige API key: {e}"}, status_code=400)
+        cfg["api_key"] = api_key
+
+    if not api_key and not language:
+        return JSONResponse({"error": "Geen instellingen opgegeven"}, status_code=400)
+
     save_config(cfg)
-    return {"status": "ok", "message": "API key opgeslagen"}
+    return {"status": "ok", "message": "Instellingen opgeslagen"}
 
 
 

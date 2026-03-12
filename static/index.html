@@ -66,43 +66,10 @@
     <!-- Help panel -->
     <div id="help-panel" class="help-panel">
         <div class="help-header">
-            <h2>Stemcommando's</h2>
+            <h2 id="help-title">Stemcommando's</h2>
             <button id="btn-close-help" class="btn btn-icon">&#10005;</button>
         </div>
-        <div class="help-content">
-            <h3>Structuur</h3>
-            <dl>
-                <dt>"nieuwe alinea" / "paragraaf"</dt><dd>Nieuwe paragraaf</dd>
-                <dt>"nieuwe regel"</dt><dd>Regelbreuk</dd>
-            </dl>
-            <h3>Koppen</h3>
-            <dl>
-                <dt>"kop een"</dt><dd># Heading 1</dd>
-                <dt>"kop twee"</dt><dd>## Heading 2</dd>
-                <dt>"kop drie"</dt><dd>### Heading 3</dd>
-            </dl>
-            <h3>Lijst</h3>
-            <dl>
-                <dt>"nieuw punt"</dt><dd>- Lijstitem</dd>
-                <dt>"nieuw to-do item"</dt><dd>- [ ] To-do item</dd>
-                <dt>"nieuw genummerd item"</dt><dd>1. Genummerd item</dd>
-            </dl>
-            <h3>Bediening</h3>
-            <dl>
-                <dt>"beëindig opname"</dt><dd>Stopt de opname</dd>
-                <dt>"verwijder laatste alinea"</dt><dd>Verwijdert laatste paragraaf</dd>
-                <dt>"verwijder laatste regel"</dt><dd>Verwijdert laatste zin</dd>
-                <dt>"herstel"</dt><dd>Maakt laatste wis ongedaan</dd>
-            </dl>
-            <h3>Leestekens</h3>
-            <dl>
-                <dt>"dubbele punt"</dt><dd>Voegt : in</dd>
-            </dl>
-            <h3>Sneltoets</h3>
-            <dl>
-                <dt id="help-shortcut-display">Ctrl + Space</dt><dd>Start / stop opname</dd>
-            </dl>
-        </div>
+        <div id="help-content" class="help-content"></div>
     </div>
 
     <!-- Settings modal -->
@@ -125,6 +92,10 @@
             <label class="modal-label modal-label-spaced" for="input-system-prompt">Systeemprompt (jargon/context)</label>
             <textarea id="input-system-prompt" class="modal-input modal-textarea" placeholder="Bijv: Gebruik 'AI' niet als 'ik'. Medische termen: anamnese, dyspneu, tachycardie..." rows="3"></textarea>
             <p class="modal-hint">Extra instructies voor de tekstcorrector, bijv. vaktermen die niet gecorrigeerd mogen worden</p>
+
+            <label class="modal-label modal-label-spaced" for="select-language">Taal / Language</label>
+            <select id="select-language" class="modal-input modal-select"></select>
+            <p class="modal-hint">Taal voor transcriptie en stemcommando's</p>
 
             <label class="modal-label modal-label-spaced" for="select-microphone">Microfoon</label>
             <select id="select-microphone" class="modal-input modal-select"></select>
