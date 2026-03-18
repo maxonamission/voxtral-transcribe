@@ -278,7 +278,7 @@ main::-webkit-scrollbar-thumb {
 footer {
     display: flex;
     justify-content: space-between;
-    align-items: flex-end;
+    align-items: center;
     padding-top: 1rem;
     flex-shrink: 0;
 }
@@ -319,23 +319,26 @@ footer {
 }
 
 .footer-links {
-    font-size: 0.75rem;
+    font-size: 0.9rem;
     color: #555;
-    position: absolute;
-    bottom: 0.5rem;
-    right: 1rem;
-    text-align: right;
-    line-height: 1.6;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
 }
 
 .footer-links a {
     color: #666;
     text-decoration: none;
     transition: color 0.2s;
+    white-space: nowrap;
 }
 
 .footer-links a:hover {
     color: #aaa;
+}
+
+#bmc-link:hover {
+    color: #e06520 !important;
 }
 
 .footer-sep {
@@ -346,8 +349,12 @@ footer {
 #bmc-tagline {
     color: #444;
     font-style: italic;
-    font-size: 0.7rem;
-    margin-right: 0.4rem;
+    font-size: 0.85rem;
+}
+
+#bmc-link {
+    color: #ff813f !important;
+    font-weight: 600;
 }
 
 /* Help panel */
