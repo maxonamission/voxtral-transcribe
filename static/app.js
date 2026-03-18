@@ -1389,11 +1389,16 @@ function stopDualDelay() {
     stopAudioCapture();
     // Process any remaining voice commands before finalizing
     processDualSlowCommands();
-    // Finalize: keep the slow (accurate) text as the final result
-    if (activeInsert && dualSlowText) {
+    // Finalize: use slow text preferentially, fall back to fast text for any remainder
+    if (activeInsert) {
+        const finalText = dualSlowText || dualFastText;
         activeInsert.innerHTML = "";
-        activeInsert.textContent = dualSlowText || dualFastText;
+        if (finalText) {
+            activeInsert.textContent = finalText;
+            activeInsert.className = "partial";
+        }
     }
+    finalizeInsertPoint();
     dualFastText = "";
     dualSlowText = "";
     dualSlowConfirmed = "";

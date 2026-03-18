@@ -33,6 +33,9 @@ var DEFAULT_SETTINGS = {
   correctModel: "mistral-small-latest",
   autoCorrect: true,
   streamingDelayMs: 480,
+  dualDelay: false,
+  dualDelayFastMs: 240,
+  dualDelaySlowMs: 2400,
   systemPrompt: "",
   mode: "realtime",
   microphoneDeviceId: "",
@@ -664,11 +667,13 @@ function createWebSocket(url, headers, callbacks) {
   return conn;
 }
 var RealtimeTranscriber = class {
-  constructor(settings, callbacks) {
+  constructor(settings, callbacks, delayOverrideMs) {
     this.ws = null;
     this.intentionallyClosed = false;
+    this.delayOverrideMs = null;
     this.settings = settings;
     this.callbacks = callbacks;
+    this.delayOverrideMs = delayOverrideMs != null ? delayOverrideMs : null;
   }
   async connect() {
     this.intentionallyClosed = false;
@@ -767,7 +772,9 @@ var RealtimeTranscriber = class {
     });
   }
   sendSessionUpdate() {
+    var _a;
     if (!this.ws) return;
+    const delayMs = (_a = this.delayOverrideMs) != null ? _a : this.settings.streamingDelayMs;
     const msg = {
       type: "session.update",
       session: {
@@ -775,7 +782,7 @@ var RealtimeTranscriber = class {
           encoding: "pcm_s16le",
           sample_rate: 16e3
         },
-        target_streaming_delay_ms: this.settings.streamingDelayMs
+        target_streaming_delay_ms: delayMs
       }
     };
     this.ws.send(JSON.stringify(msg));
@@ -1432,28 +1439,39 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Streaming delay").setDesc(
-      "Delay in ms for realtime mode. Lower = faster but less accurate."
-    ).addDropdown((drop) => {
-      const options = {
-        "240": "240 ms (fastest)",
-        "480": "480 ms (default)",
-        "640": "640 ms",
-        "800": "800 ms",
-        "1200": "1200 ms",
-        "1600": "1600 ms",
-        "2400": "2400 ms (most accurate)"
-      };
-      for (const [value, label] of Object.entries(options)) {
-        drop.addOption(value, label);
-      }
-      drop.setValue(
-        String(this.plugin.settings.streamingDelayMs)
-      ).onChange(async (value) => {
-        this.plugin.settings.streamingDelayMs = Number(value);
+    new import_obsidian2.Setting(containerEl).setName("Dual-delay mode").setDesc(
+      "Run two parallel streams: a fast one for immediate text and a slow one for higher accuracy and voice command detection. Overrides the streaming delay setting."
+    ).addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.dualDelay).onChange(async (value) => {
+        this.plugin.settings.dualDelay = value;
         await this.plugin.saveSettings();
+        this.display();
+      })
+    );
+    if (!this.plugin.settings.dualDelay) {
+      new import_obsidian2.Setting(containerEl).setName("Streaming delay").setDesc(
+        "Delay in ms for realtime mode. Lower = faster but less accurate."
+      ).addDropdown((drop) => {
+        const options = {
+          "240": "240 ms (fastest)",
+          "480": "480 ms (default)",
+          "640": "640 ms",
+          "800": "800 ms",
+          "1200": "1200 ms",
+          "1600": "1600 ms",
+          "2400": "2400 ms (most accurate)"
+        };
+        for (const [value, label] of Object.entries(options)) {
+          drop.addOption(value, label);
+        }
+        drop.setValue(
+          String(this.plugin.settings.streamingDelayMs)
+        ).onChange(async (value) => {
+          this.plugin.settings.streamingDelayMs = Number(value);
+          await this.plugin.saveSettings();
+        });
       });
-    });
+    }
     new import_obsidian2.Setting(containerEl).setName("Keyboard shortcuts").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Customize hotkeys").setDesc(
       `You can assign keyboard shortcuts to all Voxtral commands (start/stop recording, correct selection, correct note, etc.) via Obsidian's Settings \u2192 Hotkeys. Search for "Voxtral".`
@@ -1944,7 +1962,15 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian4.Plugin {
      *  Offsets are always in the current document coordinate system —
      *  existing ranges are adjusted when a new insertion happens. */
     this.dictatedRanges = [];
+    // ── Dual-delay state ──
+    this.dualSlowTranscriber = null;
+    this.dualFastText = "";
+    this.dualSlowText = "";
+    this.dualInsertOffset = 0;
+    // editor offset where dual-delay text starts
+    this.dualDisplayLen = 0;
   }
+  // length of text currently shown in editor
   /** Whether realtime mode is available on this platform */
   get canRealtime() {
     return !import_obsidian4.Platform.isMobile;
@@ -2314,6 +2340,9 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian4.Plugin {
   }
   // ── Realtime recording ──
   async startRealtimeRecording(editor) {
+    if (this.settings.dualDelay) {
+      return this.startDualDelayRecording(editor);
+    }
     this.pendingText = "";
     this.dictatedRanges = [];
     await this.connectRealtimeWebSocket(editor);
@@ -2426,6 +2455,9 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian4.Plugin {
   }
   async stopRealtimeRecording() {
     var _a, _b;
+    if (this.dualSlowTranscriber) {
+      return this.stopDualDelayRecording();
+    }
     (_a = this.realtimeTranscriber) == null ? void 0 : _a.endAudio();
     await new Promise((resolve) => setTimeout(resolve, 1e3));
     const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
@@ -2436,6 +2468,271 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian4.Plugin {
     (_b = this.realtimeTranscriber) == null ? void 0 : _b.close();
     this.realtimeTranscriber = null;
     await this.recorder.stop();
+    if (this.settings.autoCorrect && view) {
+      await this.autoCorrectAfterStop(view.editor);
+    }
+  }
+  // ── Dual-delay realtime recording ──
+  async startDualDelayRecording(editor) {
+    this.pendingText = "";
+    this.dictatedRanges = [];
+    this.dualFastText = "";
+    this.dualSlowText = "";
+    this.dualInsertOffset = editor.posToOffset(editor.getCursor());
+    this.dualDisplayLen = 0;
+    await this.connectDualDelayWebSockets(editor);
+    const deviceId = this.settings.microphoneDeviceId || void 0;
+    await this.recorder.start(deviceId, (pcmData) => {
+      var _a, _b;
+      (_a = this.realtimeTranscriber) == null ? void 0 : _a.sendAudio(pcmData);
+      (_b = this.dualSlowTranscriber) == null ? void 0 : _b.sendAudio(pcmData);
+    });
+  }
+  async connectDualDelayWebSockets(editor) {
+    const fastDelay = this.settings.dualDelayFastMs;
+    const slowDelay = this.settings.dualDelaySlowMs;
+    this.realtimeTranscriber = new RealtimeTranscriber(this.settings, {
+      onSessionCreated: () => {
+        vlog.debug("Voxtral: Fast stream session created");
+      },
+      onDelta: (text) => {
+        this.dualFastText += text;
+        this.renderDualText(editor);
+      },
+      onDone: (_text) => {
+        this.renderDualText(editor);
+      },
+      onError: (message) => {
+        vlog.error("Voxtral: Fast stream error:", message);
+      },
+      onDisconnect: () => {
+        void this.handleDualStreamDisconnect("fast");
+      }
+    }, fastDelay);
+    this.dualSlowTranscriber = new RealtimeTranscriber(this.settings, {
+      onSessionCreated: () => {
+        vlog.debug("Voxtral: Slow stream session created");
+      },
+      onDelta: (text) => {
+        this.dualSlowText += text;
+        this.renderDualText(editor);
+        this.processDualSlowCommands(editor);
+      },
+      onDone: (text) => {
+        this.dualSlowText = text || this.dualSlowText;
+        this.renderDualText(editor);
+        this.processDualSlowCommands(editor);
+      },
+      onError: (message) => {
+        vlog.error("Voxtral: Slow stream error:", message);
+      },
+      onDisconnect: () => {
+        void this.handleDualStreamDisconnect("slow");
+      }
+    }, slowDelay);
+    await Promise.all([
+      this.realtimeTranscriber.connect(),
+      this.dualSlowTranscriber.connect()
+    ]);
+  }
+  async handleDualStreamDisconnect(stream) {
+    var _a;
+    if (!this.isRecording) return;
+    const editor = this.currentEditor || ((_a = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView)) == null ? void 0 : _a.editor);
+    if (!editor) {
+      void this.stopRecording();
+      return;
+    }
+    vlog.debug(`Voxtral: ${stream} stream ended, reconnecting...`);
+    try {
+      if (stream === "fast" && this.realtimeTranscriber) {
+        const fastDelay = this.settings.dualDelayFastMs;
+        this.realtimeTranscriber = new RealtimeTranscriber(this.settings, {
+          onSessionCreated: () => vlog.debug("Voxtral: Fast stream reconnected"),
+          onDelta: (text) => {
+            this.dualFastText += text;
+            this.renderDualText(editor);
+          },
+          onDone: () => this.renderDualText(editor),
+          onError: (message) => vlog.error("Voxtral: Fast stream error:", message),
+          onDisconnect: () => void this.handleDualStreamDisconnect("fast")
+        }, fastDelay);
+        await this.realtimeTranscriber.connect();
+      } else if (stream === "slow" && this.dualSlowTranscriber) {
+        const slowDelay = this.settings.dualDelaySlowMs;
+        this.dualSlowTranscriber = new RealtimeTranscriber(this.settings, {
+          onSessionCreated: () => vlog.debug("Voxtral: Slow stream reconnected"),
+          onDelta: (text) => {
+            this.dualSlowText += text;
+            this.renderDualText(editor);
+            this.processDualSlowCommands(editor);
+          },
+          onDone: (text) => {
+            this.dualSlowText = text || this.dualSlowText;
+            this.renderDualText(editor);
+            this.processDualSlowCommands(editor);
+          },
+          onError: (message) => vlog.error("Voxtral: Slow stream error:", message),
+          onDisconnect: () => void this.handleDualStreamDisconnect("slow")
+        }, slowDelay);
+        await this.dualSlowTranscriber.connect();
+      }
+      this.consecutiveFailures = 0;
+    } catch (e) {
+      this.consecutiveFailures++;
+      vlog.error(`Voxtral: ${stream} stream reconnect failed (${this.consecutiveFailures})`, e);
+      if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
+        new import_obsidian4.Notice("Cannot reconnect. Recording stopped.", 6e3);
+        void this.stopRecording();
+        return;
+      }
+      const delay = Math.min(500 * this.consecutiveFailures, 3e3);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (this.isRecording) {
+        void this.handleDualStreamDisconnect(stream);
+      }
+    }
+  }
+  /**
+   * Update the editor with the current dual-delay text.
+   * Shows slow (confirmed) text + any fast text beyond slow.
+   */
+  renderDualText(editor) {
+    const slowLen = this.dualSlowText.length;
+    const fastLen = this.dualFastText.length;
+    let displayText;
+    if (fastLen > slowLen) {
+      displayText = this.dualSlowText + this.dualFastText.substring(slowLen);
+    } else {
+      displayText = this.dualSlowText;
+    }
+    const from = editor.offsetToPos(this.dualInsertOffset);
+    const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
+    editor.replaceRange(displayText, from, to);
+    this.dualDisplayLen = displayText.length;
+    const endOffset = this.dualInsertOffset + this.dualDisplayLen;
+    editor.setCursor(editor.offsetToPos(endOffset));
+  }
+  /**
+   * Process voice commands from the slow stream (more accurate).
+   * Checks completed sentences in dualSlowText for voice commands.
+   */
+  processDualSlowCommands(editor) {
+    if (!this.dualSlowText) return;
+    const segments = this.dualSlowText.match(/[^.!?]+[.!?]+\s*/g);
+    if (!segments) return;
+    const matchedLength = segments.join("").length;
+    const remainder = this.dualSlowText.substring(matchedLength);
+    let hasCommand = false;
+    for (const segment of segments) {
+      if (matchCommand(segment) !== null) {
+        hasCommand = true;
+        break;
+      }
+    }
+    if (!hasCommand) return;
+    const from = editor.offsetToPos(this.dualInsertOffset);
+    const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
+    editor.replaceRange("", from, to);
+    editor.setCursor(from);
+    this.dualDisplayLen = 0;
+    for (const segment of segments) {
+      const match = matchCommand(segment);
+      if (match) {
+        if (match.textBefore) {
+          let before = match.textBefore;
+          if (match.command.punctuation) {
+            before = before.replace(/[,;.!?]+\s*$/, "");
+          }
+          this.trackInsertAtCursor(editor, before);
+        }
+        match.command.action(editor);
+        if (match.command.id === "stopRecording") {
+          setTimeout(() => {
+            void this.stopRecording();
+          }, 0);
+        }
+      } else {
+        this.trackInsertAtCursor(editor, segment);
+      }
+    }
+    this.dualSlowText = remainder;
+    if (this.dualFastText.length >= matchedLength) {
+      this.dualFastText = this.dualFastText.substring(matchedLength);
+    } else {
+      this.dualFastText = "";
+    }
+    this.dualInsertOffset = editor.posToOffset(editor.getCursor());
+    this.dualDisplayLen = 0;
+    if (this.dualSlowText || this.dualFastText) {
+      this.renderDualText(editor);
+    }
+  }
+  /**
+   * Helper: insert text at cursor and track the range for auto-correct.
+   */
+  trackInsertAtCursor(editor, text) {
+    const cursor = editor.getCursor();
+    if (cursor.ch > 0 && text.length > 0 && !/^[\s\n]/.test(text)) {
+      const charBefore = editor.getRange(
+        { line: cursor.line, ch: cursor.ch - 1 },
+        cursor
+      );
+      if (charBefore && /\S/.test(charBefore)) {
+        text = " " + text;
+      }
+    }
+    const offsetBefore = editor.posToOffset(cursor);
+    editor.replaceRange(text, cursor);
+    const lines = text.split("\n");
+    const lastLine = lines[lines.length - 1];
+    const newLine = cursor.line + lines.length - 1;
+    const newCh = lines.length === 1 ? cursor.ch + lastLine.length : lastLine.length;
+    editor.setCursor({ line: newLine, ch: newCh });
+    const offsetAfter = editor.posToOffset(editor.getCursor());
+    const delta = offsetAfter - offsetBefore;
+    if (delta > 0) {
+      for (const range of this.dictatedRanges) {
+        if (range.from >= offsetBefore) {
+          range.from += delta;
+          range.to += delta;
+        } else if (range.to > offsetBefore) {
+          range.to += delta;
+        }
+      }
+      this.dictatedRanges.push({ from: offsetBefore, to: offsetAfter });
+    }
+  }
+  async stopDualDelayRecording() {
+    var _a, _b, _c, _d;
+    (_a = this.realtimeTranscriber) == null ? void 0 : _a.endAudio();
+    (_b = this.dualSlowTranscriber) == null ? void 0 : _b.endAudio();
+    await new Promise((resolve) => setTimeout(resolve, 1e3));
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    if (view) {
+      const editor = view.editor;
+      this.processDualSlowCommands(editor);
+      const finalText = this.dualSlowText || this.dualFastText;
+      if (finalText) {
+        const from = editor.offsetToPos(this.dualInsertOffset);
+        const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
+        editor.replaceRange(finalText, from, to);
+        const endOffset = this.dualInsertOffset + finalText.length;
+        editor.setCursor(editor.offsetToPos(endOffset));
+        this.dictatedRanges.push({
+          from: this.dualInsertOffset,
+          to: this.dualInsertOffset + finalText.length
+        });
+      }
+    }
+    (_c = this.realtimeTranscriber) == null ? void 0 : _c.close();
+    (_d = this.dualSlowTranscriber) == null ? void 0 : _d.close();
+    this.realtimeTranscriber = null;
+    this.dualSlowTranscriber = null;
+    await this.recorder.stop();
+    this.dualFastText = "";
+    this.dualSlowText = "";
+    this.dualDisplayLen = 0;
     if (this.settings.autoCorrect && view) {
       await this.autoCorrectAfterStop(view.editor);
     }
