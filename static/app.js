@@ -1169,9 +1169,13 @@ async function startDualDelay() {
                 dualSlowText += msg.text;
                 // Slow stream catches up — replace fast text with accurate version
                 renderDualText();
+                // Check for voice commands in slow stream (more accurate than fast)
+                processDualSlowCommands();
             } else if (msg.type === "done") {
                 dualSlowText = msg.text || dualSlowText;
                 renderDualText();
+                // Check for voice commands before marking as confirmed
+                processDualSlowCommands();
                 // Mark all slow text as confirmed
                 dualSlowConfirmed = dualSlowText;
             }
@@ -1273,10 +1277,118 @@ function renderDualText() {
     scrollToInsertPoint();
 }
 
+/**
+ * Process voice commands from the slow stream in dual-delay mode.
+ * The slow stream has better accuracy and reliably recognizes commands
+ * like "nieuwe alinea", "dubbele punt", etc.
+ *
+ * Scans dualSlowText for completed sentences (ending with .!?) and checks
+ * each for voice commands. When found: finalizes preceding text, executes
+ * the command, and trims both slow and fast accumulators.
+ */
+function processDualSlowCommands() {
+    if (!dualSlowText) return;
+
+    // Match completed sentences (text ending with sentence punctuation)
+    const parts = dualSlowText.match(/\s*[^.!?]+[.!?]+/g);
+    if (!parts) return;
+
+    const matchedLength = parts.join("").length;
+    const remainder = dualSlowText.substring(matchedLength);
+
+    // Check each completed sentence for voice commands
+    const actions = parts.map(part => {
+        const trimmedPart = part.trim();
+        const textOnly = trimmedPart.replace(/[.!?]+$/, "").trim();
+        const norm = normalizeCommand(textOnly);
+        const result = findCommand(norm, textOnly);
+        console.debug(`[dual-voice] "${textOnly}" → norm="${norm}" → ${result ? "CMD: " + result.cmd.toast : "text"}`);
+        return { trimmedPart, result };
+    });
+
+    // Only proceed if there's at least one command
+    if (!actions.some(a => a.result)) return;
+
+    // Save undo state before modifying transcript
+    const hasTextParts = actions.some(a => !a.result);
+    if (hasTextParts) saveUndo();
+
+    // Finalize the activeInsert: clear it and commit text/commands
+    const target = ensureInsertPoint();
+    target.innerHTML = "";
+    target.textContent = "";
+
+    let stopRequested = false;
+    for (const { trimmedPart, result } of actions) {
+        // Re-attach activeInsert if needed
+        if (!transcript.contains(activeInsert)) {
+            if (activeInsert.parentNode) activeInsert.remove();
+            transcript.appendChild(activeInsert);
+        }
+
+        if (result) {
+            const { cmd, textBefore } = result;
+            if (textBefore) {
+                const prefixSpan = document.createElement("span");
+                if (cmd.punctuation) {
+                    prefixSpan.textContent = stripTrailingPunctuation(textBefore) + cmd.insert;
+                    activeInsert.parentNode.insertBefore(prefixSpan, activeInsert);
+                    showToast(cmd.toast);
+                    continue;
+                }
+                prefixSpan.textContent = textBefore + " ";
+                activeInsert.parentNode.insertBefore(prefixSpan, activeInsert);
+            }
+            if (cmd.insert) {
+                if (cmd.punctuation) {
+                    const prev = activeInsert.previousSibling;
+                    if (prev && prev.textContent) {
+                        prev.textContent = stripTrailingPunctuation(prev.textContent);
+                    }
+                }
+                const span = document.createElement("span");
+                span.textContent = cmd.insert;
+                activeInsert.parentNode.insertBefore(span, activeInsert);
+            }
+            if (cmd.action === "stopRecording") stopRequested = true;
+            if (cmd.action === "deleteLastParagraph") deleteLastBlock("paragraph");
+            if (cmd.action === "deleteLastLine") deleteLastBlock("line");
+            if (cmd.action === "undo") restoreUndo();
+            showToast(cmd.toast);
+        } else {
+            // Regular text — finalize into transcript
+            const span = document.createElement("span");
+            span.textContent = trimmedPart + " ";
+            activeInsert.parentNode.insertBefore(span, activeInsert);
+        }
+    }
+
+    isMidSentenceInsert = false;
+
+    // Trim accumulators: remove the processed portion, keep remainder
+    dualSlowText = remainder;
+    // Also trim fast text — remove at least as much as we consumed from slow
+    if (dualFastText.length >= matchedLength) {
+        dualFastText = dualFastText.substring(matchedLength);
+    } else {
+        dualFastText = "";
+    }
+    dualSlowConfirmed = dualSlowText;
+
+    // Re-render with trimmed state
+    renderDualText();
+
+    if (stopRequested) {
+        setTimeout(() => { if (isRecording) btnRecord.click(); }, 0);
+    }
+}
+
 function stopDualDelay() {
     if (ws && ws.readyState === WebSocket.OPEN) ws.close();
     ws = null;
     stopAudioCapture();
+    // Process any remaining voice commands before finalizing
+    processDualSlowCommands();
     // Finalize: keep the slow (accurate) text as the final result
     if (activeInsert && dualSlowText) {
         activeInsert.innerHTML = "";
