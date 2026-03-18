@@ -210,6 +210,7 @@ main {
 }
 
 /* Dual-delay: confirmed text (slow stream, accurate) */
+.transcript .dual-confirmed,
 .dual-confirmed {
     color: #f0f0f0;
 }
