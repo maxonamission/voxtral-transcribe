@@ -1090,6 +1090,31 @@ function downsample(buffer, fromRate, toRate) {
     return result;
 }
 
+// ── Mic helper: try selected device, fallback to default ──
+async function acquireMic(extraConstraints = {}) {
+    const constraints = { channelCount: 1, ...extraConstraints };
+    if (selectedMicId) constraints.deviceId = { exact: selectedMicId };
+    try {
+        return await navigator.mediaDevices.getUserMedia({ audio: constraints });
+    } catch (err) {
+        // If a specific device was requested and failed, retry with default mic
+        if (selectedMicId) {
+            console.warn("Selected mic failed, falling back to default:", err.message);
+            const fallback = { channelCount: 1, ...extraConstraints };
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: fallback });
+            showToast("Geselecteerde microfoon niet beschikbaar — standaard gebruikt");
+            // Update selection to match what we actually got
+            const track = stream.getAudioTracks()[0];
+            if (track && track.getSettings().deviceId) {
+                selectedMicId = track.getSettings().deviceId;
+                localStorage.setItem("selectedMicId", selectedMicId);
+            }
+            return stream;
+        }
+        throw err;
+    }
+}
+
 // ── Realtime recording ──
 async function startRealtime() {
     const delay = delaySelect.value;
@@ -1145,9 +1170,7 @@ async function startRealtime() {
         ws.addEventListener("error", reject, { once: true });
     });
 
-    const audioConstraints = { channelCount: 1, sampleRate: 16000 };
-    if (selectedMicId) audioConstraints.deviceId = { exact: selectedMicId };
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+    mediaStream = await acquireMic({ sampleRate: 16000 });
     audioContext = new AudioContext({ sampleRate: 16000 });
     const source = audioContext.createMediaStreamSource(mediaStream);
 
@@ -1265,9 +1288,7 @@ async function startDualDelay() {
         ws.addEventListener("error", reject, { once: true });
     });
 
-    const audioConstraints = { channelCount: 1, sampleRate: 16000 };
-    if (selectedMicId) audioConstraints.deviceId = { exact: selectedMicId };
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+    mediaStream = await acquireMic({ sampleRate: 16000 });
     audioContext = new AudioContext({ sampleRate: 16000 });
     const source = audioContext.createMediaStreamSource(mediaStream);
 
@@ -1471,9 +1492,7 @@ let offlineChunks = [];
 async function startOffline() {
     statusText.textContent = "Opnemen...";
 
-    const audioConstraints = { channelCount: 1 };
-    if (selectedMicId) audioConstraints.deviceId = { exact: selectedMicId };
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+    mediaStream = await acquireMic();
 
     // Create AudioContext for mic level monitoring
     audioContext = new AudioContext();
@@ -1577,7 +1596,12 @@ btnRecord.addEventListener("click", async () => {
             btnRecord.classList.remove("active");
             btnRecord.textContent = "Opnemen";
             finalizeInsertPoint();
-            statusText.textContent = "Fout: " + err.message;
+            const msg = err.name === "NotReadableError" || err.name === "NotFoundError"
+                ? "Microfoon niet beschikbaar — controleer je apparaat of kies een andere microfoon in de instellingen"
+                : err.name === "NotAllowedError"
+                ? "Geen toestemming voor microfoon — sta toegang toe in je browser"
+                : "Fout: " + err.message;
+            statusText.textContent = msg;
         }
     }
 });
