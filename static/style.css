@@ -344,10 +344,10 @@ footer {
 }
 
 #bmc-tagline {
-    display: block;
     color: #444;
     font-style: italic;
     font-size: 0.7rem;
+    margin-right: 0.4rem;
 }
 
 /* Help panel */
