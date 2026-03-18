@@ -20,6 +20,7 @@ let dualFastText = ""; // accumulated fast stream text (to be replaced by slow)
 let dualSlowText = ""; // accumulated slow stream text (final/accurate)
 let dualFastInsert = null; // span for fast (preliminary) text
 let dualSlowConfirmed = ""; // how much text has been confirmed by slow stream
+let dualSlowConsumed = 0; // chars already consumed/finalized by processDualSlowCommands
 
 // ── Correction settings ──
 let autoCorrect = JSON.parse(localStorage.getItem("voxtral-autocorrect") || "false");
@@ -596,6 +597,8 @@ function processCompletedSentences() {
     isMidSentenceInsert = false; // after a sentence boundary, next text starts fresh
 
     if (stopRequested) {
+        // Clear activeInsert so stopRecording doesn't leave command text behind
+        if (activeInsert) { activeInsert.remove(); activeInsert = null; }
         setTimeout(() => { if (isRecording) btnRecord.click(); }, 0);
     }
 }
@@ -782,8 +785,14 @@ transcript.addEventListener("mouseup", () => {
         if (!transcript.contains(sel.anchorNode)) return;
         if (!transcript.contains(sel.focusNode)) return;
 
-        // Finalize current insert point
+        // Finalize current insert point and reset dual-delay accumulators
+        // so old text doesn't leak into the new insert point
+        processDualSlowCommands();
         finalizeInsertPoint();
+        dualFastText = "";
+        dualSlowText = "";
+        dualSlowConfirmed = "";
+        dualSlowConsumed = 0;
 
         if (!sel.isCollapsed) {
             // ── Selection: replace mode ──
@@ -1174,6 +1183,7 @@ async function startDualDelay() {
     dualFastText = "";
     dualSlowText = "";
     dualSlowConfirmed = "";
+    dualSlowConsumed = 0;
     dualFastInsert = null;
 
     ws.onopen = () => {
@@ -1199,7 +1209,20 @@ async function startDualDelay() {
                 // Check for voice commands in slow stream (more accurate than fast)
                 processDualSlowCommands();
             } else if (msg.type === "done") {
-                dualSlowText = msg.text || dualSlowText;
+                // msg.text is the full finalized text for this segment.
+                // processDualSlowCommands() may have already consumed/trimmed
+                // earlier sentences from dualSlowText. Only replace if msg.text
+                // extends beyond what we've already consumed; use the unconsumed
+                // portion so already-finalized text isn't re-inserted.
+                if (msg.text) {
+                    if (dualSlowConsumed > 0 && msg.text.length > dualSlowConsumed) {
+                        dualSlowText = msg.text.substring(dualSlowConsumed);
+                    } else if (dualSlowConsumed === 0) {
+                        dualSlowText = msg.text;
+                    }
+                    // If msg.text.length <= dualSlowConsumed, everything was already
+                    // processed — keep current dualSlowText (remainder) as-is.
+                }
                 renderDualText();
                 // Check for voice commands before marking as confirmed
                 processDualSlowCommands();
@@ -1395,6 +1418,7 @@ function processDualSlowCommands() {
     isMidSentenceInsert = false;
 
     // Trim accumulators: remove the processed portion, keep remainder
+    dualSlowConsumed += matchedLength;
     dualSlowText = remainder;
     // Also trim fast text — remove at least as much as we consumed from slow
     if (dualFastText.length >= matchedLength) {
@@ -1408,6 +1432,12 @@ function processDualSlowCommands() {
     renderDualText();
 
     if (stopRequested) {
+        // Clear accumulators so stopDualDelay() won't re-insert command text
+        dualSlowText = "";
+        dualFastText = "";
+        dualSlowConfirmed = "";
+        dualSlowConsumed = 0;
+        if (activeInsert) { activeInsert.remove(); activeInsert = null; }
         setTimeout(() => { if (isRecording) btnRecord.click(); }, 0);
     }
 }
@@ -1431,6 +1461,7 @@ function stopDualDelay() {
     dualFastText = "";
     dualSlowText = "";
     dualSlowConfirmed = "";
+    dualSlowConsumed = 0;
 }
 
 // ── Offline / batch recording ──
