@@ -203,6 +203,17 @@ main {
     color: #777;
 }
 
+/* Dual-delay: preliminary text (fast stream, not yet confirmed by slow) */
+.dual-preliminary {
+    color: #666;
+    font-style: italic;
+}
+
+/* Dual-delay: confirmed text (slow stream, accurate) */
+.dual-confirmed {
+    color: #f0f0f0;
+}
+
 .transcript ::selection {
     background: rgba(99, 102, 241, 0.3);
     color: #f0f0f0;

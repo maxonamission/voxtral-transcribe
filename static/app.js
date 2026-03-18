@@ -6,6 +6,7 @@ let mediaStream = null;
 let processorNode = null;
 let useRealtime = true;
 let useDiarize = false;
+let useDualDelay = JSON.parse(localStorage.getItem("voxtral-dual-delay") || "false");
 let activeInsert = null; // span where incoming text is inserted
 let isMidSentenceInsert = false; // true when inserting inside a sentence (not after . ! ?)
 let analyserNode = null;
@@ -13,6 +14,12 @@ let micLevelAnimId = null;
 let smoothLevel = 0; // smoothed mic level (0–1)
 let lastLabel = ""; // current displayed label text
 let userScrolledAway = false; // true when user manually scrolled up
+
+// ── Dual-delay state ──
+let dualFastText = ""; // accumulated fast stream text (to be replaced by slow)
+let dualSlowText = ""; // accumulated slow stream text (final/accurate)
+let dualFastInsert = null; // span for fast (preliminary) text
+let dualSlowConfirmed = ""; // how much text has been confirmed by slow stream
 
 // ── Correction settings ──
 let autoCorrect = JSON.parse(localStorage.getItem("voxtral-autocorrect") || "false");
@@ -1129,6 +1136,157 @@ function stopRealtime() {
     stopAudioCapture();
 }
 
+// ── Dual-delay realtime recording ──
+async function startDualDelay() {
+    const fastDelay = 240;
+    const slowDelay = 2400;
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    ws = new WebSocket(`${protocol}//${location.host}/ws/transcribe-dual?fast_delay=${fastDelay}&slow_delay=${slowDelay}`);
+
+    // Reset dual-delay state
+    dualFastText = "";
+    dualSlowText = "";
+    dualSlowConfirmed = "";
+    dualFastInsert = null;
+
+    ws.onopen = () => {
+        statusText.textContent = "Opnemen (dual-delay)";
+    };
+
+    ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.stream === "fast") {
+            if (msg.type === "delta") {
+                dualFastText += msg.text;
+                // Show fast text as preliminary (dimmed) — only the part not yet confirmed by slow
+                renderDualText();
+            } else if (msg.type === "done") {
+                // Fast stream sentence done — finalize but keep as preliminary
+                renderDualText();
+            }
+        } else if (msg.stream === "slow") {
+            if (msg.type === "delta") {
+                dualSlowText += msg.text;
+                // Slow stream catches up — replace fast text with accurate version
+                renderDualText();
+            } else if (msg.type === "done") {
+                dualSlowText = msg.text || dualSlowText;
+                renderDualText();
+                // Mark all slow text as confirmed
+                dualSlowConfirmed = dualSlowText;
+            }
+        } else if (msg.type === "error") {
+            console.error("Dual-delay error:", msg.message, msg.stream);
+            showToast("Serverfout — herverbinden...");
+        }
+    };
+
+    ws.onerror = (err) => console.error("Dual-delay WebSocket error:", err);
+
+    ws.onclose = () => {
+        if (isRecording) {
+            console.log("Dual-delay WebSocket closed while recording — attempting reconnect...");
+            stopAudioCapture();
+            finalizeInsertPoint();
+            showToast("Verbinding verbroken — herverbinden...");
+            setTimeout(async () => {
+                if (!isRecording) return;
+                try {
+                    await startDualDelay();
+                    showToast("Herverbonden");
+                } catch (err) {
+                    console.error("Reconnect failed:", err);
+                    isRecording = false;
+                    btnRecord.classList.remove("active");
+                    btnRecord.textContent = "Opnemen";
+                    updateModeUI();
+                    showToast("Herverbinden mislukt");
+                }
+            }, 1500);
+        }
+    };
+
+    await new Promise((resolve, reject) => {
+        ws.addEventListener("open", resolve, { once: true });
+        ws.addEventListener("error", reject, { once: true });
+    });
+
+    const audioConstraints = { channelCount: 1, sampleRate: 16000 };
+    if (selectedMicId) audioConstraints.deviceId = { exact: selectedMicId };
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+    audioContext = new AudioContext({ sampleRate: 16000 });
+    const source = audioContext.createMediaStreamSource(mediaStream);
+
+    processorNode = audioContext.createScriptProcessor(4096, 1, 1);
+    processorNode.onaudioprocess = (e) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        const inputData = e.inputBuffer.getChannelData(0);
+        const downsampled = downsample(inputData, audioContext.sampleRate, 16000);
+        const pcm = floatTo16BitPCM(downsampled);
+        ws.send(pcm.buffer);
+    };
+
+    source.connect(processorNode);
+    processorNode.connect(audioContext.destination);
+
+    startMicLevel(source);
+}
+
+function renderDualText() {
+    clearPlaceholder();
+    const target = ensureInsertPoint();
+
+    // The slow stream is authoritative. Show:
+    // 1. Confirmed slow text (normal style)
+    // 2. Any fast text beyond the slow text (dimmed/preliminary)
+    //
+    // Simple approach: slow text is the "true" prefix, fast text that extends
+    // beyond it is shown as preliminary.
+
+    const slowLen = dualSlowText.length;
+    const fastLen = dualFastText.length;
+
+    if (fastLen > slowLen) {
+        // Show slow text (confirmed) + remainder from fast (preliminary)
+        const confirmedPart = dualSlowText;
+        const preliminaryPart = dualFastText.substring(slowLen);
+        target.innerHTML = "";
+
+        if (confirmedPart) {
+            const confirmedSpan = document.createElement("span");
+            confirmedSpan.textContent = confirmedPart;
+            confirmedSpan.className = "dual-confirmed";
+            target.appendChild(confirmedSpan);
+        }
+        if (preliminaryPart) {
+            const prelimSpan = document.createElement("span");
+            prelimSpan.textContent = preliminaryPart;
+            prelimSpan.className = "dual-preliminary";
+            target.appendChild(prelimSpan);
+        }
+    } else {
+        // Slow has caught up or surpassed fast — show only slow text
+        target.textContent = dualSlowText;
+        target.className = "partial dual-confirmed";
+    }
+
+    scrollToInsertPoint();
+}
+
+function stopDualDelay() {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+    ws = null;
+    stopAudioCapture();
+    // Finalize: keep the slow (accurate) text as the final result
+    if (activeInsert && dualSlowText) {
+        activeInsert.innerHTML = "";
+        activeInsert.textContent = dualSlowText || dualFastText;
+    }
+    dualFastText = "";
+    dualSlowText = "";
+    dualSlowConfirmed = "";
+}
+
 // ── Offline / batch recording ──
 let mediaRecorder = null;
 let offlineChunks = [];
@@ -1208,7 +1366,11 @@ btnRecord.addEventListener("click", async () => {
         btnRecord.classList.remove("active");
         btnRecord.textContent = "Opnemen";
 
-        if (useRealtime && ws) {
+        if (useRealtime && useDualDelay && ws) {
+            stopDualDelay();
+            finalizeInsertPoint();
+            autoCorrectAfterStop().then(() => copyTranscript());
+        } else if (useRealtime && ws) {
             stopRealtime();
             finalizeInsertPoint();
             autoCorrectAfterStop().then(() => copyTranscript()); // correct then copy
@@ -1225,7 +1387,9 @@ btnRecord.addEventListener("click", async () => {
         btnRecord.textContent = "Stop";
 
         try {
-            if (useRealtime) {
+            if (useRealtime && useDualDelay) {
+                await startDualDelay();
+            } else if (useRealtime) {
                 await startRealtime();
             } else {
                 await startOffline();
@@ -1376,6 +1540,7 @@ queueInfo.addEventListener("click", () => {
 });
 
 // ── Settings modal ──
+const toggleDualDelay = document.getElementById("toggle-dual-delay");
 const toggleAutocorrect = document.getElementById("toggle-autocorrect");
 const inputSystemPrompt = document.getElementById("input-system-prompt");
 const selectMicrophone = document.getElementById("select-microphone");
@@ -1478,6 +1643,7 @@ function openSettings() {
         loadModels(data);
     }).catch(() => {});
     // Load correction settings
+    toggleDualDelay.checked = useDualDelay;
     toggleAutocorrect.checked = autoCorrect;
     inputSystemPrompt.value = systemPrompt;
     selectLanguage.value = activeLang;
@@ -1503,6 +1669,8 @@ document.getElementById("btn-toggle-key").addEventListener("click", () => {
 // Save key
 document.getElementById("btn-save-key").addEventListener("click", async () => {
     // Always save all settings
+    useDualDelay = toggleDualDelay.checked;
+    localStorage.setItem("voxtral-dual-delay", JSON.stringify(useDualDelay));
     autoCorrect = toggleAutocorrect.checked;
     localStorage.setItem("voxtral-autocorrect", JSON.stringify(autoCorrect));
     systemPrompt = inputSystemPrompt.value;

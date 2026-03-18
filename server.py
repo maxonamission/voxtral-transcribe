@@ -62,7 +62,7 @@ class RateLimiter:
 
 rate_limiter = RateLimiter()
 active_ws_count = 0  # Track concurrent WebSocket connections
-MAX_WS_CONNECTIONS = 2  # Allow 1 active + 1 reconnect overlap
+MAX_WS_CONNECTIONS = 4  # Allow active + reconnect overlap (dual-delay uses 2 Mistral streams per session)
 
 REALTIME_MODEL_DEFAULT = "voxtral-mini-transcribe-realtime-2602"
 BATCH_MODEL_DEFAULT = "voxtral-mini-latest"
@@ -393,6 +393,103 @@ async def ws_transcribe(websocket: WebSocket):
     finally:
         active_ws_count -= 1
         logger.info(f"WebSocket closed ({active_ws_count}/{MAX_WS_CONNECTIONS} active)")
+        receiver.cancel()
+
+
+@app.websocket("/ws/transcribe-dual")
+async def ws_transcribe_dual(websocket: WebSocket):
+    """Dual-delay realtime transcription: two parallel Mistral streams (fast + slow).
+
+    The fast stream (low delay) provides immediate feedback.
+    The slow stream (high delay) provides more accurate text that replaces the fast output.
+    Both receive identical audio data.
+    """
+    global active_ws_count
+
+    if active_ws_count >= MAX_WS_CONNECTIONS:
+        await websocket.close(code=1013, reason="Te veel gelijktijdige verbindingen")
+        return
+
+    await websocket.accept()
+    active_ws_count += 1
+    logger.info(f"Dual-delay WebSocket connected ({active_ws_count}/{MAX_WS_CONNECTIONS} active)")
+
+    fast_delay = int(websocket.query_params.get("fast_delay", "240"))
+    slow_delay = int(websocket.query_params.get("slow_delay", "2400"))
+
+    # Two queues: audio is duplicated to both streams
+    fast_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
+    slow_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
+    ws_closed = False
+
+    def make_audio_stream(queue: asyncio.Queue) -> AsyncIterator[bytes]:
+        async def stream() -> AsyncIterator[bytes]:
+            while True:
+                chunk = await queue.get()
+                if chunk is None:
+                    return
+                yield chunk
+        return stream()
+
+    async def receive_audio():
+        nonlocal ws_closed
+        try:
+            while True:
+                data = await websocket.receive_bytes()
+                await fast_queue.put(data)
+                await slow_queue.put(data)
+        except WebSocketDisconnect:
+            ws_closed = True
+            await fast_queue.put(None)
+            await slow_queue.put(None)
+        except Exception:
+            ws_closed = True
+            await fast_queue.put(None)
+            await slow_queue.put(None)
+
+    async def run_stream(label: str, delay_ms: int, queue: asyncio.Queue):
+        """Run a single Mistral realtime stream, tagging events with the stream label."""
+        try:
+            client = get_client()
+            logger.info(f"Starting {label} stream (delay={delay_ms}ms)...")
+            async for event in client.audio.realtime.transcribe_stream(
+                audio_stream=make_audio_stream(queue),
+                model=get_realtime_model(),
+                audio_format=AUDIO_FORMAT,
+                target_streaming_delay_ms=delay_ms,
+            ):
+                if ws_closed:
+                    break
+                if isinstance(event, TranscriptionStreamTextDelta):
+                    await websocket.send_json({"type": "delta", "text": event.text, "stream": label})
+                elif isinstance(event, TranscriptionStreamDone):
+                    await websocket.send_json({"type": "done", "text": event.text, "stream": label})
+                elif isinstance(event, RealtimeTranscriptionSessionCreated):
+                    await websocket.send_json({"type": "session_created", "stream": label})
+                elif isinstance(event, RealtimeTranscriptionError):
+                    logger.error(f"{label} stream error: {event}")
+                    await websocket.send_json({"type": "error", "message": str(event), "stream": label})
+        except Exception as e:
+            logger.error(f"{label} stream failed:\n{traceback.format_exc()}")
+            if not ws_closed:
+                try:
+                    await websocket.send_json({"type": "error", "message": str(e), "stream": label})
+                except Exception:
+                    pass
+
+    receiver = asyncio.create_task(receive_audio())
+
+    try:
+        # Run both streams concurrently
+        await asyncio.gather(
+            run_stream("fast", fast_delay, fast_queue),
+            run_stream("slow", slow_delay, slow_queue),
+        )
+    except WebSocketDisconnect:
+        logger.info("Dual-delay WebSocket disconnected by client")
+    finally:
+        active_ws_count -= 1
+        logger.info(f"Dual-delay WebSocket closed ({active_ws_count}/{MAX_WS_CONNECTIONS} active)")
         receiver.cancel()
 
 
