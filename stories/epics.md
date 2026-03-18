@@ -15,3 +15,11 @@ Make the app fully usable in all 13 supported languages.
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
 | 002 | [Full i18n — translate all UI strings to 13 languages](backlog/002-full-i18n.md) | Backlog | Medium |
+
+## Epic: Audio Quality
+
+Improve audio capture quality in challenging environments.
+
+| # | Story | Status | Priority |
+|---|-------|--------|----------|
+| 003 | [Advanced noise suppression with RNNoise WASM](backlog/003-rnnoise-wasm.md) | Backlog | Medium |

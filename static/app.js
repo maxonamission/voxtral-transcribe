@@ -24,6 +24,7 @@ let dualSlowConsumed = 0; // chars already consumed/finalized by processDualSlow
 
 // ── Correction settings ──
 let autoCorrect = JSON.parse(localStorage.getItem("voxtral-autocorrect") || "false");
+let noiseSuppression = JSON.parse(localStorage.getItem("voxtral-noise-suppression") || "false");
 let systemPrompt = localStorage.getItem("voxtral-system-prompt") || "";
 
 // ── Language ──
@@ -1093,6 +1094,11 @@ function downsample(buffer, fromRate, toRate) {
 // ── Mic helper: try selected device, fallback to default ──
 async function acquireMic(extraConstraints = {}) {
     const constraints = { channelCount: 1, ...extraConstraints };
+    if (noiseSuppression) {
+        constraints.noiseSuppression = { ideal: true };
+        constraints.echoCancellation = { ideal: true };
+        constraints.autoGainControl = { ideal: true };
+    }
     if (selectedMicId) constraints.deviceId = { exact: selectedMicId };
     try {
         return await navigator.mediaDevices.getUserMedia({ audio: constraints });
@@ -1743,6 +1749,7 @@ queueInfo.addEventListener("click", () => {
 // ── Settings modal ──
 const toggleDualDelay = document.getElementById("toggle-dual-delay");
 const toggleAutocorrect = document.getElementById("toggle-autocorrect");
+const toggleNoiseSuppression = document.getElementById("toggle-noise-suppression");
 const inputSystemPrompt = document.getElementById("input-system-prompt");
 const selectMicrophone = document.getElementById("select-microphone");
 const selectRealtimeModel = document.getElementById("select-realtime-model");
@@ -1846,6 +1853,7 @@ function openSettings() {
     // Load correction settings
     toggleDualDelay.checked = useDualDelay;
     toggleAutocorrect.checked = autoCorrect;
+    toggleNoiseSuppression.checked = noiseSuppression;
     inputSystemPrompt.value = systemPrompt;
     selectLanguage.value = activeLang;
     // Load microphone list
@@ -1875,6 +1883,8 @@ document.getElementById("btn-save-key").addEventListener("click", async () => {
     updateModeUI();
     autoCorrect = toggleAutocorrect.checked;
     localStorage.setItem("voxtral-autocorrect", JSON.stringify(autoCorrect));
+    noiseSuppression = toggleNoiseSuppression.checked;
+    localStorage.setItem("voxtral-noise-suppression", JSON.stringify(noiseSuppression));
     systemPrompt = inputSystemPrompt.value;
     localStorage.setItem("voxtral-system-prompt", systemPrompt);
     selectedMicId = selectMicrophone.value;
