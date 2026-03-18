@@ -7,6 +7,30 @@
  * 2. WebM/Opus blob (for batch transcription)
  */
 
+/**
+ * Inline AudioWorklet processor source.
+ * Converts Float32 samples to PCM 16-bit and posts them to the main thread.
+ * Inlined as a blob URL so no separate file needs to be loaded.
+ */
+const WORKLET_SOURCE = `
+class PcmProcessor extends AudioWorkletProcessor {
+	process(inputs) {
+		const input = inputs[0];
+		if (!input || input.length === 0) return true;
+		const channelData = input[0];
+		if (!channelData || channelData.length === 0) return true;
+		const pcm16 = new Int16Array(channelData.length);
+		for (let i = 0; i < channelData.length; i++) {
+			const s = Math.max(-1, Math.min(1, channelData[i]));
+			pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+		}
+		this.port.postMessage(pcm16.buffer, [pcm16.buffer]);
+		return true;
+	}
+}
+registerProcessor("pcm-processor", PcmProcessor);
+`;
+
 export interface MicrophoneInfo {
 	deviceId: string;
 	label: string;
@@ -16,7 +40,8 @@ export class AudioRecorder {
 	private stream: MediaStream | null = null;
 	private audioContext: AudioContext | null = null;
 	private sourceNode: MediaStreamAudioSourceNode | null = null;
-	private processorNode: ScriptProcessorNode | null = null;
+	private workletNode: AudioWorkletNode | null = null;
+	private workletUrl: string | null = null;
 	private mediaRecorder: MediaRecorder | null = null;
 	private chunks: Blob[] = [];
 	private lastFlushTime = 0;
@@ -25,6 +50,9 @@ export class AudioRecorder {
 
 	/** The label of the currently active microphone */
 	activeMicLabel = "";
+
+	/** True if the selected mic failed and we fell back to default */
+	fallbackUsed = false;
 
 	/** Duration in seconds of the last flushed/stopped chunk */
 	lastChunkDurationSec = 0;
@@ -56,15 +84,37 @@ export class AudioRecorder {
 
 	async start(
 		deviceId?: string,
-		onPcmChunk?: (pcmData: ArrayBuffer) => void
+		onPcmChunk?: (pcmData: ArrayBuffer) => void,
+		noiseSuppression?: boolean
 	): Promise<void> {
 		this.onPcmChunk = onPcmChunk || null;
 
-		const constraints: MediaStreamConstraints = {
-			audio: deviceId ? { deviceId: { exact: deviceId } } : true,
-		};
+		const audioConstraints: MediaTrackConstraints = { channelCount: 1 };
+		if (noiseSuppression) {
+			audioConstraints.noiseSuppression = { ideal: true };
+			audioConstraints.echoCancellation = { ideal: true };
+			audioConstraints.autoGainControl = { ideal: true };
+		}
+		if (deviceId) audioConstraints.deviceId = { exact: deviceId };
 
-		this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+		try {
+			this.stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+		} catch (err) {
+			// If a specific device was requested and failed, fallback to default mic
+			if (deviceId) {
+				console.warn("Voxtral: Selected mic failed, falling back to default:", err);
+				const fallbackConstraints: MediaTrackConstraints = { channelCount: 1 };
+				if (noiseSuppression) {
+					fallbackConstraints.noiseSuppression = { ideal: true };
+					fallbackConstraints.echoCancellation = { ideal: true };
+					fallbackConstraints.autoGainControl = { ideal: true };
+				}
+				this.stream = await navigator.mediaDevices.getUserMedia({ audio: fallbackConstraints });
+				this.fallbackUsed = true;
+			} else {
+				throw err;
+			}
+		}
 
 		try {
 			// Determine active mic label from stream track
@@ -76,15 +126,23 @@ export class AudioRecorder {
 				this.stream
 			);
 
-			// ScriptProcessor for PCM capture (realtime mode)
+			// AudioWorklet for PCM capture (realtime mode)
 			if (this.onPcmChunk) {
-				this.processorNode =
-					this.audioContext.createScriptProcessor(4096, 1, 1);
-				this.processorNode.onaudioprocess = (e) => {
-					this.processAudio(e);
+				const blob = new Blob([WORKLET_SOURCE], {
+					type: "application/javascript",
+				});
+				this.workletUrl = URL.createObjectURL(blob);
+				await this.audioContext.audioWorklet.addModule(this.workletUrl);
+
+				this.workletNode = new AudioWorkletNode(
+					this.audioContext,
+					"pcm-processor"
+				);
+				this.workletNode.port.onmessage = (e: MessageEvent) => {
+					this.onPcmChunk?.(e.data as ArrayBuffer);
 				};
-				this.sourceNode.connect(this.processorNode);
-				this.processorNode.connect(this.audioContext.destination);
+				this.sourceNode.connect(this.workletNode);
+				this.workletNode.connect(this.audioContext.destination);
 			}
 
 			// MediaRecorder for batch mode (WebM/Opus)
@@ -104,16 +162,6 @@ export class AudioRecorder {
 			this.cleanup();
 			throw e;
 		}
-	}
-
-	private processAudio(e: AudioProcessingEvent): void {
-		const inputData = e.inputBuffer.getChannelData(0);
-		const pcm16 = new Int16Array(inputData.length);
-		for (let i = 0; i < inputData.length; i++) {
-			const s = Math.max(-1, Math.min(1, inputData[i]));
-			pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-		}
-		this.onPcmChunk?.(pcm16.buffer);
 	}
 
 	/**
@@ -191,16 +239,20 @@ export class AudioRecorder {
 	}
 
 	private cleanup(): void {
-		if (this.processorNode) {
-			this.processorNode.disconnect();
-			this.processorNode = null;
+		if (this.workletNode) {
+			this.workletNode.disconnect();
+			this.workletNode = null;
+		}
+		if (this.workletUrl) {
+			URL.revokeObjectURL(this.workletUrl);
+			this.workletUrl = null;
 		}
 		if (this.sourceNode) {
 			this.sourceNode.disconnect();
 			this.sourceNode = null;
 		}
 		if (this.audioContext) {
-			this.audioContext.close();
+			void this.audioContext.close();
 			this.audioContext = null;
 		}
 		if (this.stream) {
@@ -210,6 +262,7 @@ export class AudioRecorder {
 		this.mediaRecorder = null;
 		this.chunks = [];
 		this.activeMicLabel = "";
+		this.fallbackUsed = false;
 	}
 
 	get isRecording(): boolean {

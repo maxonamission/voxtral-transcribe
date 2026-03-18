@@ -6,6 +6,7 @@ let mediaStream = null;
 let processorNode = null;
 let useRealtime = true;
 let useDiarize = false;
+let useDualDelay = JSON.parse(localStorage.getItem("voxtral-dual-delay") || "false");
 let activeInsert = null; // span where incoming text is inserted
 let isMidSentenceInsert = false; // true when inserting inside a sentence (not after . ! ?)
 let analyserNode = null;
@@ -14,8 +15,16 @@ let smoothLevel = 0; // smoothed mic level (0–1)
 let lastLabel = ""; // current displayed label text
 let userScrolledAway = false; // true when user manually scrolled up
 
+// ── Dual-delay state ──
+let dualFastText = ""; // accumulated fast stream text (to be replaced by slow)
+let dualSlowText = ""; // accumulated slow stream text (final/accurate)
+let dualFastInsert = null; // span for fast (preliminary) text
+let dualSlowConfirmed = ""; // how much text has been confirmed by slow stream
+let dualSlowConsumed = 0; // chars already consumed/finalized by processDualSlowCommands
+
 // ── Correction settings ──
 let autoCorrect = JSON.parse(localStorage.getItem("voxtral-autocorrect") || "false");
+let noiseSuppression = JSON.parse(localStorage.getItem("voxtral-noise-suppression") || "false");
 let systemPrompt = localStorage.getItem("voxtral-system-prompt") || "";
 
 // ── Language ──
@@ -141,8 +150,18 @@ const diarizeLabel = document.getElementById("diarize-label");
 
 function updateModeUI() {
     if (isRecording) return;
-    statusText.textContent = useRealtime ? "Realtime" : "Opname";
-    delaySelect.disabled = !useRealtime;
+    statusText.textContent = useRealtime
+        ? (useDualDelay ? "Realtime (dual-delay)" : "Realtime")
+        : "Opname";
+    // Show delay selector only in realtime + non-dual mode
+    delaySelect.disabled = !useRealtime || useDualDelay;
+    if (useRealtime && useDualDelay) {
+        delaySelect.style.opacity = "0.4";
+        delaySelect.title = "Dual-delay actief (snel 240ms + nauwkeurig 2400ms)";
+    } else {
+        delaySelect.style.opacity = "";
+        delaySelect.title = "Streaming delay";
+    }
     // Diarize toggle: only visible in opname (batch) mode
     const showDiarize = !useRealtime;
     diarizeToggle.closest(".toggle").classList.toggle("hidden-toggle", !showDiarize);
@@ -385,7 +404,7 @@ const COMMAND_DEFS = [
     { id: "heading3", insert: "\n\n### ", toast: "### H3" },
     { id: "bulletPoint", insert: "\n- ", toast: "•" },
     { id: "todoItem", insert: "\n- [ ] ", toast: "☐" },
-    { id: "numberedItem", insert: "\n1. ", toast: "1." },
+    { id: "numberedItem", action: "numberedItem", toast: "1." },
     { id: "stopRecording", action: "stopRecording", toast: "⏹ Stop" },
     { id: "deleteLastParagraph", action: "deleteLastParagraph", toast: "🗑" },
     { id: "deleteLastLine", action: "deleteLastLine", toast: "🗑" },
@@ -566,6 +585,7 @@ function processCompletedSentences() {
             if (cmd.action === "deleteLastParagraph") deleteLastBlock("paragraph");
             if (cmd.action === "deleteLastLine") deleteLastBlock("line");
             if (cmd.action === "undo") restoreUndo();
+            if (cmd.action === "numberedItem") insertNumberedItem();
             showToast(cmd.toast);
         } else {
             // Finalize as regular text (white, not gray)
@@ -578,6 +598,8 @@ function processCompletedSentences() {
     isMidSentenceInsert = false; // after a sentence boundary, next text starts fresh
 
     if (stopRequested) {
+        // Clear activeInsert so stopRecording doesn't leave command text behind
+        if (activeInsert) { activeInsert.remove(); activeInsert = null; }
         setTimeout(() => { if (isRecording) btnRecord.click(); }, 0);
     }
 }
@@ -613,11 +635,27 @@ function executeCommand(cmd) {
     } else if (cmd.action === "undo") {
         if (activeInsert) { activeInsert.remove(); activeInsert = null; }
         restoreUndo();
+    } else if (cmd.action === "numberedItem") {
+        insertNumberedItem();
     }
 
     isMidSentenceInsert = false;
     replaceHint.classList.add("hidden");
     showToast(cmd.toast);
+}
+
+function insertNumberedItem() {
+    const text = transcript.textContent;
+    // Find the last numbered item pattern (e.g. "1. ", "2. ") on any line
+    const match = text.match(/(\d+)\.\s[^\n]*$/);
+    const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
+    const span = document.createElement("span");
+    span.textContent = `\n${nextNum}. `;
+    if (activeInsert && activeInsert.parentNode) {
+        activeInsert.parentNode.insertBefore(span, activeInsert);
+    } else {
+        transcript.appendChild(span);
+    }
 }
 
 // ── Undo stack ──
@@ -748,8 +786,14 @@ transcript.addEventListener("mouseup", () => {
         if (!transcript.contains(sel.anchorNode)) return;
         if (!transcript.contains(sel.focusNode)) return;
 
-        // Finalize current insert point
+        // Finalize current insert point and reset dual-delay accumulators
+        // so old text doesn't leak into the new insert point
+        processDualSlowCommands();
         finalizeInsertPoint();
+        dualFastText = "";
+        dualSlowText = "";
+        dualSlowConfirmed = "";
+        dualSlowConsumed = 0;
 
         if (!sel.isCollapsed) {
             // ── Selection: replace mode ──
@@ -1047,6 +1091,36 @@ function downsample(buffer, fromRate, toRate) {
     return result;
 }
 
+// ── Mic helper: try selected device, fallback to default ──
+async function acquireMic(extraConstraints = {}) {
+    const constraints = { channelCount: 1, ...extraConstraints };
+    if (noiseSuppression) {
+        constraints.noiseSuppression = { ideal: true };
+        constraints.echoCancellation = { ideal: true };
+        constraints.autoGainControl = { ideal: true };
+    }
+    if (selectedMicId) constraints.deviceId = { exact: selectedMicId };
+    try {
+        return await navigator.mediaDevices.getUserMedia({ audio: constraints });
+    } catch (err) {
+        // If a specific device was requested and failed, retry with default mic
+        if (selectedMicId) {
+            console.warn("Selected mic failed, falling back to default:", err.message);
+            const fallback = { channelCount: 1, ...extraConstraints };
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: fallback });
+            showToast("Geselecteerde microfoon niet beschikbaar — standaard gebruikt");
+            // Update selection to match what we actually got
+            const track = stream.getAudioTracks()[0];
+            if (track && track.getSettings().deviceId) {
+                selectedMicId = track.getSettings().deviceId;
+                localStorage.setItem("selectedMicId", selectedMicId);
+            }
+            return stream;
+        }
+        throw err;
+    }
+}
+
 // ── Realtime recording ──
 async function startRealtime() {
     const delay = delaySelect.value;
@@ -1102,9 +1176,7 @@ async function startRealtime() {
         ws.addEventListener("error", reject, { once: true });
     });
 
-    const audioConstraints = { channelCount: 1, sampleRate: 16000 };
-    if (selectedMicId) audioConstraints.deviceId = { exact: selectedMicId };
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+    mediaStream = await acquireMic({ sampleRate: 16000 });
     audioContext = new AudioContext({ sampleRate: 16000 });
     const source = audioContext.createMediaStreamSource(mediaStream);
 
@@ -1129,6 +1201,296 @@ function stopRealtime() {
     stopAudioCapture();
 }
 
+// ── Dual-delay realtime recording ──
+async function startDualDelay() {
+    const fastDelay = 240;
+    const slowDelay = 2400;
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    ws = new WebSocket(`${protocol}//${location.host}/ws/transcribe-dual?fast_delay=${fastDelay}&slow_delay=${slowDelay}`);
+
+    // Reset dual-delay state
+    dualFastText = "";
+    dualSlowText = "";
+    dualSlowConfirmed = "";
+    dualSlowConsumed = 0;
+    dualFastInsert = null;
+
+    ws.onopen = () => {
+        statusText.textContent = "Opnemen (dual-delay)";
+    };
+
+    ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.stream === "fast") {
+            if (msg.type === "delta") {
+                dualFastText += msg.text;
+                // Show fast text as preliminary (dimmed) — only the part not yet confirmed by slow
+                renderDualText();
+            } else if (msg.type === "done") {
+                // Fast stream sentence done — finalize but keep as preliminary
+                renderDualText();
+            }
+        } else if (msg.stream === "slow") {
+            if (msg.type === "delta") {
+                dualSlowText += msg.text;
+                // Slow stream catches up — replace fast text with accurate version
+                renderDualText();
+                // Check for voice commands in slow stream (more accurate than fast)
+                processDualSlowCommands();
+            } else if (msg.type === "done") {
+                // msg.text is the full finalized text for this segment.
+                // processDualSlowCommands() may have already consumed/trimmed
+                // earlier sentences from dualSlowText. Only replace if msg.text
+                // extends beyond what we've already consumed; use the unconsumed
+                // portion so already-finalized text isn't re-inserted.
+                if (msg.text) {
+                    if (dualSlowConsumed > 0 && msg.text.length > dualSlowConsumed) {
+                        dualSlowText = msg.text.substring(dualSlowConsumed);
+                    } else if (dualSlowConsumed === 0) {
+                        dualSlowText = msg.text;
+                    }
+                    // If msg.text.length <= dualSlowConsumed, everything was already
+                    // processed — keep current dualSlowText (remainder) as-is.
+                }
+                renderDualText();
+                // Check for voice commands before marking as confirmed
+                processDualSlowCommands();
+                // Mark all slow text as confirmed
+                dualSlowConfirmed = dualSlowText;
+            }
+        } else if (msg.type === "error") {
+            console.error("Dual-delay error:", msg.message, msg.stream);
+            showToast("Serverfout — herverbinden...");
+        }
+    };
+
+    ws.onerror = (err) => console.error("Dual-delay WebSocket error:", err);
+
+    ws.onclose = () => {
+        if (isRecording) {
+            console.log("Dual-delay WebSocket closed while recording — attempting reconnect...");
+            stopAudioCapture();
+            finalizeInsertPoint();
+            showToast("Verbinding verbroken — herverbinden...");
+            setTimeout(async () => {
+                if (!isRecording) return;
+                try {
+                    await startDualDelay();
+                    showToast("Herverbonden");
+                } catch (err) {
+                    console.error("Reconnect failed:", err);
+                    isRecording = false;
+                    btnRecord.classList.remove("active");
+                    btnRecord.textContent = "Opnemen";
+                    updateModeUI();
+                    showToast("Herverbinden mislukt");
+                }
+            }, 1500);
+        }
+    };
+
+    await new Promise((resolve, reject) => {
+        ws.addEventListener("open", resolve, { once: true });
+        ws.addEventListener("error", reject, { once: true });
+    });
+
+    mediaStream = await acquireMic({ sampleRate: 16000 });
+    audioContext = new AudioContext({ sampleRate: 16000 });
+    const source = audioContext.createMediaStreamSource(mediaStream);
+
+    processorNode = audioContext.createScriptProcessor(4096, 1, 1);
+    processorNode.onaudioprocess = (e) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        const inputData = e.inputBuffer.getChannelData(0);
+        const downsampled = downsample(inputData, audioContext.sampleRate, 16000);
+        const pcm = floatTo16BitPCM(downsampled);
+        ws.send(pcm.buffer);
+    };
+
+    source.connect(processorNode);
+    processorNode.connect(audioContext.destination);
+
+    startMicLevel(source);
+}
+
+function renderDualText() {
+    clearPlaceholder();
+    const target = ensureInsertPoint();
+
+    // The slow stream is authoritative. Show:
+    // 1. Confirmed slow text (normal style)
+    // 2. Any fast text beyond the slow text (dimmed/preliminary)
+    //
+    // Simple approach: slow text is the "true" prefix, fast text that extends
+    // beyond it is shown as preliminary.
+
+    const slowLen = dualSlowText.length;
+    const fastLen = dualFastText.length;
+
+    if (fastLen > slowLen) {
+        // Show slow text (confirmed) + remainder from fast (preliminary)
+        const confirmedPart = dualSlowText;
+        const preliminaryPart = dualFastText.substring(slowLen);
+        target.innerHTML = "";
+
+        if (confirmedPart) {
+            const confirmedSpan = document.createElement("span");
+            confirmedSpan.textContent = confirmedPart;
+            confirmedSpan.className = "dual-confirmed";
+            target.appendChild(confirmedSpan);
+        }
+        if (preliminaryPart) {
+            const prelimSpan = document.createElement("span");
+            prelimSpan.textContent = preliminaryPart;
+            prelimSpan.className = "dual-preliminary";
+            target.appendChild(prelimSpan);
+        }
+    } else {
+        // Slow has caught up or surpassed fast — show only slow text
+        target.textContent = dualSlowText;
+        target.className = "partial dual-confirmed";
+    }
+
+    scrollToInsertPoint();
+}
+
+/**
+ * Process voice commands from the slow stream in dual-delay mode.
+ * The slow stream has better accuracy and reliably recognizes commands
+ * like "nieuwe alinea", "dubbele punt", etc.
+ *
+ * Scans dualSlowText for completed sentences (ending with .!?) and checks
+ * each for voice commands. When found: finalizes preceding text, executes
+ * the command, and trims both slow and fast accumulators.
+ */
+function processDualSlowCommands() {
+    if (!dualSlowText) return;
+
+    // Match completed sentences (text ending with sentence punctuation)
+    const parts = dualSlowText.match(/\s*[^.!?]+[.!?]+/g);
+    if (!parts) return;
+
+    const matchedLength = parts.join("").length;
+    const remainder = dualSlowText.substring(matchedLength);
+
+    // Check each completed sentence for voice commands
+    const actions = parts.map(part => {
+        const trimmedPart = part.trim();
+        const textOnly = trimmedPart.replace(/[.!?]+$/, "").trim();
+        const norm = normalizeCommand(textOnly);
+        const result = findCommand(norm, textOnly);
+        console.debug(`[dual-voice] "${textOnly}" → norm="${norm}" → ${result ? "CMD: " + result.cmd.toast : "text"}`);
+        return { trimmedPart, result };
+    });
+
+    // Always flush completed sentences — even without commands.
+    // This keeps accumulators small (preventing performance degradation)
+    // and moves confirmed text to permanent spans (preventing grey flicker).
+
+    // Save undo state before modifying transcript
+    const hasTextParts = actions.some(a => !a.result);
+    if (hasTextParts) saveUndo();
+
+    // Finalize the activeInsert: clear it and commit text/commands
+    const target = ensureInsertPoint();
+    target.innerHTML = "";
+    target.textContent = "";
+
+    let stopRequested = false;
+    for (const { trimmedPart, result } of actions) {
+        // Re-attach activeInsert if needed
+        if (!transcript.contains(activeInsert)) {
+            if (activeInsert.parentNode) activeInsert.remove();
+            transcript.appendChild(activeInsert);
+        }
+
+        if (result) {
+            const { cmd, textBefore } = result;
+            if (textBefore) {
+                const prefixSpan = document.createElement("span");
+                if (cmd.punctuation) {
+                    prefixSpan.textContent = stripTrailingPunctuation(textBefore) + cmd.insert;
+                    activeInsert.parentNode.insertBefore(prefixSpan, activeInsert);
+                    showToast(cmd.toast);
+                    continue;
+                }
+                prefixSpan.textContent = textBefore + " ";
+                activeInsert.parentNode.insertBefore(prefixSpan, activeInsert);
+            }
+            if (cmd.insert) {
+                if (cmd.punctuation) {
+                    const prev = activeInsert.previousSibling;
+                    if (prev && prev.textContent) {
+                        prev.textContent = stripTrailingPunctuation(prev.textContent);
+                    }
+                }
+                const span = document.createElement("span");
+                span.textContent = cmd.insert;
+                activeInsert.parentNode.insertBefore(span, activeInsert);
+            }
+            if (cmd.action === "stopRecording") stopRequested = true;
+            if (cmd.action === "deleteLastParagraph") deleteLastBlock("paragraph");
+            if (cmd.action === "deleteLastLine") deleteLastBlock("line");
+            if (cmd.action === "undo") restoreUndo();
+            if (cmd.action === "numberedItem") insertNumberedItem();
+            showToast(cmd.toast);
+        } else {
+            // Regular text — finalize into transcript
+            const span = document.createElement("span");
+            span.textContent = trimmedPart + " ";
+            activeInsert.parentNode.insertBefore(span, activeInsert);
+        }
+    }
+
+    isMidSentenceInsert = false;
+
+    // Trim accumulators: remove the processed portion, keep remainder
+    dualSlowConsumed += matchedLength;
+    dualSlowText = remainder;
+    // Also trim fast text — remove at least as much as we consumed from slow
+    if (dualFastText.length >= matchedLength) {
+        dualFastText = dualFastText.substring(matchedLength);
+    } else {
+        dualFastText = "";
+    }
+    dualSlowConfirmed = dualSlowText;
+
+    // Re-render with trimmed state
+    renderDualText();
+
+    if (stopRequested) {
+        // Clear accumulators so stopDualDelay() won't re-insert command text
+        dualSlowText = "";
+        dualFastText = "";
+        dualSlowConfirmed = "";
+        dualSlowConsumed = 0;
+        if (activeInsert) { activeInsert.remove(); activeInsert = null; }
+        setTimeout(() => { if (isRecording) btnRecord.click(); }, 0);
+    }
+}
+
+function stopDualDelay() {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+    ws = null;
+    stopAudioCapture();
+    // Process any remaining voice commands before finalizing
+    processDualSlowCommands();
+    // Finalize: use slow text preferentially, fall back to fast text for any remainder
+    if (activeInsert) {
+        const finalText = dualSlowText || dualFastText;
+        activeInsert.innerHTML = "";
+        if (finalText) {
+            activeInsert.textContent = finalText;
+            activeInsert.className = "partial";
+        }
+    }
+    finalizeInsertPoint();
+    dualFastText = "";
+    dualSlowText = "";
+    dualSlowConfirmed = "";
+    dualSlowConsumed = 0;
+}
+
 // ── Offline / batch recording ──
 let mediaRecorder = null;
 let offlineChunks = [];
@@ -1136,9 +1498,7 @@ let offlineChunks = [];
 async function startOffline() {
     statusText.textContent = "Opnemen...";
 
-    const audioConstraints = { channelCount: 1 };
-    if (selectedMicId) audioConstraints.deviceId = { exact: selectedMicId };
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+    mediaStream = await acquireMic();
 
     // Create AudioContext for mic level monitoring
     audioContext = new AudioContext();
@@ -1208,7 +1568,11 @@ btnRecord.addEventListener("click", async () => {
         btnRecord.classList.remove("active");
         btnRecord.textContent = "Opnemen";
 
-        if (useRealtime && ws) {
+        if (useRealtime && useDualDelay && ws) {
+            stopDualDelay();
+            finalizeInsertPoint();
+            autoCorrectAfterStop().then(() => copyTranscript());
+        } else if (useRealtime && ws) {
             stopRealtime();
             finalizeInsertPoint();
             autoCorrectAfterStop().then(() => copyTranscript()); // correct then copy
@@ -1225,7 +1589,9 @@ btnRecord.addEventListener("click", async () => {
         btnRecord.textContent = "Stop";
 
         try {
-            if (useRealtime) {
+            if (useRealtime && useDualDelay) {
+                await startDualDelay();
+            } else if (useRealtime) {
                 await startRealtime();
             } else {
                 await startOffline();
@@ -1236,7 +1602,12 @@ btnRecord.addEventListener("click", async () => {
             btnRecord.classList.remove("active");
             btnRecord.textContent = "Opnemen";
             finalizeInsertPoint();
-            statusText.textContent = "Fout: " + err.message;
+            const msg = err.name === "NotReadableError" || err.name === "NotFoundError"
+                ? "Microfoon niet beschikbaar — controleer je apparaat of kies een andere microfoon in de instellingen"
+                : err.name === "NotAllowedError"
+                ? "Geen toestemming voor microfoon — sta toegang toe in je browser"
+                : "Fout: " + err.message;
+            statusText.textContent = msg;
         }
     }
 });
@@ -1376,7 +1747,9 @@ queueInfo.addEventListener("click", () => {
 });
 
 // ── Settings modal ──
+const toggleDualDelay = document.getElementById("toggle-dual-delay");
 const toggleAutocorrect = document.getElementById("toggle-autocorrect");
+const toggleNoiseSuppression = document.getElementById("toggle-noise-suppression");
 const inputSystemPrompt = document.getElementById("input-system-prompt");
 const selectMicrophone = document.getElementById("select-microphone");
 const selectRealtimeModel = document.getElementById("select-realtime-model");
@@ -1478,7 +1851,9 @@ function openSettings() {
         loadModels(data);
     }).catch(() => {});
     // Load correction settings
+    toggleDualDelay.checked = useDualDelay;
     toggleAutocorrect.checked = autoCorrect;
+    toggleNoiseSuppression.checked = noiseSuppression;
     inputSystemPrompt.value = systemPrompt;
     selectLanguage.value = activeLang;
     // Load microphone list
@@ -1503,8 +1878,13 @@ document.getElementById("btn-toggle-key").addEventListener("click", () => {
 // Save key
 document.getElementById("btn-save-key").addEventListener("click", async () => {
     // Always save all settings
+    useDualDelay = toggleDualDelay.checked;
+    localStorage.setItem("voxtral-dual-delay", JSON.stringify(useDualDelay));
+    updateModeUI();
     autoCorrect = toggleAutocorrect.checked;
     localStorage.setItem("voxtral-autocorrect", JSON.stringify(autoCorrect));
+    noiseSuppression = toggleNoiseSuppression.checked;
+    localStorage.setItem("voxtral-noise-suppression", JSON.stringify(noiseSuppression));
     systemPrompt = inputSystemPrompt.value;
     localStorage.setItem("voxtral-system-prompt", systemPrompt);
     selectedMicId = selectMicrophone.value;
@@ -1516,6 +1896,7 @@ document.getElementById("btn-save-key").addEventListener("click", async () => {
         activeLang = newLang;
         localStorage.setItem("voxtral-language", activeLang);
         VOICE_COMMANDS = buildVoiceCommands(activeLang);
+        updateBmcLink();
     }
 
     // Build the server payload: language + models always, API key only if entered
@@ -1692,6 +2073,114 @@ document.getElementById("btn-save-key").addEventListener("click", () => {
         pendingShortcut = null;
     }
 });
+
+// ── Footer: time-based Buy Me A Coffee message ──
+// Button text is fixed (BMC branding); only the tagline above is localised.
+const BMC_BUTTONS = [
+    "☕ Buy me a coffee",  // morning
+    "📖 Buy me a book",   // afternoon
+    "🍺 Buy me a beer",   // evening
+    "🛏️ I like what you built!", // night
+];
+const BMC_TAGLINES = {
+    // [morning, afternoon, evening, night]
+    en: [
+        "Need a coffee to process all this? Me too!",
+        "Writing a book? I like books too!",
+        "Worked so fast you have time for a beer? Let me join you!",
+        "Time to go to bed! No more coffee.",
+    ],
+    nl: [
+        "Een koffie nodig om dit allemaal te verwerken? Ik ook!",
+        "Een boek aan het schrijven? Ik hou ook van boeken!",
+        "Zo snel gewerkt dat je tijd hebt voor een biertje? Ik doe mee!",
+        "Tijd om naar bed te gaan! Geen koffie meer.",
+    ],
+    fr: [
+        "Besoin d'un café pour digérer tout ça ? Moi aussi !",
+        "Tu écris un livre ? J'aime les livres aussi !",
+        "Tu as travaillé si vite qu'il te reste du temps pour une bière ? Je t'accompagne !",
+        "C'est l'heure d'aller dormir ! Plus de café.",
+    ],
+    de: [
+        "Brauchst du einen Kaffee, um das alles zu verarbeiten? Ich auch!",
+        "Schreibst du ein Buch? Ich mag Bücher auch!",
+        "So schnell gearbeitet, dass du Zeit für ein Bier hast? Ich bin dabei!",
+        "Zeit, ins Bett zu gehen! Kein Kaffee mehr.",
+    ],
+    es: [
+        "¿Necesitas un café para procesar todo esto? ¡Yo también!",
+        "¿Escribiendo un libro? ¡A mí también me gustan los libros!",
+        "¿Trabajaste tan rápido que tienes tiempo para una cerveza? ¡Me apunto!",
+        "¡Hora de irse a la cama! No más café.",
+    ],
+    pt: [
+        "Precisa de um café para processar tudo isto? Eu também!",
+        "Escrevendo um livro? Também gosto de livros!",
+        "Trabalhou tão rápido que tem tempo para uma cerveja? Eu vou junto!",
+        "Hora de ir dormir! Chega de café.",
+    ],
+    it: [
+        "Hai bisogno di un caffè per elaborare tutto questo? Anch'io!",
+        "Stai scrivendo un libro? Anche a me piacciono i libri!",
+        "Hai lavorato così veloce che hai tempo per una birra? Mi unisco!",
+        "È ora di andare a dormire! Basta caffè.",
+    ],
+    ru: [
+        "Нужен кофе, чтобы всё это переварить? Мне тоже!",
+        "Пишешь книгу? Я тоже люблю книги!",
+        "Работал так быстро, что есть время на пиво? Я с тобой!",
+        "Пора спать! Хватит кофе.",
+    ],
+    zh: [
+        "需要一杯咖啡来消化这一切？我也是！",
+        "在写书？我也喜欢书！",
+        "工作这么快，有时间喝杯啤酒？我也来一杯！",
+        "该睡觉了！别再喝咖啡了。",
+    ],
+    hi: [
+        "इतना सब समझने के लिए कॉफ़ी चाहिए? मुझे भी!",
+        "किताब लिख रहे हो? मुझे भी किताबें पसंद हैं!",
+        "इतनी तेज़ी से काम किया कि बीयर का टाइम है? मैं भी आता हूँ!",
+        "सोने का टाइम! अब और कॉफ़ी नहीं।",
+    ],
+    ar: [
+        "تحتاج قهوة لمعالجة كل هذا؟ أنا أيضاً!",
+        "تكتب كتاباً؟ أنا أحب الكتب أيضاً!",
+        "عملت بسرعة وعندك وقت لبيرة؟ أنا معك!",
+        "حان وقت النوم! لا مزيد من القهوة.",
+    ],
+    ja: [
+        "これを全部処理するのにコーヒーが必要？私も！",
+        "本を書いてるの？私も本が好き！",
+        "こんなに早く仕事してビールの時間？一緒に飲もう！",
+        "もう寝る時間！コーヒーはおしまい。",
+    ],
+    ko: [
+        "이걸 다 처리하려면 커피가 필요하지? 나도!",
+        "책 쓰고 있어? 나도 책 좋아해!",
+        "일을 너무 빨리 해서 맥주 마실 시간이 있다고? 나도 낄게!",
+        "이제 잘 시간이야! 커피는 그만.",
+    ],
+};
+
+function updateBmcLink() {
+    const tagline = document.getElementById("bmc-tagline");
+    const link = document.getElementById("bmc-link");
+    if (!tagline || !link) return;
+
+    const tags = BMC_TAGLINES[activeLang] || BMC_TAGLINES.en;
+    const hour = new Date().getHours();
+    let idx;
+    if (hour >= 6 && hour < 12) idx = 0;       // morning → coffee
+    else if (hour >= 12 && hour < 18) idx = 1;  // afternoon → book
+    else if (hour >= 18 && hour < 22) idx = 2;  // evening → beer
+    else idx = 3;                                // night → bed
+
+    tagline.textContent = tags[idx];
+    link.textContent = BMC_BUTTONS[idx];
+}
+updateBmcLink();
 
 // ── Init ──
 updateModeUI();

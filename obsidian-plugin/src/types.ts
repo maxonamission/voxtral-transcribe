@@ -11,6 +11,9 @@ export interface VoxtralSettings {
 	correctModel: string;
 	autoCorrect: boolean;
 	streamingDelayMs: number;
+	dualDelay: boolean; // dual-delay mode: fast + slow stream for speed + accuracy
+	dualDelayFastMs: number;
+	dualDelaySlowMs: number;
 	systemPrompt: string;
 	mode: "realtime" | "batch";
 	microphoneDeviceId: string; // "" = system default
@@ -19,6 +22,7 @@ export interface VoxtralSettings {
 	dismissMobileBatchNotice: boolean; // hide "using batch mode" notice on mobile
 	enterToSend: boolean; // Enter key acts as tap-to-send when mic is live in batch mode
 	typingCooldownMs: number; // ms of silence before mic unmutes after typing
+	noiseSuppression: boolean; // browser-level noise suppression, echo cancellation, AGC
 }
 
 export const DEFAULT_SETTINGS: VoxtralSettings = {
@@ -29,6 +33,9 @@ export const DEFAULT_SETTINGS: VoxtralSettings = {
 	correctModel: "mistral-small-latest",
 	autoCorrect: true,
 	streamingDelayMs: 480,
+	dualDelay: false,
+	dualDelayFastMs: 240,
+	dualDelaySlowMs: 2400,
 	systemPrompt: "",
 	mode: "realtime",
 	microphoneDeviceId: "",
@@ -37,6 +44,7 @@ export const DEFAULT_SETTINGS: VoxtralSettings = {
 	dismissMobileBatchNotice: false,
 	enterToSend: true,
 	typingCooldownMs: 800,
+	noiseSuppression: false,
 };
 
 export const DEFAULT_CORRECT_PROMPT =

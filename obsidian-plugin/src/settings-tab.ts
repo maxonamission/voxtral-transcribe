@@ -7,7 +7,7 @@ import { AudioRecorder } from "./audio-recorder";
 import { listModels } from "./mistral-api";
 import type { MistralModel, } from "./mistral-api";
 import type { FocusBehavior } from "./types";
-import { SUPPORTED_LANGUAGES, LANGUAGE_NAMES, type LangCode } from "./lang";
+import { SUPPORTED_LANGUAGES, LANGUAGE_NAMES } from "./lang";
 
 export class VoxtralSettingTab extends PluginSettingTab {
 	plugin: VoxtralPlugin;
@@ -22,14 +22,14 @@ export class VoxtralSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Voxtral Transcribe" });
+		;
 
 		new Setting(containerEl)
 			.setName("Mistral API key")
 			.setDesc("Your API key from platform.mistral.ai")
 			.addText((text) =>
 				text
-					.setPlaceholder("sk-...")
+					.setPlaceholder("Enter your API key")
 					.setValue(this.plugin.settings.apiKey)
 					.onChange(async (value) => {
 						this.plugin.settings.apiKey = value.trim();
@@ -56,6 +56,8 @@ export class VoxtralSettingTab extends PluginSettingTab {
 					drop.addOption(mic.deviceId, mic.label);
 				}
 				drop.setValue(this.plugin.settings.microphoneDeviceId);
+			}).catch((err) => {
+				console.error("Voxtral: Failed to enumerate microphones", err);
 			});
 
 			drop.onChange(async (value) => {
@@ -216,33 +218,66 @@ export class VoxtralSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Streaming delay")
+			.setName("Noise suppression")
 			.setDesc(
-				"Delay in ms for realtime mode. Lower = faster but less accurate."
+				"Enable browser-level noise suppression, echo cancellation, and auto gain control. " +
+				"Useful in noisy environments."
 			)
-			.addDropdown((drop) => {
-				const options: Record<string, string> = {
-					"240": "240 ms (fastest)",
-					"480": "480 ms (default)",
-					"640": "640 ms",
-					"800": "800 ms",
-					"1200": "1200 ms",
-					"1600": "1600 ms",
-					"2400": "2400 ms (most accurate)",
-				};
-				for (const [value, label] of Object.entries(options)) {
-					drop.addOption(value, label);
-				}
-				drop.setValue(
-					String(this.plugin.settings.streamingDelayMs)
-				).onChange(async (value) => {
-					this.plugin.settings.streamingDelayMs = Number(value);
-					await this.plugin.saveSettings();
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.noiseSuppression)
+					.onChange(async (value) => {
+						this.plugin.settings.noiseSuppression = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Dual-delay mode")
+			.setDesc(
+				"Run two parallel streams: a fast one for immediate text and a slow one " +
+				"for higher accuracy and voice command detection. Overrides the streaming delay setting."
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.dualDelay)
+					.onChange(async (value) => {
+						this.plugin.settings.dualDelay = value;
+						await this.plugin.saveSettings();
+						this.display(); // re-render to show/hide delay settings
+					})
+			);
+
+		if (!this.plugin.settings.dualDelay) {
+			new Setting(containerEl)
+				.setName("Streaming delay")
+				.setDesc(
+					"Delay in ms for realtime mode. Lower = faster but less accurate."
+				)
+				.addDropdown((drop) => {
+					const options: Record<string, string> = {
+						"240": "240 ms (fastest)",
+						"480": "480 ms (default)",
+						"640": "640 ms",
+						"800": "800 ms",
+						"1200": "1200 ms",
+						"1600": "1600 ms",
+						"2400": "2400 ms (most accurate)",
+					};
+					for (const [value, label] of Object.entries(options)) {
+						drop.addOption(value, label);
+					}
+					drop.setValue(
+						String(this.plugin.settings.streamingDelayMs)
+					).onChange(async (value) => {
+						this.plugin.settings.streamingDelayMs = Number(value);
+						await this.plugin.saveSettings();
+					});
 				});
-			});
+		}
 
 		// Hotkeys hint
-		containerEl.createEl("h3", { text: "Keyboard shortcuts" });
+		new Setting(containerEl).setName("Keyboard shortcuts").setHeading();
 
 		new Setting(containerEl)
 			.setName("Customize hotkeys")
@@ -253,11 +288,13 @@ export class VoxtralSettingTab extends PluginSettingTab {
 			)
 			.addButton((btn) =>
 				btn
-					.setButtonText("Open Hotkeys")
+					.setButtonText("Open hotkeys")
 					.onClick(() => {
 						// Open Obsidian's hotkey settings and pre-filter
-						(this.app as any).setting?.openTabById?.("hotkeys");
-						const tab = (this.app as any).setting?.activeTab;
+						// @ts-expect-error Accessing internal Obsidian API for hotkey tab navigation
+						const appSetting = this.app.setting;
+						appSetting?.openTabById?.("hotkeys");
+						const tab = appSetting?.activeTab;
 						if (tab?.searchComponent) {
 							tab.searchComponent.setValue("Voxtral");
 							tab.updateHotkeyVisibility?.();
@@ -266,21 +303,21 @@ export class VoxtralSettingTab extends PluginSettingTab {
 			);
 
 		// Support
-		containerEl.createEl("h3", { text: "Support this project" });
+		new Setting(containerEl).setName("Support this project").setHeading();
 
 		new Setting(containerEl)
-			.setName("Buy Me a Coffee")
+			.setName("Buy me a coffee")
 			.setDesc("Find this plugin useful? Consider a donation!")
 			.addButton((btn) =>
 				btn
-					.setButtonText("Buy Me a Coffee")
+					.setButtonText("Buy me a coffee")
 					.onClick(() => {
 						window.open("https://buymeacoffee.com/maxonamission");
 					})
 			);
 
 		// Advanced settings
-		containerEl.createEl("h3", { text: "Advanced" });
+		new Setting(containerEl).setName("Advanced").setHeading();
 
 		// Filter helpers based on model capabilities
 		const isTranscriptionModel = (m: MistralModel) =>
@@ -340,7 +377,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 				const textarea = setting.controlEl.querySelector("textarea");
 				if (textarea) {
 					textarea.rows = 6;
-					textarea.style.width = "100%";
+					textarea.classList.add("voxtral-textarea-full");
 				}
 			});
 	}
@@ -391,6 +428,8 @@ export class VoxtralSettingTab extends PluginSettingTab {
 					drop.addOption(model.id, model.id);
 				}
 				drop.setValue(currentValue);
+			}).catch((err) => {
+				console.error("Voxtral: Failed to fetch models", err);
 			});
 		});
 	}
