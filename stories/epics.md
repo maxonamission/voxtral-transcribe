@@ -23,3 +23,11 @@ Improve audio capture quality in challenging environments.
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
 | 003 | [Advanced noise suppression with RNNoise WASM](backlog/003-rnnoise-wasm.md) | Backlog | Medium |
+
+## Epic: Distribution
+
+Make the app easy to download and run for testers and users.
+
+| # | Story | Status | Priority |
+|---|-------|--------|----------|
+| 004 | [Automated GitHub Releases with cross-platform builds](backlog/004-github-releases-ci.md) | Backlog | High |
