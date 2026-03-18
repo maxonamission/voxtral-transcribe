@@ -11,6 +11,9 @@ export interface VoxtralSettings {
 	correctModel: string;
 	autoCorrect: boolean;
 	streamingDelayMs: number;
+	dualDelay: boolean; // dual-delay mode: fast + slow stream for speed + accuracy
+	dualDelayFastMs: number;
+	dualDelaySlowMs: number;
 	systemPrompt: string;
 	mode: "realtime" | "batch";
 	microphoneDeviceId: string; // "" = system default
@@ -29,6 +32,9 @@ export const DEFAULT_SETTINGS: VoxtralSettings = {
 	correctModel: "mistral-small-latest",
 	autoCorrect: true,
 	streamingDelayMs: 480,
+	dualDelay: false,
+	dualDelayFastMs: 240,
+	dualDelaySlowMs: 2400,
 	systemPrompt: "",
 	mode: "realtime",
 	microphoneDeviceId: "",

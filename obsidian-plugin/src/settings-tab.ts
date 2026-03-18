@@ -218,30 +218,48 @@ export class VoxtralSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Streaming delay")
+			.setName("Dual-delay mode")
 			.setDesc(
-				"Delay in ms for realtime mode. Lower = faster but less accurate."
+				"Run two parallel streams: a fast one for immediate text and a slow one " +
+				"for higher accuracy and voice command detection. Overrides the streaming delay setting."
 			)
-			.addDropdown((drop) => {
-				const options: Record<string, string> = {
-					"240": "240 ms (fastest)",
-					"480": "480 ms (default)",
-					"640": "640 ms",
-					"800": "800 ms",
-					"1200": "1200 ms",
-					"1600": "1600 ms",
-					"2400": "2400 ms (most accurate)",
-				};
-				for (const [value, label] of Object.entries(options)) {
-					drop.addOption(value, label);
-				}
-				drop.setValue(
-					String(this.plugin.settings.streamingDelayMs)
-				).onChange(async (value) => {
-					this.plugin.settings.streamingDelayMs = Number(value);
-					await this.plugin.saveSettings();
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.dualDelay)
+					.onChange(async (value) => {
+						this.plugin.settings.dualDelay = value;
+						await this.plugin.saveSettings();
+						this.display(); // re-render to show/hide delay settings
+					})
+			);
+
+		if (!this.plugin.settings.dualDelay) {
+			new Setting(containerEl)
+				.setName("Streaming delay")
+				.setDesc(
+					"Delay in ms for realtime mode. Lower = faster but less accurate."
+				)
+				.addDropdown((drop) => {
+					const options: Record<string, string> = {
+						"240": "240 ms (fastest)",
+						"480": "480 ms (default)",
+						"640": "640 ms",
+						"800": "800 ms",
+						"1200": "1200 ms",
+						"1600": "1600 ms",
+						"2400": "2400 ms (most accurate)",
+					};
+					for (const [value, label] of Object.entries(options)) {
+						drop.addOption(value, label);
+					}
+					drop.setValue(
+						String(this.plugin.settings.streamingDelayMs)
+					).onChange(async (value) => {
+						this.plugin.settings.streamingDelayMs = Number(value);
+						await this.plugin.saveSettings();
+					});
 				});
-			});
+		}
 
 		// Hotkeys hint
 		new Setting(containerEl).setName("Keyboard shortcuts").setHeading();
