@@ -2008,6 +2008,33 @@ document.getElementById("btn-save-key").addEventListener("click", () => {
     }
 });
 
+// ── Footer: time-based Buy Me A Coffee message ──
+function updateBmcLink() {
+    const tagline = document.getElementById("bmc-tagline");
+    const link = document.getElementById("bmc-link");
+    if (!tagline || !link) return;
+
+    const hour = new Date().getHours();
+    if (hour >= 6 && hour < 12) {
+        // Morning → coffee
+        tagline.textContent = "Need a coffee to process all this? Me too!";
+        link.textContent = "☕ Buy me a coffee";
+    } else if (hour >= 12 && hour < 18) {
+        // Afternoon → book
+        tagline.textContent = "Writing a book? I like books too!";
+        link.textContent = "📖 Buy me a book";
+    } else if (hour >= 18 && hour < 22) {
+        // Evening → beer
+        tagline.textContent = "Worked so fast you have time for a beer? Let me join you!";
+        link.textContent = "🍺 Buy me a beer";
+    } else {
+        // Night (22:00–06:00) → bed
+        tagline.textContent = "Time to go to bed! No more coffee.";
+        link.textContent = "🛏️ I like what you built!";
+    }
+}
+updateBmcLink();
+
 // ── Init ──
 updateModeUI();
 updateQueueBadge();
