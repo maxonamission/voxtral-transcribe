@@ -339,7 +339,7 @@ footer {
 }
 
 #bmc-link:hover {
-    color: #e06520 !important;
+    color: #FFDD00 !important;
 }
 
 .footer-sep {
@@ -348,13 +348,13 @@ footer {
 }
 
 #bmc-tagline {
-    color: #444;
+    color: #f0f0f0;
     font-style: italic;
-    font-size: 0.85rem;
+    font-size: 1rem;
 }
 
 #bmc-link {
-    color: #ff813f !important;
+    color: #FFDD00 !important;
     font-weight: 600;
 }
 
