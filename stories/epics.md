@@ -7,6 +7,7 @@ Improve the user experience across different screen sizes, devices, and input me
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
 | 001 | [Settings modal not scrollable on small screens](done/001-settings-modal-scroll.md) | Done | High |
+| 005 | [Settings modal two-column landscape layout](backlog/005-settings-two-column-layout.md) | Backlog | Low |
 
 ## Epic: Internationalization
 
