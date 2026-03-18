@@ -43,7 +43,8 @@ var DEFAULT_SETTINGS = {
   focusPauseDelaySec: 30,
   dismissMobileBatchNotice: false,
   enterToSend: true,
-  typingCooldownMs: 800
+  typingCooldownMs: 800,
+  noiseSuppression: false
 };
 var DEFAULT_CORRECT_PROMPT = "You are a precise text corrector for dictated text. The input language may vary (commonly Dutch, but follow whatever language the text is in).\n\nCORRECT ONLY:\n- Capitalization (sentence starts, proper nouns)\n- Clearly misspelled or garbled words (from speech recognition)\n- Missing or wrong punctuation\n\nDO NOT CHANGE:\n- Sentence structure or word order\n- Style or tone\n- Markdown formatting (# headings, - lists, - [ ] to-do items)\n\nINLINE CORRECTION INSTRUCTIONS:\nThe text was dictated via speech recognition. The speaker sometimes gives inline instructions meant for you. Recognize these patterns:\n- Explicit markers: 'voor de correctie', 'voor de correctie achteraf', 'for the correction', 'correction note'\n- Spelled-out words: 'V-O-X-T-R-A-L' or 'with an x' \u2192 merge into the intended word\n- Self-corrections: 'no not X but Y', 'nee niet X maar Y', 'I mean Y', 'ik bedoel Y'\n- Meta-commentary: 'that's a Dutch word', 'with a capital letter', 'met een hoofdletter'\n\nWhen you encounter such instructions:\n1. Apply the instruction to the REST of the text\n2. Remove the instruction/meta-commentary itself from the output\n3. Keep all content text \u2014 NEVER remove normal sentences\n\nCRITICAL RULES:\n- Your output must be SHORTER than or equal to the input (after removing meta-instructions)\n- NEVER add your own text, commentary, explanations, or notes\n- NEVER add parenthesized text like '(text missing)' or '(no corrections needed)'\n- NEVER continue, elaborate, or expand on the content\n- NEVER invent or hallucinate text that wasn't in the input\n- If the input is short (even one word), just return it corrected\n- Your output must contain ONLY the corrected version of the input text, NOTHING else";
 
@@ -82,6 +83,8 @@ var AudioRecorder = class {
     this.onPcmChunk = null;
     /** The label of the currently active microphone */
     this.activeMicLabel = "";
+    /** True if the selected mic failed and we fell back to default */
+    this.fallbackUsed = false;
     /** Duration in seconds of the last flushed/stopped chunk */
     this.lastChunkDurationSec = 0;
   }
@@ -104,12 +107,32 @@ var AudioRecorder = class {
       label: d.label || `Microfoon (${d.deviceId.slice(0, 8)}...)`
     }));
   }
-  async start(deviceId, onPcmChunk) {
+  async start(deviceId, onPcmChunk, noiseSuppression) {
     this.onPcmChunk = onPcmChunk || null;
-    const constraints = {
-      audio: deviceId ? { deviceId: { exact: deviceId } } : true
-    };
-    this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+    const audioConstraints = { channelCount: 1 };
+    if (noiseSuppression) {
+      audioConstraints.noiseSuppression = { ideal: true };
+      audioConstraints.echoCancellation = { ideal: true };
+      audioConstraints.autoGainControl = { ideal: true };
+    }
+    if (deviceId) audioConstraints.deviceId = { exact: deviceId };
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+    } catch (err) {
+      if (deviceId) {
+        console.warn("Voxtral: Selected mic failed, falling back to default:", err);
+        const fallbackConstraints = { channelCount: 1 };
+        if (noiseSuppression) {
+          fallbackConstraints.noiseSuppression = { ideal: true };
+          fallbackConstraints.echoCancellation = { ideal: true };
+          fallbackConstraints.autoGainControl = { ideal: true };
+        }
+        this.stream = await navigator.mediaDevices.getUserMedia({ audio: fallbackConstraints });
+        this.fallbackUsed = true;
+      } else {
+        throw err;
+      }
+    }
     try {
       const audioTrack = this.stream.getAudioTracks()[0];
       this.activeMicLabel = (audioTrack == null ? void 0 : audioTrack.label) || "Onbekende microfoon";
@@ -235,6 +258,7 @@ var AudioRecorder = class {
     this.mediaRecorder = null;
     this.chunks = [];
     this.activeMicLabel = "";
+    this.fallbackUsed = false;
   }
   get isRecording() {
     return this.stream !== null;
@@ -1439,6 +1463,14 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
+    new import_obsidian2.Setting(containerEl).setName("Noise suppression").setDesc(
+      "Enable browser-level noise suppression, echo cancellation, and auto gain control. Useful in noisy environments."
+    ).addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.noiseSuppression).onChange(async (value) => {
+        this.plugin.settings.noiseSuppression = value;
+        await this.plugin.saveSettings();
+      })
+    );
     new import_obsidian2.Setting(containerEl).setName("Dual-delay mode").setDesc(
       "Run two parallel streams: a fast one for immediate text and a slow one for higher accuracy and voice command detection. Overrides the streaming delay setting."
     ).addToggle(
@@ -2350,7 +2382,10 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian4.Plugin {
     await this.recorder.start(deviceId, (pcmData) => {
       var _a;
       (_a = this.realtimeTranscriber) == null ? void 0 : _a.sendAudio(pcmData);
-    });
+    }, this.settings.noiseSuppression);
+    if (this.recorder.fallbackUsed) {
+      new import_obsidian4.Notice("Selected mic unavailable \u2014 using default");
+    }
   }
   async connectRealtimeWebSocket(editor) {
     this.realtimeTranscriber = new RealtimeTranscriber(this.settings, {
@@ -2486,7 +2521,10 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian4.Plugin {
       var _a, _b;
       (_a = this.realtimeTranscriber) == null ? void 0 : _a.sendAudio(pcmData);
       (_b = this.dualSlowTranscriber) == null ? void 0 : _b.sendAudio(pcmData);
-    });
+    }, this.settings.noiseSuppression);
+    if (this.recorder.fallbackUsed) {
+      new import_obsidian4.Notice("Selected mic unavailable \u2014 using default");
+    }
   }
   async connectDualDelayWebSockets(editor) {
     const fastDelay = this.settings.dualDelayFastMs;
@@ -2732,7 +2770,10 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian4.Plugin {
   // ── Batch recording ──
   async startBatchRecording() {
     const deviceId = this.settings.microphoneDeviceId || void 0;
-    await this.recorder.start(deviceId);
+    await this.recorder.start(deviceId, void 0, this.settings.noiseSuppression);
+    if (this.recorder.fallbackUsed) {
+      new import_obsidian4.Notice("Selected mic unavailable \u2014 using default");
+    }
   }
   async stopBatchRecording() {
     const blob = await this.recorder.stop();

@@ -593,7 +593,10 @@ export default class VoxtralPlugin extends Plugin {
 		const deviceId = this.settings.microphoneDeviceId || undefined;
 		await this.recorder.start(deviceId, (pcmData) => {
 			this.realtimeTranscriber?.sendAudio(pcmData);
-		});
+		}, this.settings.noiseSuppression);
+		if (this.recorder.fallbackUsed) {
+			new Notice("Selected mic unavailable — using default");
+		}
 	}
 
 	private async connectRealtimeWebSocket(editor: Editor): Promise<void> {
@@ -757,7 +760,10 @@ export default class VoxtralPlugin extends Plugin {
 			// Send audio to BOTH transcribers
 			this.realtimeTranscriber?.sendAudio(pcmData);
 			this.dualSlowTranscriber?.sendAudio(pcmData);
-		});
+		}, this.settings.noiseSuppression);
+		if (this.recorder.fallbackUsed) {
+			new Notice("Selected mic unavailable — using default");
+		}
 	}
 
 	private async connectDualDelayWebSockets(editor: Editor): Promise<void> {
@@ -1058,7 +1064,10 @@ export default class VoxtralPlugin extends Plugin {
 
 	private async startBatchRecording(): Promise<void> {
 		const deviceId = this.settings.microphoneDeviceId || undefined;
-		await this.recorder.start(deviceId);
+		await this.recorder.start(deviceId, undefined, this.settings.noiseSuppression);
+		if (this.recorder.fallbackUsed) {
+			new Notice("Selected mic unavailable — using default");
+		}
 	}
 
 	private async stopBatchRecording(): Promise<void> {

@@ -218,6 +218,21 @@ export class VoxtralSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName("Noise suppression")
+			.setDesc(
+				"Enable browser-level noise suppression, echo cancellation, and auto gain control. " +
+				"Useful in noisy environments."
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.noiseSuppression)
+					.onChange(async (value) => {
+						this.plugin.settings.noiseSuppression = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
 			.setName("Dual-delay mode")
 			.setDesc(
 				"Run two parallel streams: a fast one for immediate text and a slow one " +
