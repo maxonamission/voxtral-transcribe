@@ -215,8 +215,23 @@ jobs:
           name: rpi-build
           path: VoxtralTranscribe-linux-arm64-rpi.tar.gz
 
+  build-obsidian-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package Obsidian plugin
+        run: |
+          cd obsidian-plugin
+          zip ../VoxtralTranscribe-obsidian-plugin.zip main.js manifest.json styles.css
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: obsidian-plugin-build
+          path: VoxtralTranscribe-obsidian-plugin.zip
+
   release:
-    needs: [build-windows, build-macos, build-linux, build-rpi]
+    needs: [build-windows, build-macos, build-linux, build-rpi, build-obsidian-plugin]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -235,3 +250,4 @@ jobs:
             artifacts/VoxtralTranscribe-macos.zip
             artifacts/VoxtralTranscribe-linux-x64.tar.gz
             artifacts/VoxtralTranscribe-linux-arm64-rpi.tar.gz
+            artifacts/VoxtralTranscribe-obsidian-plugin.zip
