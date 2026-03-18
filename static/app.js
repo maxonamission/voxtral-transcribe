@@ -596,6 +596,8 @@ function processCompletedSentences() {
     isMidSentenceInsert = false; // after a sentence boundary, next text starts fresh
 
     if (stopRequested) {
+        // Clear activeInsert so stopRecording doesn't leave command text behind
+        if (activeInsert) { activeInsert.remove(); activeInsert = null; }
         setTimeout(() => { if (isRecording) btnRecord.click(); }, 0);
     }
 }
@@ -1408,6 +1410,11 @@ function processDualSlowCommands() {
     renderDualText();
 
     if (stopRequested) {
+        // Clear accumulators so stopDualDelay() won't re-insert command text
+        dualSlowText = "";
+        dualFastText = "";
+        dualSlowConfirmed = "";
+        if (activeInsert) { activeInsert.remove(); activeInsert = null; }
         setTimeout(() => { if (isRecording) btnRecord.click(); }, 0);
     }
 }
