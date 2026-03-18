@@ -339,8 +339,7 @@ footer {
 }
 
 #bmc-link:hover {
-    background: #e5c700 !important;
-    color: #000 !important;
+    color: #e5c700 !important;
 }
 
 .footer-sep {
@@ -349,7 +348,7 @@ footer {
 }
 
 #bmc-tagline {
-    color: #f0f0f0;
+    color: #666;
     font-style: italic;
     font-size: 1rem;
 }
@@ -358,16 +357,16 @@ footer {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    background: #FFDD00;
-    color: #000 !important;
+    background: transparent;
+    color: #FFDD00 !important;
     font-family: 'Cookie', cursive;
     font-size: 1.1rem;
     font-weight: 400;
     padding: 0.35rem 1rem;
     border-radius: 8px;
-    border: 1px solid #000;
+    border: none;
     text-decoration: none !important;
-    transition: background 0.2s;
+    transition: color 0.2s;
     line-height: 1.4;
 }
 
