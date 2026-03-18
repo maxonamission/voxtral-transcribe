@@ -1831,6 +1831,7 @@ document.getElementById("btn-save-key").addEventListener("click", async () => {
         activeLang = newLang;
         localStorage.setItem("voxtral-language", activeLang);
         VOICE_COMMANDS = buildVoiceCommands(activeLang);
+        updateBmcLink();
     }
 
     // Build the server payload: language + models always, API key only if entered
@@ -2009,29 +2010,103 @@ document.getElementById("btn-save-key").addEventListener("click", () => {
 });
 
 // ── Footer: time-based Buy Me A Coffee message ──
+const BMC_STRINGS = {
+    // [tagline_coffee, button_coffee, tagline_book, button_book, tagline_beer, button_beer, tagline_night, button_night]
+    en: [
+        "Need a coffee to process all this? Me too!", "☕ Buy me a coffee",
+        "Writing a book? I like books too!", "📖 Buy me a book",
+        "Worked so fast you have time for a beer? Let me join you!", "🍺 Buy me a beer",
+        "Time to go to bed! No more coffee.", "🛏️ I like what you built!",
+    ],
+    nl: [
+        "Een koffie nodig om dit allemaal te verwerken? Ik ook!", "☕ Koop een koffie",
+        "Een boek aan het schrijven? Ik hou ook van boeken!", "📖 Koop een boek",
+        "Zo snel gewerkt dat je tijd hebt voor een biertje? Ik doe mee!", "🍺 Koop een biertje",
+        "Tijd om naar bed te gaan! Geen koffie meer.", "🛏️ Leuk wat je gemaakt hebt!",
+    ],
+    fr: [
+        "Besoin d'un café pour digérer tout ça ? Moi aussi !", "☕ Offre-moi un café",
+        "Tu écris un livre ? J'aime les livres aussi !", "📖 Offre-moi un livre",
+        "Tu as travaillé si vite qu'il te reste du temps pour une bière ? Je t'accompagne !", "🍺 Offre-moi une bière",
+        "C'est l'heure d'aller dormir ! Plus de café.", "🛏️ J'aime ce que tu as créé !",
+    ],
+    de: [
+        "Brauchst du einen Kaffee, um das alles zu verarbeiten? Ich auch!", "☕ Kauf mir einen Kaffee",
+        "Schreibst du ein Buch? Ich mag Bücher auch!", "📖 Kauf mir ein Buch",
+        "So schnell gearbeitet, dass du Zeit für ein Bier hast? Ich bin dabei!", "🍺 Kauf mir ein Bier",
+        "Zeit, ins Bett zu gehen! Kein Kaffee mehr.", "🛏️ Mir gefällt, was du gebaut hast!",
+    ],
+    es: [
+        "¿Necesitas un café para procesar todo esto? ¡Yo también!", "☕ Cómprame un café",
+        "¿Escribiendo un libro? ¡A mí también me gustan los libros!", "📖 Cómprame un libro",
+        "¿Trabajaste tan rápido que tienes tiempo para una cerveza? ¡Me apunto!", "🍺 Cómprame una cerveza",
+        "¡Hora de irse a la cama! No más café.", "🛏️ ¡Me gusta lo que creaste!",
+    ],
+    pt: [
+        "Precisa de um café para processar tudo isto? Eu também!", "☕ Compre-me um café",
+        "Escrevendo um livro? Também gosto de livros!", "📖 Compre-me um livro",
+        "Trabalhou tão rápido que tem tempo para uma cerveja? Eu vou junto!", "🍺 Compre-me uma cerveja",
+        "Hora de ir dormir! Chega de café.", "🛏️ Gostei do que você criou!",
+    ],
+    it: [
+        "Hai bisogno di un caffè per elaborare tutto questo? Anch'io!", "☕ Offrimi un caffè",
+        "Stai scrivendo un libro? Anche a me piacciono i libri!", "📖 Offrimi un libro",
+        "Hai lavorato così veloce che hai tempo per una birra? Mi unisco!", "🍺 Offrimi una birra",
+        "È ora di andare a dormire! Basta caffè.", "🛏️ Mi piace quello che hai creato!",
+    ],
+    ru: [
+        "Нужен кофе, чтобы всё это переварить? Мне тоже!", "☕ Купи мне кофе",
+        "Пишешь книгу? Я тоже люблю книги!", "📖 Купи мне книгу",
+        "Работал так быстро, что есть время на пиво? Я с тобой!", "🍺 Купи мне пиво",
+        "Пора спать! Хватит кофе.", "🛏️ Мне нравится то, что ты создал!",
+    ],
+    zh: [
+        "需要一杯咖啡来消化这一切？我也是！", "☕ 请我喝咖啡",
+        "在写书？我也喜欢书！", "📖 请我看本书",
+        "工作这么快，有时间喝杯啤酒？我也来一杯！", "🍺 请我喝啤酒",
+        "该睡觉了！别再喝咖啡了。", "🛏️ 我喜欢你做的东西！",
+    ],
+    hi: [
+        "इतना सब समझने के लिए कॉफ़ी चाहिए? मुझे भी!", "☕ मुझे कॉफ़ी दिलाओ",
+        "किताब लिख रहे हो? मुझे भी किताबें पसंद हैं!", "📖 मुझे किताब दिलाओ",
+        "इतनी तेज़ी से काम किया कि बीयर का टाइम है? मैं भी आता हूँ!", "🍺 मुझे बीयर दिलाओ",
+        "सोने का टाइम! अब और कॉफ़ी नहीं।", "🛏️ मुझे पसंद आया जो तुमने बनाया!",
+    ],
+    ar: [
+        "تحتاج قهوة لمعالجة كل هذا؟ أنا أيضاً!", "☕ اشترِ لي قهوة",
+        "تكتب كتاباً؟ أنا أحب الكتب أيضاً!", "📖 اشترِ لي كتاباً",
+        "عملت بسرعة وعندك وقت لبيرة؟ أنا معك!", "🍺 اشترِ لي بيرة",
+        "حان وقت النوم! لا مزيد من القهوة.", "🛏️ أحببت ما صنعته!",
+    ],
+    ja: [
+        "これを全部処理するのにコーヒーが必要？私も！", "☕ コーヒーをおごって",
+        "本を書いてるの？私も本が好き！", "📖 本をおごって",
+        "こんなに早く仕事してビールの時間？一緒に飲もう！", "🍺 ビールをおごって",
+        "もう寝る時間！コーヒーはおしまい。", "🛏️ いいもの作ったね！",
+    ],
+    ko: [
+        "이걸 다 처리하려면 커피가 필요하지? 나도!", "☕ 커피 한 잔 사줘",
+        "책 쓰고 있어? 나도 책 좋아해!", "📖 책 한 권 사줘",
+        "일을 너무 빨리 해서 맥주 마실 시간이 있다고? 나도 낄게!", "🍺 맥주 한 잔 사줘",
+        "이제 잘 시간이야! 커피는 그만.", "🛏️ 네가 만든 거 마음에 들어!",
+    ],
+};
+
 function updateBmcLink() {
     const tagline = document.getElementById("bmc-tagline");
     const link = document.getElementById("bmc-link");
     if (!tagline || !link) return;
 
+    const strings = BMC_STRINGS[activeLang] || BMC_STRINGS.en;
     const hour = new Date().getHours();
-    if (hour >= 6 && hour < 12) {
-        // Morning → coffee
-        tagline.textContent = "Need a coffee to process all this? Me too!";
-        link.textContent = "☕ Buy me a coffee";
-    } else if (hour >= 12 && hour < 18) {
-        // Afternoon → book
-        tagline.textContent = "Writing a book? I like books too!";
-        link.textContent = "📖 Buy me a book";
-    } else if (hour >= 18 && hour < 22) {
-        // Evening → beer
-        tagline.textContent = "Worked so fast you have time for a beer? Let me join you!";
-        link.textContent = "🍺 Buy me a beer";
-    } else {
-        // Night (22:00–06:00) → bed
-        tagline.textContent = "Time to go to bed! No more coffee.";
-        link.textContent = "🛏️ I like what you built!";
-    }
+    let idx;
+    if (hour >= 6 && hour < 12) idx = 0;       // morning → coffee
+    else if (hour >= 12 && hour < 18) idx = 2;  // afternoon → book
+    else if (hour >= 18 && hour < 22) idx = 4;  // evening → beer
+    else idx = 6;                                // night → bed
+
+    tagline.textContent = strings[idx];
+    link.textContent = strings[idx + 1];
 }
 updateBmcLink();
 
