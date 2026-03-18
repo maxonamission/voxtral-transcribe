@@ -4,12 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag to create (e.g. v1.1.0)'
+        description: 'Version tag to create (e.g. v0.3.0)'
         required: true
         type: string
-  push:
-    branches:
-      - main
 
 permissions:
   contents: write
@@ -23,44 +20,18 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Determine version
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            if [ ! -f obsidian-plugin/manifest.json ]; then
-              echo "Error: obsidian-plugin/manifest.json not found"
-              exit 1
-            fi
-            VERSION=$(python3 -c "
-import json, sys
-try:
-    d = json.load(open('obsidian-plugin/manifest.json'))
-    v = d.get('version')
-    if not v:
-        print('Error: version field missing from manifest.json', file=sys.stderr)
-        sys.exit(1)
-    print(v)
-except json.JSONDecodeError as e:
-    print(f'Error: invalid JSON in manifest.json: {e}', file=sys.stderr)
-    sys.exit(1)
-")
-            echo "version=v$VERSION" >> $GITHUB_OUTPUT
-          fi
-
       - name: Validate version format
         run: |
-          if ! echo "${{ steps.version.outputs.version }}" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "Error: version must be in the format vX.Y.Z (e.g. v1.1.0)"
+          if ! echo "${{ inputs.version }}" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Error: version must be in the format vX.Y.Z (e.g. v0.3.0)"
             exit 1
           fi
 
       - name: Check if tag already exists
         id: check_tag
         run: |
-          if git tag --list "${{ steps.version.outputs.version }}" | grep -q .; then
-            echo "Tag ${{ steps.version.outputs.version }} already exists, skipping"
+          if git tag --list "${{ inputs.version }}" | grep -q .; then
+            echo "Tag ${{ inputs.version }} already exists, skipping"
             echo "exists=true" >> $GITHUB_OUTPUT
           else
             echo "exists=false" >> $GITHUB_OUTPUT
@@ -71,5 +42,5 @@ except json.JSONDecodeError as e:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag ${{ steps.version.outputs.version }}
-          git push origin ${{ steps.version.outputs.version }}
+          git tag ${{ inputs.version }}
+          git push origin ${{ inputs.version }}
