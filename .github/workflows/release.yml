@@ -1,0 +1,237 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller `
+            --name VoxtralTranscribe `
+            --onedir `
+            --windowed `
+            --noconfirm `
+            --clean `
+            --add-data "static;static" `
+            --hidden-import uvicorn.logging `
+            --hidden-import uvicorn.loops `
+            --hidden-import uvicorn.loops.auto `
+            --hidden-import uvicorn.protocols `
+            --hidden-import uvicorn.protocols.http `
+            --hidden-import uvicorn.protocols.http.auto `
+            --hidden-import uvicorn.protocols.websockets `
+            --hidden-import uvicorn.protocols.websockets.auto `
+            --hidden-import uvicorn.lifespan `
+            --hidden-import uvicorn.lifespan.on `
+            --hidden-import uvicorn.lifespan.off `
+            --collect-all mistralai `
+            --collect-all pystray `
+            --collect-all PIL `
+            server.py
+
+      - name: Create launcher
+        run: |
+          @"
+          @echo off
+          cd /d "%~dp0"
+          set VOXTRAL_NO_BROWSER=1
+          start "" VoxtralTranscribe.exe
+          timeout /t 2 /nobreak >nul
+          start "" http://127.0.0.1:8000
+          "@ | Out-File -Encoding ASCII "dist\VoxtralTranscribe\Start Voxtral Transcribe.bat"
+        shell: pwsh
+
+      - name: Copy .env.example
+        run: copy .env.example dist\VoxtralTranscribe\ 2>nul || echo "No .env.example"
+
+      - name: Zip artifact
+        run: Compress-Archive -Path dist\VoxtralTranscribe\* -DestinationPath VoxtralTranscribe-windows.zip
+        shell: pwsh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: VoxtralTranscribe-windows.zip
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller \
+            --name "Voxtral Transcribe" \
+            --onedir \
+            --noconfirm \
+            --clean \
+            --add-data "static:static" \
+            --hidden-import uvicorn.logging \
+            --hidden-import uvicorn.loops \
+            --hidden-import uvicorn.loops.auto \
+            --hidden-import uvicorn.protocols \
+            --hidden-import uvicorn.protocols.http \
+            --hidden-import uvicorn.protocols.http.auto \
+            --hidden-import uvicorn.protocols.websockets \
+            --hidden-import uvicorn.protocols.websockets.auto \
+            --hidden-import uvicorn.lifespan \
+            --hidden-import uvicorn.lifespan.on \
+            --hidden-import uvicorn.lifespan.off \
+            --collect-all mistralai \
+            server.py
+
+      - name: Copy .env.example
+        run: cp .env.example "dist/Voxtral Transcribe/" 2>/dev/null || true
+
+      - name: Zip artifact
+        run: cd dist && zip -r ../VoxtralTranscribe-macos.zip "Voxtral Transcribe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: VoxtralTranscribe-macos.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller \
+            --name voxtral-transcribe \
+            --onedir \
+            --noconfirm \
+            --clean \
+            --add-data "static:static" \
+            --hidden-import uvicorn.logging \
+            --hidden-import uvicorn.loops \
+            --hidden-import uvicorn.loops.auto \
+            --hidden-import uvicorn.protocols \
+            --hidden-import uvicorn.protocols.http \
+            --hidden-import uvicorn.protocols.http.auto \
+            --hidden-import uvicorn.protocols.websockets \
+            --hidden-import uvicorn.protocols.websockets.auto \
+            --hidden-import uvicorn.lifespan \
+            --hidden-import uvicorn.lifespan.on \
+            --hidden-import uvicorn.lifespan.off \
+            --collect-all mistralai \
+            server.py
+
+      - name: Copy .env.example
+        run: cp .env.example dist/voxtral-transcribe/ 2>/dev/null || true
+
+      - name: Tar artifact
+        run: cd dist && tar -czf ../VoxtralTranscribe-linux-x64.tar.gz voxtral-transcribe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: VoxtralTranscribe-linux-x64.tar.gz
+
+  build-rpi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build for Raspberry Pi (ARM64) via QEMU
+        uses: uraimo/run-on-arch-action@v2
+        with:
+          arch: aarch64
+          distro: ubuntu22.04
+          githubToken: ${{ github.token }}
+          install: |
+            apt-get update -q
+            apt-get install -y -q python3 python3-pip python3-venv
+          run: |
+            python3 -m venv /tmp/venv
+            . /tmp/venv/bin/activate
+            pip install -q -r requirements.txt
+            pip install -q pyinstaller
+            pyinstaller \
+              --name voxtral-transcribe \
+              --onedir \
+              --noconfirm \
+              --clean \
+              --add-data "static:static" \
+              --hidden-import uvicorn.logging \
+              --hidden-import uvicorn.loops \
+              --hidden-import uvicorn.loops.auto \
+              --hidden-import uvicorn.protocols \
+              --hidden-import uvicorn.protocols.http \
+              --hidden-import uvicorn.protocols.http.auto \
+              --hidden-import uvicorn.protocols.websockets \
+              --hidden-import uvicorn.protocols.websockets.auto \
+              --hidden-import uvicorn.lifespan \
+              --hidden-import uvicorn.lifespan.on \
+              --hidden-import uvicorn.lifespan.off \
+              --collect-all mistralai \
+              server.py
+            cp .env.example dist/voxtral-transcribe/ 2>/dev/null || true
+            cd dist && tar -czf ../VoxtralTranscribe-linux-arm64-rpi.tar.gz voxtral-transcribe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpi-build
+          path: VoxtralTranscribe-linux-arm64-rpi.tar.gz
+
+  release:
+    needs: [build-windows, build-macos, build-linux, build-rpi]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/VoxtralTranscribe-windows.zip
+            artifacts/VoxtralTranscribe-macos.zip
+            artifacts/VoxtralTranscribe-linux-x64.tar.gz
+            artifacts/VoxtralTranscribe-linux-arm64-rpi.tar.gz

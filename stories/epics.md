@@ -7,6 +7,7 @@ Improve the user experience across different screen sizes, devices, and input me
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
 | 001 | [Settings modal not scrollable on small screens](done/001-settings-modal-scroll.md) | Done | High |
+| 005 | [Settings modal two-column landscape layout](backlog/005-settings-two-column-layout.md) | Backlog | Low |
 
 ## Epic: Internationalization
 
@@ -23,3 +24,11 @@ Improve audio capture quality in challenging environments.
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
 | 003 | [Advanced noise suppression with RNNoise WASM](backlog/003-rnnoise-wasm.md) | Backlog | Medium |
+
+## Epic: Distribution
+
+Make the app easy to download and run for testers and users.
+
+| # | Story | Status | Priority |
+|---|-------|--------|----------|
+| 004 | [Automated GitHub Releases with cross-platform builds](doing/004-github-releases-ci.md) | Doing | High |
