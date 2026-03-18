@@ -1,7 +1,7 @@
 # Story 004: Automated GitHub Releases with cross-platform builds
 
 **Epic:** Distribution
-**Status:** Backlog
+**Status:** Doing
 **Priority:** High
 **Estimate:** Medium
 

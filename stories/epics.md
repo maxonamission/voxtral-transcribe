@@ -30,4 +30,4 @@ Make the app easy to download and run for testers and users.
 
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
-| 004 | [Automated GitHub Releases with cross-platform builds](backlog/004-github-releases-ci.md) | Backlog | High |
+| 004 | [Automated GitHub Releases with cross-platform builds](doing/004-github-releases-ci.md) | Doing | High |
