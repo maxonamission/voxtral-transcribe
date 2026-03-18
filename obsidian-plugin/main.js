@@ -2623,14 +2623,6 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian4.Plugin {
     if (!segments) return;
     const matchedLength = segments.join("").length;
     const remainder = this.dualSlowText.substring(matchedLength);
-    let hasCommand = false;
-    for (const segment of segments) {
-      if (matchCommand(segment) !== null) {
-        hasCommand = true;
-        break;
-      }
-    }
-    if (!hasCommand) return;
     const from = editor.offsetToPos(this.dualInsertOffset);
     const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
     editor.replaceRange("", from, to);

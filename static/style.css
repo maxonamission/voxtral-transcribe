@@ -318,6 +318,29 @@ footer {
     color: #999;
 }
 
+.footer-links {
+    font-size: 0.75rem;
+    color: #555;
+    position: absolute;
+    bottom: 0.5rem;
+    right: 1rem;
+}
+
+.footer-links a {
+    color: #666;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.footer-links a:hover {
+    color: #aaa;
+}
+
+.footer-sep {
+    margin: 0 0.4rem;
+    color: #444;
+}
+
 /* Help panel */
 .help-panel {
     order: -1;

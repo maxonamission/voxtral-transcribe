@@ -148,8 +148,18 @@ const diarizeLabel = document.getElementById("diarize-label");
 
 function updateModeUI() {
     if (isRecording) return;
-    statusText.textContent = useRealtime ? "Realtime" : "Opname";
-    delaySelect.disabled = !useRealtime;
+    statusText.textContent = useRealtime
+        ? (useDualDelay ? "Realtime (dual-delay)" : "Realtime")
+        : "Opname";
+    // Show delay selector only in realtime + non-dual mode
+    delaySelect.disabled = !useRealtime || useDualDelay;
+    if (useRealtime && useDualDelay) {
+        delaySelect.style.opacity = "0.4";
+        delaySelect.title = "Dual-delay actief (snel 240ms + nauwkeurig 2400ms)";
+    } else {
+        delaySelect.style.opacity = "";
+        delaySelect.title = "Streaming delay";
+    }
     // Diarize toggle: only visible in opname (batch) mode
     const showDiarize = !useRealtime;
     diarizeToggle.closest(".toggle").classList.toggle("hidden-toggle", !showDiarize);
@@ -392,7 +402,7 @@ const COMMAND_DEFS = [
     { id: "heading3", insert: "\n\n### ", toast: "### H3" },
     { id: "bulletPoint", insert: "\n- ", toast: "•" },
     { id: "todoItem", insert: "\n- [ ] ", toast: "☐" },
-    { id: "numberedItem", insert: "\n1. ", toast: "1." },
+    { id: "numberedItem", action: "numberedItem", toast: "1." },
     { id: "stopRecording", action: "stopRecording", toast: "⏹ Stop" },
     { id: "deleteLastParagraph", action: "deleteLastParagraph", toast: "🗑" },
     { id: "deleteLastLine", action: "deleteLastLine", toast: "🗑" },
@@ -573,6 +583,7 @@ function processCompletedSentences() {
             if (cmd.action === "deleteLastParagraph") deleteLastBlock("paragraph");
             if (cmd.action === "deleteLastLine") deleteLastBlock("line");
             if (cmd.action === "undo") restoreUndo();
+            if (cmd.action === "numberedItem") insertNumberedItem();
             showToast(cmd.toast);
         } else {
             // Finalize as regular text (white, not gray)
@@ -620,11 +631,27 @@ function executeCommand(cmd) {
     } else if (cmd.action === "undo") {
         if (activeInsert) { activeInsert.remove(); activeInsert = null; }
         restoreUndo();
+    } else if (cmd.action === "numberedItem") {
+        insertNumberedItem();
     }
 
     isMidSentenceInsert = false;
     replaceHint.classList.add("hidden");
     showToast(cmd.toast);
+}
+
+function insertNumberedItem() {
+    const text = transcript.textContent;
+    // Find the last numbered item pattern (e.g. "1. ", "2. ") on any line
+    const match = text.match(/(\d+)\.\s[^\n]*$/);
+    const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
+    const span = document.createElement("span");
+    span.textContent = `\n${nextNum}. `;
+    if (activeInsert && activeInsert.parentNode) {
+        activeInsert.parentNode.insertBefore(span, activeInsert);
+    } else {
+        transcript.appendChild(span);
+    }
 }
 
 // ── Undo stack ──
@@ -1306,8 +1333,9 @@ function processDualSlowCommands() {
         return { trimmedPart, result };
     });
 
-    // Only proceed if there's at least one command
-    if (!actions.some(a => a.result)) return;
+    // Always flush completed sentences — even without commands.
+    // This keeps accumulators small (preventing performance degradation)
+    // and moves confirmed text to permanent spans (preventing grey flicker).
 
     // Save undo state before modifying transcript
     const hasTextParts = actions.some(a => !a.result);
@@ -1354,6 +1382,7 @@ function processDualSlowCommands() {
             if (cmd.action === "deleteLastParagraph") deleteLastBlock("paragraph");
             if (cmd.action === "deleteLastLine") deleteLastBlock("line");
             if (cmd.action === "undo") restoreUndo();
+            if (cmd.action === "numberedItem") insertNumberedItem();
             showToast(cmd.toast);
         } else {
             // Regular text — finalize into transcript
@@ -1788,6 +1817,7 @@ document.getElementById("btn-save-key").addEventListener("click", async () => {
     // Always save all settings
     useDualDelay = toggleDualDelay.checked;
     localStorage.setItem("voxtral-dual-delay", JSON.stringify(useDualDelay));
+    updateModeUI();
     autoCorrect = toggleAutocorrect.checked;
     localStorage.setItem("voxtral-autocorrect", JSON.stringify(autoCorrect));
     systemPrompt = inputSystemPrompt.value;
