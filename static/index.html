@@ -84,6 +84,13 @@
             <p id="settings-status" class="modal-status"></p>
             <p class="modal-hint">Maak een key aan op <a href="https://console.mistral.ai/api-keys" target="_blank">console.mistral.ai</a></p>
 
+            <label class="modal-label modal-label-spaced">Dual-delay (experimenteel)</label>
+            <label class="toggle-row">
+                <input type="checkbox" id="toggle-dual-delay">
+                <span>Twee streams: snel (240ms) + nauwkeurig (2400ms)</span>
+            </label>
+            <p class="modal-hint">Snelle voorlopige tekst wordt automatisch vervangen door nauwkeurigere versie. Gebruikt 2x API-credits.</p>
+
             <label class="modal-label modal-label-spaced">Tekstcorrectie</label>
             <label class="toggle-row">
                 <input type="checkbox" id="toggle-autocorrect">
@@ -129,6 +136,6 @@
 
     <div id="toast" class="toast hidden">Gekopieerd</div>
 
-    <script src="app.js?v=22"></script>
+    <script src="app.js?v=23"></script>
 </body>
 </html>
