@@ -918,16 +918,9 @@ export default class VoxtralPlugin extends Plugin {
 		const matchedLength = segments.join("").length;
 		const remainder = this.dualSlowText.substring(matchedLength);
 
-		// Check each segment for commands
-		let hasCommand = false;
-		for (const segment of segments) {
-			if (matchCommand(segment) !== null) {
-				hasCommand = true;
-				break;
-			}
-		}
-
-		if (!hasCommand) return;
+		// Always flush completed sentences — even without commands.
+		// This keeps accumulators small (preventing performance degradation)
+		// and ensures confirmed text is permanently committed.
 
 		// Clear the dual-delay text from editor first
 		const from = editor.offsetToPos(this.dualInsertOffset);

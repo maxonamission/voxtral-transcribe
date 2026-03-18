@@ -148,8 +148,18 @@ const diarizeLabel = document.getElementById("diarize-label");
 
 function updateModeUI() {
     if (isRecording) return;
-    statusText.textContent = useRealtime ? "Realtime" : "Opname";
-    delaySelect.disabled = !useRealtime;
+    statusText.textContent = useRealtime
+        ? (useDualDelay ? "Realtime (dual-delay)" : "Realtime")
+        : "Opname";
+    // Show delay selector only in realtime + non-dual mode
+    delaySelect.disabled = !useRealtime || useDualDelay;
+    if (useRealtime && useDualDelay) {
+        delaySelect.style.opacity = "0.4";
+        delaySelect.title = "Dual-delay actief (snel 240ms + nauwkeurig 2400ms)";
+    } else {
+        delaySelect.style.opacity = "";
+        delaySelect.title = "Streaming delay";
+    }
     // Diarize toggle: only visible in opname (batch) mode
     const showDiarize = !useRealtime;
     diarizeToggle.closest(".toggle").classList.toggle("hidden-toggle", !showDiarize);
@@ -392,7 +402,7 @@ const COMMAND_DEFS = [
     { id: "heading3", insert: "\n\n### ", toast: "### H3" },
     { id: "bulletPoint", insert: "\n- ", toast: "•" },
     { id: "todoItem", insert: "\n- [ ] ", toast: "☐" },
-    { id: "numberedItem", insert: "\n1. ", toast: "1." },
+    { id: "numberedItem", action: "numberedItem", toast: "1." },
     { id: "stopRecording", action: "stopRecording", toast: "⏹ Stop" },
     { id: "deleteLastParagraph", action: "deleteLastParagraph", toast: "🗑" },
     { id: "deleteLastLine", action: "deleteLastLine", toast: "🗑" },
@@ -573,6 +583,7 @@ function processCompletedSentences() {
             if (cmd.action === "deleteLastParagraph") deleteLastBlock("paragraph");
             if (cmd.action === "deleteLastLine") deleteLastBlock("line");
             if (cmd.action === "undo") restoreUndo();
+            if (cmd.action === "numberedItem") insertNumberedItem();
             showToast(cmd.toast);
         } else {
             // Finalize as regular text (white, not gray)
@@ -620,11 +631,27 @@ function executeCommand(cmd) {
     } else if (cmd.action === "undo") {
         if (activeInsert) { activeInsert.remove(); activeInsert = null; }
         restoreUndo();
+    } else if (cmd.action === "numberedItem") {
+        insertNumberedItem();
     }
 
     isMidSentenceInsert = false;
     replaceHint.classList.add("hidden");
     showToast(cmd.toast);
+}
+
+function insertNumberedItem() {
+    const text = transcript.textContent;
+    // Find the last numbered item pattern (e.g. "1. ", "2. ") on any line
+    const match = text.match(/(\d+)\.\s[^\n]*$/);
+    const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
+    const span = document.createElement("span");
+    span.textContent = `\n${nextNum}. `;
+    if (activeInsert && activeInsert.parentNode) {
+        activeInsert.parentNode.insertBefore(span, activeInsert);
+    } else {
+        transcript.appendChild(span);
+    }
 }
 
 // ── Undo stack ──
@@ -1306,8 +1333,9 @@ function processDualSlowCommands() {
         return { trimmedPart, result };
     });
 
-    // Only proceed if there's at least one command
-    if (!actions.some(a => a.result)) return;
+    // Always flush completed sentences — even without commands.
+    // This keeps accumulators small (preventing performance degradation)
+    // and moves confirmed text to permanent spans (preventing grey flicker).
 
     // Save undo state before modifying transcript
     const hasTextParts = actions.some(a => !a.result);
@@ -1354,6 +1382,7 @@ function processDualSlowCommands() {
             if (cmd.action === "deleteLastParagraph") deleteLastBlock("paragraph");
             if (cmd.action === "deleteLastLine") deleteLastBlock("line");
             if (cmd.action === "undo") restoreUndo();
+            if (cmd.action === "numberedItem") insertNumberedItem();
             showToast(cmd.toast);
         } else {
             // Regular text — finalize into transcript
@@ -1788,6 +1817,7 @@ document.getElementById("btn-save-key").addEventListener("click", async () => {
     // Always save all settings
     useDualDelay = toggleDualDelay.checked;
     localStorage.setItem("voxtral-dual-delay", JSON.stringify(useDualDelay));
+    updateModeUI();
     autoCorrect = toggleAutocorrect.checked;
     localStorage.setItem("voxtral-autocorrect", JSON.stringify(autoCorrect));
     systemPrompt = inputSystemPrompt.value;
@@ -1801,6 +1831,7 @@ document.getElementById("btn-save-key").addEventListener("click", async () => {
         activeLang = newLang;
         localStorage.setItem("voxtral-language", activeLang);
         VOICE_COMMANDS = buildVoiceCommands(activeLang);
+        updateBmcLink();
     }
 
     // Build the server payload: language + models always, API key only if entered
@@ -1977,6 +2008,114 @@ document.getElementById("btn-save-key").addEventListener("click", () => {
         pendingShortcut = null;
     }
 });
+
+// ── Footer: time-based Buy Me A Coffee message ──
+// Button text is fixed (BMC branding); only the tagline above is localised.
+const BMC_BUTTONS = [
+    "☕ Buy me a coffee",  // morning
+    "📖 Buy me a book",   // afternoon
+    "🍺 Buy me a beer",   // evening
+    "🛏️ I like what you built!", // night
+];
+const BMC_TAGLINES = {
+    // [morning, afternoon, evening, night]
+    en: [
+        "Need a coffee to process all this? Me too!",
+        "Writing a book? I like books too!",
+        "Worked so fast you have time for a beer? Let me join you!",
+        "Time to go to bed! No more coffee.",
+    ],
+    nl: [
+        "Een koffie nodig om dit allemaal te verwerken? Ik ook!",
+        "Een boek aan het schrijven? Ik hou ook van boeken!",
+        "Zo snel gewerkt dat je tijd hebt voor een biertje? Ik doe mee!",
+        "Tijd om naar bed te gaan! Geen koffie meer.",
+    ],
+    fr: [
+        "Besoin d'un café pour digérer tout ça ? Moi aussi !",
+        "Tu écris un livre ? J'aime les livres aussi !",
+        "Tu as travaillé si vite qu'il te reste du temps pour une bière ? Je t'accompagne !",
+        "C'est l'heure d'aller dormir ! Plus de café.",
+    ],
+    de: [
+        "Brauchst du einen Kaffee, um das alles zu verarbeiten? Ich auch!",
+        "Schreibst du ein Buch? Ich mag Bücher auch!",
+        "So schnell gearbeitet, dass du Zeit für ein Bier hast? Ich bin dabei!",
+        "Zeit, ins Bett zu gehen! Kein Kaffee mehr.",
+    ],
+    es: [
+        "¿Necesitas un café para procesar todo esto? ¡Yo también!",
+        "¿Escribiendo un libro? ¡A mí también me gustan los libros!",
+        "¿Trabajaste tan rápido que tienes tiempo para una cerveza? ¡Me apunto!",
+        "¡Hora de irse a la cama! No más café.",
+    ],
+    pt: [
+        "Precisa de um café para processar tudo isto? Eu também!",
+        "Escrevendo um livro? Também gosto de livros!",
+        "Trabalhou tão rápido que tem tempo para uma cerveja? Eu vou junto!",
+        "Hora de ir dormir! Chega de café.",
+    ],
+    it: [
+        "Hai bisogno di un caffè per elaborare tutto questo? Anch'io!",
+        "Stai scrivendo un libro? Anche a me piacciono i libri!",
+        "Hai lavorato così veloce che hai tempo per una birra? Mi unisco!",
+        "È ora di andare a dormire! Basta caffè.",
+    ],
+    ru: [
+        "Нужен кофе, чтобы всё это переварить? Мне тоже!",
+        "Пишешь книгу? Я тоже люблю книги!",
+        "Работал так быстро, что есть время на пиво? Я с тобой!",
+        "Пора спать! Хватит кофе.",
+    ],
+    zh: [
+        "需要一杯咖啡来消化这一切？我也是！",
+        "在写书？我也喜欢书！",
+        "工作这么快，有时间喝杯啤酒？我也来一杯！",
+        "该睡觉了！别再喝咖啡了。",
+    ],
+    hi: [
+        "इतना सब समझने के लिए कॉफ़ी चाहिए? मुझे भी!",
+        "किताब लिख रहे हो? मुझे भी किताबें पसंद हैं!",
+        "इतनी तेज़ी से काम किया कि बीयर का टाइम है? मैं भी आता हूँ!",
+        "सोने का टाइम! अब और कॉफ़ी नहीं।",
+    ],
+    ar: [
+        "تحتاج قهوة لمعالجة كل هذا؟ أنا أيضاً!",
+        "تكتب كتاباً؟ أنا أحب الكتب أيضاً!",
+        "عملت بسرعة وعندك وقت لبيرة؟ أنا معك!",
+        "حان وقت النوم! لا مزيد من القهوة.",
+    ],
+    ja: [
+        "これを全部処理するのにコーヒーが必要？私も！",
+        "本を書いてるの？私も本が好き！",
+        "こんなに早く仕事してビールの時間？一緒に飲もう！",
+        "もう寝る時間！コーヒーはおしまい。",
+    ],
+    ko: [
+        "이걸 다 처리하려면 커피가 필요하지? 나도!",
+        "책 쓰고 있어? 나도 책 좋아해!",
+        "일을 너무 빨리 해서 맥주 마실 시간이 있다고? 나도 낄게!",
+        "이제 잘 시간이야! 커피는 그만.",
+    ],
+};
+
+function updateBmcLink() {
+    const tagline = document.getElementById("bmc-tagline");
+    const link = document.getElementById("bmc-link");
+    if (!tagline || !link) return;
+
+    const tags = BMC_TAGLINES[activeLang] || BMC_TAGLINES.en;
+    const hour = new Date().getHours();
+    let idx;
+    if (hour >= 6 && hour < 12) idx = 0;       // morning → coffee
+    else if (hour >= 12 && hour < 18) idx = 1;  // afternoon → book
+    else if (hour >= 18 && hour < 22) idx = 2;  // evening → beer
+    else idx = 3;                                // night → bed
+
+    tagline.textContent = tags[idx];
+    link.textContent = BMC_BUTTONS[idx];
+}
+updateBmcLink();
 
 // ── Init ──
 updateModeUI();
