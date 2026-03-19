@@ -76,6 +76,9 @@ jobs:
       - name: Copy .env.example
         run: copy .env.example dist\VoxtralTranscribe\ 2>nul || echo "No .env.example"
 
+      - name: Copy README
+        run: copy README-windows.txt dist\VoxtralTranscribe\README.txt 2>nul || echo "No README"
+
       - name: Zip artifact
         run: Compress-Archive -Path dist\VoxtralTranscribe\* -DestinationPath VoxtralTranscribe-windows.zip
         shell: pwsh
@@ -127,6 +130,9 @@ jobs:
       - name: Copy .env.example
         run: cp .env.example "dist/Voxtral Transcribe/" 2>/dev/null || true
 
+      - name: Copy README
+        run: cp README-macos.txt "dist/Voxtral Transcribe/README.txt" 2>/dev/null || true
+
       - name: Zip artifact
         run: cd dist && zip -r ../VoxtralTranscribe-macos.zip "Voxtral Transcribe"
 
@@ -177,6 +183,9 @@ jobs:
       - name: Copy .env.example
         run: cp .env.example dist/voxtral-transcribe/ 2>/dev/null || true
 
+      - name: Copy README
+        run: cp README-linux.txt dist/voxtral-transcribe/README.txt 2>/dev/null || true
+
       - name: Tar artifact
         run: cd dist && tar -czf ../VoxtralTranscribe-linux-x64.tar.gz voxtral-transcribe
 
@@ -226,6 +235,7 @@ jobs:
               --collect-all mistralai \
               server.py
             cp .env.example dist/voxtral-transcribe/ 2>/dev/null || true
+            cp README-rpi.txt dist/voxtral-transcribe/README.txt 2>/dev/null || true
             cd dist && tar -czf ../VoxtralTranscribe-linux-arm64-rpi.tar.gz voxtral-transcribe
 
       - uses: actions/upload-artifact@v4
