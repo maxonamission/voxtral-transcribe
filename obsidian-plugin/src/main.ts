@@ -960,7 +960,14 @@ export default class VoxtralPlugin extends Plugin {
 				this.processDualSlowCommands(editor);
 			},
 			onDone: (text) => {
-				this.dualSlowText = text || this.dualSlowText;
+				// Only use the final text if it extends beyond what we've
+				// already processed.  processDualSlowCommands() trims
+				// dualSlowText as sentences are flushed; overwriting it
+				// with the full API response would re-introduce already-
+				// committed text and cause duplicates.
+				if (text && text.length > this.dualSlowText.length) {
+					this.dualSlowText = text;
+				}
 				this.renderDualText(editor);
 				this.processDualSlowCommands(editor);
 			},
@@ -1017,7 +1024,9 @@ export default class VoxtralPlugin extends Plugin {
 						this.processDualSlowCommands(editor);
 					},
 					onDone: (text) => {
-						this.dualSlowText = text || this.dualSlowText;
+						if (text && text.length > this.dualSlowText.length) {
+							this.dualSlowText = text;
+						}
 						this.renderDualText(editor);
 						this.processDualSlowCommands(editor);
 					},
@@ -1077,10 +1086,44 @@ export default class VoxtralPlugin extends Plugin {
 		if (!this.dualSlowText) return;
 
 		const segments = this.dualSlowText.match(/[^.!?]+[.!?]+\s*/g);
+
+		// Also check the remainder (text without sentence-ending punctuation)
+		// for standalone voice commands like "wikilink", "vet", etc.
+		const segmentText = segments ? segments.join("") : "";
+		const remainder = this.dualSlowText.substring(segmentText.length);
+
+		// If there are no complete sentences, check if the entire text
+		// is a standalone voice command (no surrounding text needed).
+		if (!segments && remainder.trim()) {
+			const cmdMatch = matchCommand(remainder.trim());
+			if (cmdMatch && !cmdMatch.textBefore) {
+				// Pure command without text before — execute it
+				const from = editor.offsetToPos(this.dualInsertOffset);
+				const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
+				editor.replaceRange("", from, to);
+				editor.setCursor(from);
+				this.dualDisplayLen = 0;
+
+				cmdMatch.command.action(editor);
+				if (cmdMatch.command.id === "stopRecording") {
+					setTimeout(() => { void this.stopRecording(); }, 0);
+				}
+				if (isSlotActive()) {
+					this.updateStatusBar("slot");
+				}
+
+				this.dualSlowText = "";
+				this.dualFastText = "";
+				this.dualInsertOffset = editor.posToOffset(editor.getCursor());
+				return;
+			}
+			// Not a command — leave it for later (more text may come)
+			return;
+		}
+
 		if (!segments) return;
 
-		const matchedLength = segments.join("").length;
-		const remainder = this.dualSlowText.substring(matchedLength);
+		const matchedLength = segmentText.length;
 
 		// Always flush completed sentences — even without commands.
 		// This keeps accumulators small (preventing performance degradation)

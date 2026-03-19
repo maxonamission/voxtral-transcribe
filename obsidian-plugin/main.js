@@ -1428,10 +1428,7 @@ var MISHEARINGS = {
     [/\bnieuw punt\b/g, "nieuw punt"],
     [/\blinea\b/g, "alinea"],
     [/\blinie\b/g, "alinea"],
-    [/\bbeeindigde\b/g, "beeindig de"],
-    [/\bvicky\s*link\b/g, "wikilink"],
-    [/\bvicky\b/g, "wiki"],
-    [/\bwikke\b/g, "wiki"]
+    [/\bbeeindigde\b/g, "beeindig de"]
   ],
   fr: [
     [/\bnouveau ligne\b/g, "nouvelle ligne"],
@@ -3650,7 +3647,9 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
         this.processDualSlowCommands(editor);
       },
       onDone: (text) => {
-        this.dualSlowText = text || this.dualSlowText;
+        if (text && text.length > this.dualSlowText.length) {
+          this.dualSlowText = text;
+        }
         this.renderDualText(editor);
         this.processDualSlowCommands(editor);
       },
@@ -3699,7 +3698,9 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
             this.processDualSlowCommands(editor);
           },
           onDone: (text) => {
-            this.dualSlowText = text || this.dualSlowText;
+            if (text && text.length > this.dualSlowText.length) {
+              this.dualSlowText = text;
+            }
             this.renderDualText(editor);
             this.processDualSlowCommands(editor);
           },
@@ -3751,9 +3752,34 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
   processDualSlowCommands(editor) {
     if (!this.dualSlowText) return;
     const segments = this.dualSlowText.match(/[^.!?]+[.!?]+\s*/g);
+    const segmentText = segments ? segments.join("") : "";
+    const remainder = this.dualSlowText.substring(segmentText.length);
+    if (!segments && remainder.trim()) {
+      const cmdMatch = matchCommand(remainder.trim());
+      if (cmdMatch && !cmdMatch.textBefore) {
+        const from2 = editor.offsetToPos(this.dualInsertOffset);
+        const to2 = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
+        editor.replaceRange("", from2, to2);
+        editor.setCursor(from2);
+        this.dualDisplayLen = 0;
+        cmdMatch.command.action(editor);
+        if (cmdMatch.command.id === "stopRecording") {
+          setTimeout(() => {
+            void this.stopRecording();
+          }, 0);
+        }
+        if (isSlotActive()) {
+          this.updateStatusBar("slot");
+        }
+        this.dualSlowText = "";
+        this.dualFastText = "";
+        this.dualInsertOffset = editor.posToOffset(editor.getCursor());
+        return;
+      }
+      return;
+    }
     if (!segments) return;
-    const matchedLength = segments.join("").length;
-    const remainder = this.dualSlowText.substring(matchedLength);
+    const matchedLength = segmentText.length;
     const from = editor.offsetToPos(this.dualInsertOffset);
     const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
     editor.replaceRange("", from, to);

@@ -625,9 +625,6 @@ export const MISHEARINGS: Partial<Record<LangCode, [RegExp, string][]>> = {
 		[/\blinea\b/g, "alinea"],
 		[/\blinie\b/g, "alinea"],
 		[/\bbeeindigde\b/g, "beeindig de"],
-		[/\bvicky\s*link\b/g, "wikilink"],
-		[/\bvicky\b/g, "wiki"],
-		[/\bwikke\b/g, "wiki"],
 	],
 	fr: [
 		[/\bnouveau ligne\b/g, "nouvelle ligne"],
