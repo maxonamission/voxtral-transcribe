@@ -1,114 +1,114 @@
 ╔══════════════════════════════════════════════════════════════╗
 ║              Voxtral Transcribe - Linux (x64)                ║
-║              Spraak-naar-tekst met Mistral AI                ║
+║              Speech-to-text with Mistral AI                  ║
 ╚══════════════════════════════════════════════════════════════╝
 
-WAT IS VOXTRAL TRANSCRIBE?
-═══════════════════════════
-Voxtral Transcribe is een lokale spraak-naar-tekst applicatie die
-de Mistral Voxtral API gebruikt voor realtime audiotranscriptie.
+WHAT IS VOXTRAL TRANSCRIBE?
+════════════════════════════
+Voxtral Transcribe is a local speech-to-text application that
+uses the Mistral Voxtral API for real-time audio transcription.
 
-Kenmerken:
-  • Realtime streaming transcriptie
-  • Spraakcommando's voor documentstructuur (alinea's, kopjes, lijsten)
-  • Automatische tekstcorrectie via Mistral Small
-  • Offline wachtrij als de server niet bereikbaar is
-  • Automatisch kopiëren naar klembord na opname
-  • Donkere modus interface
+Features:
+  • Real-time streaming transcription
+  • Voice commands for document structure (paragraphs, headings, lists)
+  • Automatic text correction via Mistral Small
+  • Offline queue when the server is unreachable
+  • Auto-copy to clipboard after recording
+  • Dark mode interface
 
 
-STARTEN
-═══════
-1. Pak het archief uit:
+GETTING STARTED
+═══════════════
+1. Extract the archive:
      tar -xzf VoxtralTranscribe-linux-x64.tar.gz
 
-2. Navigeer naar de map:
+2. Navigate to the folder:
      cd voxtral-transcribe
 
-3. Maak het bestand uitvoerbaar (eenmalig):
+3. Make the file executable (one time only):
      chmod +x voxtral-transcribe
 
-4. Start de applicatie:
+4. Start the application:
      ./voxtral-transcribe
 
-5. Je browser opent automatisch naar http://127.0.0.1:8000
+5. Your browser opens automatically to http://127.0.0.1:8000
 
-Tip: je kunt de app op de achtergrond starten met:
+Tip: you can start the app in the background with:
      ./voxtral-transcribe &
 
 
-MISTRAL API-SLEUTEL VERKRIJGEN
-══════════════════════════════
-Je hebt een API-sleutel van Mistral nodig om Voxtral Transcribe
-te gebruiken. Zo krijg je er een:
+OBTAINING A MISTRAL API KEY
+═══════════════════════════
+You need a Mistral API key to use Voxtral Transcribe.
+Here's how to get one:
 
-1. Ga naar https://console.mistral.ai/
-2. Maak een account aan of log in
-3. Ga naar "API Keys" in het menu
-4. Klik op "Create new key"
-5. Kopieer de sleutel en plak deze in het instellingenscherm
-   van Voxtral Transcribe
+1. Go to https://console.mistral.ai/
+2. Create an account or log in
+3. Go to "API Keys" in the menu
+4. Click "Create new key"
+5. Copy the key and paste it into the Voxtral Transcribe
+   settings screen
 
-Let op: er zijn kosten verbonden aan het gebruik van de Mistral
-API. Bekijk de prijzen op https://mistral.ai/pricing/
+Note: there are costs associated with using the Mistral API.
+See pricing at https://mistral.ai/pricing/
 
 
-CONFIGURATIE
-════════════
-Je kunt de API-sleutel op twee manieren instellen:
+CONFIGURATION
+═════════════
+You can set the API key in two ways:
 
-Via de app (aanbevolen):
-  Klik op het tandwiel-icoon in de app en vul je sleutel in.
+Via the app (recommended):
+  Click the gear icon in the app and enter your key.
 
-Via .env bestand:
-  Hernoem ".env.example" naar ".env" en vul je sleutel in:
-    MISTRAL_API_KEY=jouw_sleutel_hier
+Via .env file:
+  Rename ".env.example" to ".env" and enter your key:
+    MISTRAL_API_KEY=your_key_here
 
 Via environment variable:
-  export MISTRAL_API_KEY=jouw_sleutel_hier
+  export MISTRAL_API_KEY=your_key_here
   ./voxtral-transcribe
 
 
-GEBRUIK
-═══════
-1. Klik op "Opnemen" om een opname te starten
-2. Spreek in je microfoon - de tekst verschijnt realtime
-3. Gebruik spraakcommando's:
-   - "nieuwe alinea"     → nieuwe paragraaf
-   - "nieuw kopje [tekst]" → voegt een kop toe
-   - "nieuw lijstje"     → start een opsomming
-   - "nieuwe taak"       → voegt een to-do item toe
-4. Klik nogmaals op "Opnemen" om te stoppen
-5. De tekst wordt automatisch naar je klembord gekopieerd
+USAGE
+═════
+1. Click "Record" to start a recording
+2. Speak into your microphone - text appears in real time
+3. Use voice commands:
+   - "new paragraph"      → new paragraph
+   - "heading one"        → adds a heading
+   - "new bullet"         → starts a bullet list
+   - "new to-do"          → adds a to-do item
+4. Click "Record" again to stop
+5. The text is automatically copied to your clipboard
 
 
-PROBLEMEN OPLOSSEN
-══════════════════
-• De app start niet?
-  → Zorg dat er geen andere applicatie op poort 8000 draait
-  → Controleer met: ss -tlnp | grep 8000
+TROUBLESHOOTING
+═══════════════
+• The app won't start?
+  → Make sure no other application is using port 8000
+  → Check with: ss -tlnp | grep 8000
 
-• Geen audio-invoer?
-  → Controleer of PulseAudio of PipeWire draait
-  → Controleer je microfoontoegang met: pactl list sources short
+• No audio input?
+  → Check that PulseAudio or PipeWire is running
+  → Check your microphone access with: pactl list sources short
 
-• Geen transcriptie?
-  → Controleer je API-sleutel in de instellingen
-  → Controleer of je microfoon correct is geselecteerd
+• No transcription?
+  → Check your API key in the settings
+  → Check that your microphone is correctly selected
 
-• Microfoon werkt niet in browser?
-  → Geef je browser toestemming om de microfoon te gebruiken
-  → Sommige Wayland-compositors vereisen extra configuratie
+• Microphone not working in browser?
+  → Give your browser permission to use the microphone
+  → Some Wayland compositors require extra configuration
 
 
-STOPPEN
-═══════
-Druk op Ctrl+C in de terminal, of als de app op de achtergrond
-draait:
+STOPPING
+════════
+Press Ctrl+C in the terminal, or if the app is running in
+the background:
   kill $(pgrep -f voxtral-transcribe)
 
 
-MEER INFORMATIE
-═══════════════
+MORE INFORMATION
+════════════════
 Website: https://github.com/maxonamission/voxtral-transcribe
-Licentie: MIT
+License: GPL-3.0

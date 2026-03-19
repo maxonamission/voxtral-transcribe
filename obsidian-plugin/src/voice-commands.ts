@@ -49,6 +49,22 @@ function fixMishearings(text: string): string {
 	return text;
 }
 
+// Levenshtein edit distance between two strings
+function levenshtein(a: string, b: string): number {
+	const m = a.length, n = b.length;
+	const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1));
+	for (let i = 0; i <= m; i++) dp[i][0] = i;
+	for (let j = 0; j <= n; j++) dp[0][j] = j;
+	for (let i = 1; i <= m; i++) {
+		for (let j = 1; j <= n; j++) {
+			dp[i][j] = a[i - 1] === b[j - 1]
+				? dp[i - 1][j - 1]
+				: 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+		}
+	}
+	return dp[m][n];
+}
+
 function insertAtCursor(editor: Editor, text: string): void {
 	const cursor = editor.getCursor();
 
@@ -178,6 +194,7 @@ export interface CommandMatch {
 export function matchCommand(rawText: string): CommandMatch | null {
 	const normalized = fixMishearings(normalizeCommand(rawText));
 
+	// Pass 1: exact match (full or suffix)
 	for (const cmd of COMMAND_DEFS) {
 		const patterns = getPatternsForCommand(cmd.id, activeLang);
 		for (const pattern of patterns) {
@@ -193,7 +210,23 @@ export function matchCommand(rawText: string): CommandMatch | null {
 			}
 		}
 	}
-	return null;
+
+	// Pass 2: fuzzy match for standalone sentences only (Levenshtein ≤ 2)
+	// This catches conjugation errors like "beeindigde opname" ≈ "beeindig de opname"
+	let bestMatch: CommandMatch | null = null;
+	let bestDist = 3; // threshold: must be strictly less than this
+	for (const cmd of COMMAND_DEFS) {
+		const patterns = getPatternsForCommand(cmd.id, activeLang);
+		for (const pattern of patterns) {
+			const normPattern = normalizeCommand(pattern);
+			const dist = levenshtein(normalized, normPattern);
+			if (dist > 0 && dist < bestDist) {
+				bestDist = dist;
+				bestMatch = { command: cmd, textBefore: "" };
+			}
+		}
+	}
+	return bestMatch;
 }
 
 /**

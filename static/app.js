@@ -390,7 +390,15 @@ const LANG_PATTERNS = {
 };
 
 const LANG_MISHEARINGS = {
-    nl: [[/\bniveau\b/g, "nieuwe"]],
+    nl: [
+        [/\bniveau\b/g, "nieuwe"],
+        [/\bniva\b/g, "nieuwe"],
+        [/\bnieuw alinea\b/g, "nieuwe alinea"],
+        [/\bnieuw regel\b/g, "nieuwe regel"],
+        [/\blinea\b/g, "alinea"],
+        [/\blinie\b/g, "alinea"],
+        [/\bbeeindigde\b/g, "beeindig de"],
+    ],
     fr: [[/\bnouveau ligne\b/g, "nouvelle ligne"], [/\bnouvelle paragraphe\b/g, "nouveau paragraphe"]],
     de: [[/\bneue absatz\b/g, "neuer absatz"], [/\bneues zeile\b/g, "neue zeile"]],
 };
@@ -442,6 +450,22 @@ function stripDiacritics(str) {
     return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
+// Levenshtein edit distance between two strings
+function levenshtein(a, b) {
+    const m = a.length, n = b.length;
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            dp[i][j] = a[i - 1] === b[j - 1]
+                ? dp[i - 1][j - 1]
+                : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+        }
+    }
+    return dp[m][n];
+}
+
 // Normalize spoken text for command matching
 function normalizeCommand(text) {
     let norm = text.toLowerCase().trim();
@@ -456,14 +480,12 @@ function normalizeCommand(text) {
 }
 
 function findCommand(normalized, rawText) {
+    // Pass 1: exact match (full or suffix)
     for (const cmd of VOICE_COMMANDS) {
         for (const pattern of cmd.patterns) {
-            // Normalize pattern the same way as input (strip diacritics, hyphens, etc.)
             const p = normalizeCommand(pattern);
             if (normalized === p) return { cmd, textBefore: "" };
             if (normalized.endsWith(" " + p)) {
-                // Extract raw text before the command by stripping the same
-                // number of words from the end of the raw input
                 const patternWordCount = p.split(/\s+/).length;
                 const rawWords = (rawText || "").trimEnd().split(/\s+/);
                 const textBefore = rawWords.slice(0, -patternWordCount).join(" ");
@@ -471,7 +493,21 @@ function findCommand(normalized, rawText) {
             }
         }
     }
-    return null;
+    // Pass 2: fuzzy match for standalone sentences only (Levenshtein ≤ 2)
+    // This catches conjugation errors like "beeindigde opname" ≈ "beeindig de opname"
+    let bestMatch = null;
+    let bestDist = 3; // threshold: must be strictly less than this
+    for (const cmd of VOICE_COMMANDS) {
+        for (const pattern of cmd.patterns) {
+            const p = normalizeCommand(pattern);
+            const dist = levenshtein(normalized, p);
+            if (dist > 0 && dist < bestDist) {
+                bestDist = dist;
+                bestMatch = { cmd, textBefore: "" };
+            }
+        }
+    }
+    return bestMatch;
 }
 
 function checkForCommand() {

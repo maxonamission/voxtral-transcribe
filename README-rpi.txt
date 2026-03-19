@@ -1,140 +1,139 @@
 ╔══════════════════════════════════════════════════════════════╗
 ║        Voxtral Transcribe - Raspberry Pi (ARM64)             ║
-║        Spraak-naar-tekst met Mistral AI                      ║
+║        Speech-to-text with Mistral AI                        ║
 ╚══════════════════════════════════════════════════════════════╝
 
-WAT IS VOXTRAL TRANSCRIBE?
-═══════════════════════════
-Voxtral Transcribe is een lokale spraak-naar-tekst applicatie die
-de Mistral Voxtral API gebruikt voor realtime audiotranscriptie.
+WHAT IS VOXTRAL TRANSCRIBE?
+════════════════════════════
+Voxtral Transcribe is a local speech-to-text application that
+uses the Mistral Voxtral API for real-time audio transcription.
 
-Kenmerken:
-  • Realtime streaming transcriptie
-  • Spraakcommando's voor documentstructuur (alinea's, kopjes, lijsten)
-  • Automatische tekstcorrectie via Mistral Small
-  • Offline wachtrij als de server niet bereikbaar is
-  • Automatisch kopiëren naar klembord na opname
-  • Donkere modus interface
+Features:
+  • Real-time streaming transcription
+  • Voice commands for document structure (paragraphs, headings, lists)
+  • Automatic text correction via Mistral Small
+  • Offline queue when the server is unreachable
+  • Auto-copy to clipboard after recording
+  • Dark mode interface
 
-Deze versie is gebouwd voor Raspberry Pi met een 64-bit OS
-(aarch64/ARM64). Getest op Raspberry Pi 4 en 5.
-
-
-VEREISTEN
-═════════
-  • Raspberry Pi 4 of 5 (64-bit OS vereist)
-  • Raspberry Pi OS (64-bit) of Ubuntu Server 22.04+ (arm64)
-  • USB-microfoon of audio-interface
-  • Internetverbinding (voor de Mistral API)
+This version is built for Raspberry Pi with a 64-bit OS
+(aarch64/ARM64). Tested on Raspberry Pi 4 and 5.
 
 
-STARTEN
-═══════
-1. Pak het archief uit:
+REQUIREMENTS
+════════════
+  • Raspberry Pi 4 or 5 (64-bit OS required)
+  • Raspberry Pi OS (64-bit) or Ubuntu Server 22.04+ (arm64)
+  • USB microphone or audio interface
+  • Internet connection (for the Mistral API)
+
+
+GETTING STARTED
+═══════════════
+1. Extract the archive:
      tar -xzf VoxtralTranscribe-linux-arm64-rpi.tar.gz
 
-2. Navigeer naar de map:
+2. Navigate to the folder:
      cd voxtral-transcribe
 
-3. Maak het bestand uitvoerbaar (eenmalig):
+3. Make the file executable (one time only):
      chmod +x voxtral-transcribe
 
-4. Start de applicatie:
+4. Start the application:
      ./voxtral-transcribe
 
-5. Open een browser op de Pi of op een ander apparaat in je
-   netwerk naar http://127.0.0.1:8000
+5. Open a browser on the Pi or on another device on your
+   network at http://127.0.0.1:8000
 
-Tip: Als je de Pi headless gebruikt (zonder scherm), kun je
-vanaf een ander apparaat in hetzelfde netwerk verbinden.
-Start dan met:
+Tip: If you're using the Pi headless (without a monitor), you
+can connect from another device on the same network.
+Start with:
   VOXTRAL_HOST=0.0.0.0 ./voxtral-transcribe
-En open http://<pi-ip-adres>:8000 in je browser.
+And open http://<pi-ip-address>:8000 in your browser.
 
-Om de app als service te draaien bij het opstarten:
-  Maak een systemd service bestand aan in
+To run the app as a service on startup:
+  Create a systemd service file in
   /etc/systemd/system/voxtral.service
 
 
-MISTRAL API-SLEUTEL VERKRIJGEN
-══════════════════════════════
-Je hebt een API-sleutel van Mistral nodig om Voxtral Transcribe
-te gebruiken. Zo krijg je er een:
+OBTAINING A MISTRAL API KEY
+═══════════════════════════
+You need a Mistral API key to use Voxtral Transcribe.
+Here's how to get one:
 
-1. Ga naar https://console.mistral.ai/
-2. Maak een account aan of log in
-3. Ga naar "API Keys" in het menu
-4. Klik op "Create new key"
-5. Kopieer de sleutel en plak deze in het instellingenscherm
-   van Voxtral Transcribe
+1. Go to https://console.mistral.ai/
+2. Create an account or log in
+3. Go to "API Keys" in the menu
+4. Click "Create new key"
+5. Copy the key and paste it into the Voxtral Transcribe
+   settings screen
 
-Let op: er zijn kosten verbonden aan het gebruik van de Mistral
-API. Bekijk de prijzen op https://mistral.ai/pricing/
+Note: there are costs associated with using the Mistral API.
+See pricing at https://mistral.ai/pricing/
 
 
-CONFIGURATIE
-════════════
-Je kunt de API-sleutel op twee manieren instellen:
+CONFIGURATION
+═════════════
+You can set the API key in two ways:
 
-Via de app (aanbevolen):
-  Klik op het tandwiel-icoon in de app en vul je sleutel in.
+Via the app (recommended):
+  Click the gear icon in the app and enter your key.
 
-Via .env bestand:
-  Hernoem ".env.example" naar ".env" en vul je sleutel in:
-    MISTRAL_API_KEY=jouw_sleutel_hier
+Via .env file:
+  Rename ".env.example" to ".env" and enter your key:
+    MISTRAL_API_KEY=your_key_here
 
 Via environment variable:
-  export MISTRAL_API_KEY=jouw_sleutel_hier
+  export MISTRAL_API_KEY=your_key_here
   ./voxtral-transcribe
 
 
-GEBRUIK
-═══════
-1. Klik op "Opnemen" om een opname te starten
-2. Spreek in je microfoon - de tekst verschijnt realtime
-3. Gebruik spraakcommando's:
-   - "nieuwe alinea"     → nieuwe paragraaf
-   - "nieuw kopje [tekst]" → voegt een kop toe
-   - "nieuw lijstje"     → start een opsomming
-   - "nieuwe taak"       → voegt een to-do item toe
-4. Klik nogmaals op "Opnemen" om te stoppen
-5. De tekst wordt automatisch naar je klembord gekopieerd
+USAGE
+═════
+1. Click "Record" to start a recording
+2. Speak into your microphone - text appears in real time
+3. Use voice commands:
+   - "new paragraph"      → new paragraph
+   - "heading one"        → adds a heading
+   - "new bullet"         → starts a bullet list
+   - "new to-do"          → adds a to-do item
+4. Click "Record" again to stop
+5. The text is automatically copied to your clipboard
 
 
-PROBLEMEN OPLOSSEN
-══════════════════
-• De app start niet?
-  → Zorg dat je een 64-bit OS draait: uname -m (moet "aarch64"
-    tonen)
-  → Zorg dat er geen andere applicatie op poort 8000 draait
+TROUBLESHOOTING
+═══════════════
+• The app won't start?
+  → Make sure you're running a 64-bit OS: uname -m (should
+    show "aarch64")
+  → Make sure no other application is using port 8000
 
-• Geen audio-invoer?
-  → Controleer of je USB-microfoon herkend wordt: arecord -l
-  → Installeer ALSA-utils als dat nog niet gedaan is:
+• No audio input?
+  → Check that your USB microphone is recognized: arecord -l
+  → Install ALSA utils if not already done:
     sudo apt install alsa-utils
 
-• Geen transcriptie?
-  → Controleer je API-sleutel in de instellingen
-  → Controleer je internetverbinding
+• No transcription?
+  → Check your API key in the settings
+  → Check your internet connection
 
-• Slechte audiokwaliteit?
-  → Gebruik een dedicated USB-microfoon in plaats van de
-    ingebouwde audio-jack (betere kwaliteit)
+• Poor audio quality?
+  → Use a dedicated USB microphone instead of the built-in
+    audio jack (better quality)
 
-• App is traag?
-  → De Raspberry Pi doet alleen het versturen van audio en
-    ontvangen van tekst - de zware verwerking gebeurt in de
-    cloud. Trage prestaties duiden meestal op een trage
-    internetverbinding.
+• App is slow?
+  → The Raspberry Pi only sends audio and receives text -
+    the heavy processing happens in the cloud. Slow
+    performance usually indicates a slow internet connection.
 
 
-STOPPEN
-═══════
-Druk op Ctrl+C in de terminal, of:
+STOPPING
+════════
+Press Ctrl+C in the terminal, or:
   kill $(pgrep -f voxtral-transcribe)
 
 
-MEER INFORMATIE
-═══════════════
+MORE INFORMATION
+════════════════
 Website: https://github.com/maxonamission/voxtral-transcribe
-Licentie: MIT
+License: GPL-3.0

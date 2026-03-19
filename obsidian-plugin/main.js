@@ -1290,9 +1290,13 @@ var LABELS = {
 var MISHEARINGS = {
   nl: [
     [/\bniveau\b/g, "nieuwe"],
+    [/\bniva\b/g, "nieuwe"],
     [/\bnieuw alinea\b/g, "nieuwe alinea"],
     [/\bnieuw regel\b/g, "nieuwe regel"],
-    [/\bnieuw punt\b/g, "nieuw punt"]
+    [/\bnieuw punt\b/g, "nieuw punt"],
+    [/\blinea\b/g, "alinea"],
+    [/\blinie\b/g, "alinea"],
+    [/\bbeeindigde\b/g, "beeindig de"]
   ],
   fr: [
     [/\bnouveau ligne\b/g, "nouvelle ligne"],
@@ -1640,6 +1644,18 @@ function fixMishearings(text) {
   }
   return text;
 }
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
 function insertAtCursor(editor, text) {
   const cursor = editor.getCursor();
   if (cursor.ch > 0 && text.length > 0 && !/^[\s\n]/.test(text)) {
@@ -1755,7 +1771,20 @@ function matchCommand(rawText) {
       }
     }
   }
-  return null;
+  let bestMatch = null;
+  let bestDist = 3;
+  for (const cmd of COMMAND_DEFS) {
+    const patterns = getPatternsForCommand(cmd.id, activeLang);
+    for (const pattern of patterns) {
+      const normPattern = normalizeCommand(pattern);
+      const dist = levenshtein(normalized, normPattern);
+      if (dist > 0 && dist < bestDist) {
+        bestDist = dist;
+        bestMatch = { command: cmd, textBefore: "" };
+      }
+    }
+  }
+  return bestMatch;
 }
 function processText(editor, text) {
   const segments = text.match(/[^.!?]+[.!?]+\s*/g);
