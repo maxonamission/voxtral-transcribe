@@ -26,13 +26,22 @@ import {
 	processText,
 	matchCommand,
 	setLanguage,
+	setPreMatchHook,
 	isSlotActive,
 	getActiveSlot,
 	closeSlot,
 	cancelSlot,
+	openSlot,
 	loadCustomCommands,
 	loadCustomCommandTriggers,
 } from "./voice-commands";
+import {
+	scanTemplates,
+	matchTemplate,
+	matchQuickTemplate,
+	insertTemplate,
+	type QuickTemplate,
+} from "./templates";
 
 // ── In-memory log buffer (ring buffer, last 500 entries) ──
 
@@ -212,12 +221,99 @@ export default class VoxtralPlugin extends Plugin {
 		setLanguage(this.settings.language);
 		loadCustomCommands(this.settings.customCommands);
 		loadCustomCommandTriggers(this.settings.customCommands);
+		this.setupTemplates();
 	}
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
 		setLanguage(this.settings.language);
+		loadCustomCommands(this.settings.customCommands);
+		loadCustomCommandTriggers(this.settings.customCommands);
+		this.setupTemplates();
 		this.refreshHelpView();
+	}
+
+	/** Scan templates folder and register the pre-match hook */
+	private setupTemplates(): void {
+		scanTemplates(this.app, this.settings.templatesFolder);
+
+		setPreMatchHook((editor, normalizedText, rawText) => {
+			const lang = this.settings.language;
+
+			// Try quick-templates first (table, code block, callout)
+			const quickMatch = matchQuickTemplate(normalizedText, lang);
+			if (quickMatch) {
+				if (quickMatch.textBefore) {
+					// Insert preceding text (reuse raw text for proper casing)
+					const cmdWords = normalizedText.length - quickMatch.textBefore.length;
+					const before = rawText.substring(0, rawText.length - cmdWords).trimEnd();
+					if (before) {
+						const cursor = editor.getCursor();
+						if (cursor.ch > 0 && !/^[\s\n]/.test(before)) {
+							const charBefore = editor.getRange(
+								{ line: cursor.line, ch: cursor.ch - 1 },
+								cursor
+							);
+							const prefix = charBefore && /\S/.test(charBefore) ? " " : "";
+							editor.replaceRange(prefix + before, cursor);
+							const newCh = cursor.ch + prefix.length + before.length;
+							editor.setCursor({ line: cursor.line, ch: newCh });
+						} else {
+							editor.replaceRange(before, cursor);
+							const newCh = cursor.ch + before.length;
+							editor.setCursor({ line: cursor.line, ch: newCh });
+						}
+					}
+				}
+				this.insertQuickTemplate(editor, quickMatch.template);
+				return true;
+			}
+
+			// Try user templates ("template {name}" / "sjabloon {name}")
+			const tmplMatch = matchTemplate(normalizedText, lang);
+			if (tmplMatch) {
+				if (tmplMatch.textBefore) {
+					const cmdWords = normalizedText.length - tmplMatch.textBefore.length;
+					const before = rawText.substring(0, rawText.length - cmdWords).trimEnd();
+					if (before) {
+						const cursor = editor.getCursor();
+						editor.replaceRange(before, cursor);
+						const newCh = cursor.ch + before.length;
+						editor.setCursor({ line: cursor.line, ch: newCh });
+					}
+				}
+				// insertTemplate is async — fire and forget
+				void insertTemplate(this.app, editor, tmplMatch.template);
+				return true;
+			}
+
+			return false;
+		});
+	}
+
+	/** Insert a quick-template at the cursor, optionally opening a slot */
+	private insertQuickTemplate(editor: Editor, tmpl: QuickTemplate): void {
+		if (tmpl.slot) {
+			// Open a slot (e.g. code block: type language, then Enter closes)
+			const cursor = editor.getCursor();
+			editor.replaceRange(tmpl.slot.prefix, cursor);
+			const lines = tmpl.slot.prefix.split("\n");
+			const lastLine = lines[lines.length - 1];
+			const newLine = cursor.line + lines.length - 1;
+			const newCh = lines.length === 1 ? cursor.ch + lastLine.length : lastLine.length;
+			editor.setCursor({ line: newLine, ch: newCh });
+			openSlot(tmpl.id, tmpl.slot);
+			this.updateStatusBar("slot");
+		} else {
+			// Simple content insertion
+			const cursor = editor.getCursor();
+			editor.replaceRange(tmpl.content, cursor);
+			const lines = tmpl.content.split("\n");
+			const lastLine = lines[lines.length - 1];
+			const newLine = cursor.line + lines.length - 1;
+			const newCh = lines.length === 1 ? cursor.ch + lastLine.length : lastLine.length;
+			editor.setCursor({ line: newLine, ch: newCh });
+		}
 	}
 
 	/** Re-render the help panel with the current language. */
@@ -864,7 +960,14 @@ export default class VoxtralPlugin extends Plugin {
 				this.processDualSlowCommands(editor);
 			},
 			onDone: (text) => {
-				this.dualSlowText = text || this.dualSlowText;
+				// Only use the final text if it extends beyond what we've
+				// already processed.  processDualSlowCommands() trims
+				// dualSlowText as sentences are flushed; overwriting it
+				// with the full API response would re-introduce already-
+				// committed text and cause duplicates.
+				if (text && text.length > this.dualSlowText.length) {
+					this.dualSlowText = text;
+				}
 				this.renderDualText(editor);
 				this.processDualSlowCommands(editor);
 			},
@@ -921,7 +1024,9 @@ export default class VoxtralPlugin extends Plugin {
 						this.processDualSlowCommands(editor);
 					},
 					onDone: (text) => {
-						this.dualSlowText = text || this.dualSlowText;
+						if (text && text.length > this.dualSlowText.length) {
+							this.dualSlowText = text;
+						}
 						this.renderDualText(editor);
 						this.processDualSlowCommands(editor);
 					},
@@ -981,10 +1086,44 @@ export default class VoxtralPlugin extends Plugin {
 		if (!this.dualSlowText) return;
 
 		const segments = this.dualSlowText.match(/[^.!?]+[.!?]+\s*/g);
+
+		// Also check the remainder (text without sentence-ending punctuation)
+		// for standalone voice commands like "wikilink", "vet", etc.
+		const segmentText = segments ? segments.join("") : "";
+		const remainder = this.dualSlowText.substring(segmentText.length);
+
+		// If there are no complete sentences, check if the entire text
+		// is a standalone voice command (no surrounding text needed).
+		if (!segments && remainder.trim()) {
+			const cmdMatch = matchCommand(remainder.trim());
+			if (cmdMatch && !cmdMatch.textBefore) {
+				// Pure command without text before — execute it
+				const from = editor.offsetToPos(this.dualInsertOffset);
+				const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
+				editor.replaceRange("", from, to);
+				editor.setCursor(from);
+				this.dualDisplayLen = 0;
+
+				cmdMatch.command.action(editor);
+				if (cmdMatch.command.id === "stopRecording") {
+					setTimeout(() => { void this.stopRecording(); }, 0);
+				}
+				if (isSlotActive()) {
+					this.updateStatusBar("slot");
+				}
+
+				this.dualSlowText = "";
+				this.dualFastText = "";
+				this.dualInsertOffset = editor.posToOffset(editor.getCursor());
+				return;
+			}
+			// Not a command — leave it for later (more text may come)
+			return;
+		}
+
 		if (!segments) return;
 
-		const matchedLength = segments.join("").length;
-		const remainder = this.dualSlowText.substring(matchedLength);
+		const matchedLength = segmentText.length;
 
 		// Always flush completed sentences — even without commands.
 		// This keeps accumulators small (preventing performance degradation)

@@ -42,6 +42,7 @@ export interface VoxtralSettings {
 	typingCooldownMs: number; // ms of silence before mic unmutes after typing
 	noiseSuppression: boolean; // browser-level noise suppression, echo cancellation, AGC
 	customCommands: CustomCommand[];
+	templatesFolder: string; // path to templates folder (e.g. "Templates"), empty = disabled
 }
 
 export const DEFAULT_SETTINGS: VoxtralSettings = {
@@ -65,6 +66,7 @@ export const DEFAULT_SETTINGS: VoxtralSettings = {
 	typingCooldownMs: 800,
 	noiseSuppression: false,
 	customCommands: [],
+	templatesFolder: "",
 };
 
 export const DEFAULT_CORRECT_PROMPT =

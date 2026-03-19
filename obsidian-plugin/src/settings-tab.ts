@@ -232,7 +232,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 					})
 			);
 
-		const dualDelaySetting = new Setting(containerEl)
+		new Setting(containerEl)
 			.setName("Dual-delay mode")
 			.setDesc(
 				Platform.isMobile
@@ -317,6 +317,32 @@ export class VoxtralSettingTab extends PluginSettingTab {
 					.onClick(() => {
 						window.open("https://buymeacoffee.com/maxonamission");
 					})
+			);
+
+		// Templates
+		new Setting(containerEl).setName("Templates").setHeading();
+
+		new Setting(containerEl)
+			.setName("Templates folder")
+			.setDesc(
+				'Path to your templates folder (e.g. "Templates"). ' +
+				'Say "template {name}" or "sjabloon {name}" to insert. Leave empty to disable.'
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("Templates")
+					.setValue(this.plugin.settings.templatesFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.templatesFolder = value.trim();
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Built-in quick-templates")
+			.setDesc(
+				'Say "tabel", "codeblok", "callout", "tip", or "waarschuwing" to insert ' +
+				"common Markdown structures. Always active."
 			);
 
 		// Custom voice commands
@@ -428,7 +454,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 			.setDesc("Add a custom voice command for inserting text or opening a slot")
 			.addButton((btn) =>
 				btn
-					.setButtonText("+ Add command")
+					.setButtonText("Add command")
 					.setCta()
 					.onClick(() => {
 						const newCmd: CustomCommand = {
@@ -446,119 +472,107 @@ export class VoxtralSettingTab extends PluginSettingTab {
 	private openCommandEditor(cmd: CustomCommand, index: number): void {
 		const modal = document.createElement("div");
 		modal.addClass("modal-container", "mod-dim");
-		const modalBg = modal.createDiv("modal-bg");
-		modalBg.style.opacity = "0.85";
-		const modalEl = modal.createDiv("modal");
-		modalEl.style.maxWidth = "500px";
-		modalEl.style.padding = "20px";
+		const modalBg = modal.createDiv("modal-bg voxtral-cmd-modal-bg");
+		const modalEl = modal.createDiv("modal voxtral-cmd-modal");
 
 		const lang = this.plugin.settings.language;
 
-		// Title
-		const title = modalEl.createEl("h3", { text: "Custom voice command" });
-		title.style.marginTop = "0";
+		// Title — use Setting heading instead of raw <h3>
+		new Setting(modalEl).setName("Custom voice command").setHeading();
 
 		// Trigger phrases
-		const triggerLabel = modalEl.createEl("label", { text: "Trigger phrases (comma-separated)" });
-		triggerLabel.style.display = "block";
-		triggerLabel.style.marginBottom = "4px";
-		triggerLabel.style.fontWeight = "bold";
-		const triggerInput = modalEl.createEl("input", { type: "text" });
-		triggerInput.style.width = "100%";
-		triggerInput.style.marginBottom = "12px";
-		triggerInput.value = (cmd.triggers[lang] ?? []).join(", ");
+		const triggerSetting = new Setting(modalEl)
+			.setName("Trigger phrases (comma-separated)");
+		let triggerInput: HTMLInputElement;
+		triggerSetting.addText((text) => {
+			triggerInput = text.inputEl;
+			text.setValue((cmd.triggers[lang] ?? []).join(", "));
+		});
 
 		// Type selector
-		const typeLabel = modalEl.createEl("label", { text: "Type" });
-		typeLabel.style.display = "block";
-		typeLabel.style.marginBottom = "4px";
-		typeLabel.style.fontWeight = "bold";
-		const typeSelect = modalEl.createEl("select");
-		typeSelect.style.width = "100%";
-		typeSelect.style.marginBottom = "12px";
-		typeSelect.createEl("option", { text: "Insert text", value: "insert" });
-		typeSelect.createEl("option", { text: "Slot (type between prefix/suffix)", value: "slot" });
-		typeSelect.value = cmd.type;
+		let typeValue = cmd.type;
+		new Setting(modalEl)
+			.setName("Type")
+			.addDropdown((drop) => {
+				drop.addOption("insert", "Insert text");
+				drop.addOption("slot", "Slot (type between prefix/suffix)");
+				drop.setValue(cmd.type);
+				drop.onChange((value) => {
+					typeValue = value as "insert" | "slot";
+					updateVisibility();
+				});
+			});
 
 		// Insert text field
 		const insertContainer = modalEl.createDiv();
-		const insertLabel = insertContainer.createEl("label", { text: "Text to insert" });
-		insertLabel.style.display = "block";
-		insertLabel.style.marginBottom = "4px";
-		insertLabel.style.fontWeight = "bold";
-		const insertDesc = insertContainer.createEl("small", { text: "Use \\n for newline" });
-		insertDesc.style.display = "block";
-		insertDesc.style.marginBottom = "4px";
-		insertDesc.style.color = "var(--text-muted)";
-		const insertInput = insertContainer.createEl("input", { type: "text" });
-		insertInput.style.width = "100%";
-		insertInput.style.marginBottom = "12px";
-		insertInput.value = (cmd.insertText ?? "").replace(/\n/g, "\\n");
+		let insertInput: HTMLInputElement;
+		new Setting(insertContainer)
+			.setName("Text to insert")
+			.setDesc("Use \\n for newline")
+			.addText((text) => {
+				insertInput = text.inputEl;
+				text.setValue((cmd.insertText ?? "").replace(/\n/g, "\\n"));
+			});
 
 		// Slot fields
 		const slotContainer = modalEl.createDiv();
-		const prefixLabel = slotContainer.createEl("label", { text: "Prefix (e.g. [[ or **)" });
-		prefixLabel.style.display = "block";
-		prefixLabel.style.marginBottom = "4px";
-		prefixLabel.style.fontWeight = "bold";
-		const prefixInput = slotContainer.createEl("input", { type: "text" });
-		prefixInput.style.width = "100%";
-		prefixInput.style.marginBottom = "8px";
-		prefixInput.value = cmd.slotPrefix ?? "";
+		let prefixInput: HTMLInputElement;
+		let suffixInput: HTMLInputElement;
+		let exitValue = cmd.slotExit ?? "enter";
 
-		const suffixLabel = slotContainer.createEl("label", { text: "Suffix (e.g. ]] or **)" });
-		suffixLabel.style.display = "block";
-		suffixLabel.style.marginBottom = "4px";
-		suffixLabel.style.fontWeight = "bold";
-		const suffixInput = slotContainer.createEl("input", { type: "text" });
-		suffixInput.style.width = "100%";
-		suffixInput.style.marginBottom = "8px";
-		suffixInput.value = cmd.slotSuffix ?? "";
+		new Setting(slotContainer)
+			.setName("Prefix (e.g. [[ or **)")
+			.addText((text) => {
+				prefixInput = text.inputEl;
+				text.setValue(cmd.slotPrefix ?? "");
+			});
 
-		const exitLabel = slotContainer.createEl("label", { text: "Close slot on" });
-		exitLabel.style.display = "block";
-		exitLabel.style.marginBottom = "4px";
-		exitLabel.style.fontWeight = "bold";
-		const exitSelect = slotContainer.createEl("select");
-		exitSelect.style.width = "100%";
-		exitSelect.style.marginBottom = "12px";
-		exitSelect.createEl("option", { text: "Enter", value: "enter" });
-		exitSelect.createEl("option", { text: "Space", value: "space" });
-		exitSelect.createEl("option", { text: "Enter or Space", value: "enter-or-space" });
-		exitSelect.value = cmd.slotExit ?? "enter";
+		new Setting(slotContainer)
+			.setName("Suffix (e.g. ]] or **)")
+			.addText((text) => {
+				suffixInput = text.inputEl;
+				text.setValue(cmd.slotSuffix ?? "");
+			});
+
+		new Setting(slotContainer)
+			.setName("Close slot on")
+			.addDropdown((drop) => {
+				drop.addOption("enter", "Enter");
+				drop.addOption("space", "Space");
+				drop.addOption("enter-or-space", "Enter or space");
+				drop.setValue(exitValue);
+				drop.onChange((value) => {
+					exitValue = value as "enter" | "space" | "enter-or-space";
+				});
+			});
 
 		// Show/hide based on type
 		const updateVisibility = () => {
-			insertContainer.style.display = typeSelect.value === "insert" ? "block" : "none";
-			slotContainer.style.display = typeSelect.value === "slot" ? "block" : "none";
+			insertContainer.toggle(typeValue === "insert");
+			slotContainer.toggle(typeValue === "slot");
 		};
-		typeSelect.addEventListener("change", updateVisibility);
 		updateVisibility();
 
 		// Buttons
-		const btnRow = modalEl.createDiv();
-		btnRow.style.display = "flex";
-		btnRow.style.justifyContent = "flex-end";
-		btnRow.style.gap = "8px";
-		btnRow.style.marginTop = "16px";
+		const btnRow = modalEl.createDiv("voxtral-cmd-btn-row");
 
 		const cancelBtn = btnRow.createEl("button", { text: "Cancel" });
 		cancelBtn.addEventListener("click", () => modal.remove());
 
 		const saveBtn = btnRow.createEl("button", { text: "Save", cls: "mod-cta" });
-		saveBtn.addEventListener("click", async () => {
+		saveBtn.addEventListener("click", () => {
 			// Parse triggers
 			const triggers = triggerInput.value
 				.split(",")
-				.map((t) => t.trim())
-				.filter((t) => t.length > 0);
+				.map((t: string) => t.trim())
+				.filter((t: string) => t.length > 0);
 			if (triggers.length === 0) {
-				triggerInput.style.borderColor = "var(--text-error)";
+				triggerInput.addClass("voxtral-cmd-error");
 				return;
 			}
 
 			cmd.triggers[lang] = triggers;
-			cmd.type = typeSelect.value as "insert" | "slot";
+			cmd.type = typeValue;
 
 			if (cmd.type === "insert") {
 				cmd.insertText = insertInput.value.replace(/\\n/g, "\n");
@@ -568,12 +582,12 @@ export class VoxtralSettingTab extends PluginSettingTab {
 			} else {
 				cmd.slotPrefix = prefixInput.value;
 				cmd.slotSuffix = suffixInput.value;
-				cmd.slotExit = exitSelect.value as "enter" | "space" | "enter-or-space";
+				cmd.slotExit = exitValue;
 				cmd.insertText = undefined;
 			}
 
 			this.plugin.settings.customCommands[index] = cmd;
-			await this.plugin.saveSettings();
+			void this.plugin.saveSettings();
 			modal.remove();
 			this.display();
 		});
