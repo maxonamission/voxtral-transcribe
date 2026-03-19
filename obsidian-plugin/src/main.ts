@@ -26,6 +26,12 @@ import {
 	processText,
 	matchCommand,
 	setLanguage,
+	isSlotActive,
+	getActiveSlot,
+	closeSlot,
+	cancelSlot,
+	loadCustomCommands,
+	loadCustomCommandTriggers,
 } from "./voice-commands";
 
 // ── In-memory log buffer (ring buffer, last 500 entries) ──
@@ -78,6 +84,8 @@ export default class VoxtralPlugin extends Plugin {
 	private maxConsecutiveFailures = 5;
 	private currentEditor: Editor | null = null;
 	private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+	/** Text buffered while a slot is active (transcription paused) */
+	private slotBuffer = "";
 	/** Ranges of text inserted during realtime dictation.
 	 *  Offsets are always in the current document coordinate system —
 	 *  existing ranges are adjusted when a new insertion happens. */
@@ -202,6 +210,8 @@ export default class VoxtralPlugin extends Plugin {
 			await this.loadData()
 		);
 		setLanguage(this.settings.language);
+		loadCustomCommands(this.settings.customCommands);
+		loadCustomCommandTriggers(this.settings.customCommands);
 	}
 
 	async saveSettings(): Promise<void> {
@@ -322,6 +332,33 @@ export default class VoxtralPlugin extends Plugin {
 	// ── Typing mute (prevent keyboard noise from being transcribed) ──
 
 	private handleTypingMute(e: KeyboardEvent): void {
+		// ── Slot handling: Enter/Escape close/cancel the active slot ──
+		if (isSlotActive()) {
+			const slot = getActiveSlot();
+			if (e.key === "Escape") {
+				e.preventDefault();
+				cancelSlot();
+				this.updateStatusBar("recording");
+				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (view) this.flushSlotBuffer(view.editor);
+				return;
+			}
+			const isEnterExit = slot?.def.exitTrigger === "enter" || slot?.def.exitTrigger === "enter-or-space";
+			const isSpaceExit = slot?.def.exitTrigger === "space" || slot?.def.exitTrigger === "enter-or-space";
+			if ((e.key === "Enter" && isEnterExit) || (e.key === " " && isSpaceExit)) {
+				e.preventDefault();
+				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (view) {
+					closeSlot(view.editor);
+					this.flushSlotBuffer(view.editor);
+				}
+				this.updateStatusBar("recording");
+				return;
+			}
+			// All other keys: let the user type normally into the slot
+			return;
+		}
+
 		if (!this.isRecording || this.isPaused) return;
 
 		// Ignore modifier-only keys and shortcuts
@@ -593,7 +630,10 @@ export default class VoxtralPlugin extends Plugin {
 		const deviceId = this.settings.microphoneDeviceId || undefined;
 		await this.recorder.start(deviceId, (pcmData) => {
 			this.realtimeTranscriber?.sendAudio(pcmData);
-		});
+		}, this.settings.noiseSuppression);
+		if (this.recorder.fallbackUsed) {
+			new Notice("Selected mic unavailable — using default");
+		}
 	}
 
 	private async connectRealtimeWebSocket(editor: Editor): Promise<void> {
@@ -677,6 +717,12 @@ export default class VoxtralPlugin extends Plugin {
 	}
 
 	private handleRealtimeDelta(editor: Editor, text: string): void {
+		// While a slot is active, buffer incoming transcription
+		if (isSlotActive()) {
+			this.slotBuffer += text;
+			return;
+		}
+
 		this.pendingText += text;
 
 		// Flush on sentence-ending punctuation OR after accumulating enough text
@@ -710,10 +756,29 @@ export default class VoxtralPlugin extends Plugin {
 	}
 
 	private handleRealtimeDone(editor: Editor, _text: string): void {
+		// While a slot is active, buffer incoming transcription
+		if (isSlotActive()) {
+			return;
+		}
+
 		if (this.pendingText.trim()) {
 			this.trackProcessText(editor, this.pendingText.trim() + " ");
 			this.pendingText = "";
 		}
+	}
+
+	/** Flush buffered transcription text after a slot closes */
+	private flushSlotBuffer(editor: Editor): void {
+		if (this.slotBuffer.trim()) {
+			this.pendingText += this.slotBuffer;
+			this.slotBuffer = "";
+			// Trigger normal processing
+			if (this.pendingText.trim()) {
+				this.trackProcessText(editor, this.pendingText.trim() + " ");
+				this.pendingText = "";
+			}
+		}
+		this.slotBuffer = "";
 	}
 
 	private async stopRealtimeRecording(): Promise<void> {
@@ -757,7 +822,10 @@ export default class VoxtralPlugin extends Plugin {
 			// Send audio to BOTH transcribers
 			this.realtimeTranscriber?.sendAudio(pcmData);
 			this.dualSlowTranscriber?.sendAudio(pcmData);
-		});
+		}, this.settings.noiseSuppression);
+		if (this.recorder.fallbackUsed) {
+			new Notice("Selected mic unavailable — using default");
+		}
 	}
 
 	private async connectDualDelayWebSockets(editor: Editor): Promise<void> {
@@ -945,6 +1013,9 @@ export default class VoxtralPlugin extends Plugin {
 				if (match.command.id === "stopRecording") {
 					setTimeout(() => { void this.stopRecording(); }, 0);
 				}
+				if (isSlotActive()) {
+					this.updateStatusBar("slot");
+				}
 			} else {
 				this.trackInsertAtCursor(editor, segment);
 			}
@@ -1058,7 +1129,10 @@ export default class VoxtralPlugin extends Plugin {
 
 	private async startBatchRecording(): Promise<void> {
 		const deviceId = this.settings.microphoneDeviceId || undefined;
-		await this.recorder.start(deviceId);
+		await this.recorder.start(deviceId, undefined, this.settings.noiseSuppression);
+		if (this.recorder.fallbackUsed) {
+			new Notice("Selected mic unavailable — using default");
+		}
 	}
 
 	private async stopBatchRecording(): Promise<void> {
@@ -1117,6 +1191,10 @@ export default class VoxtralPlugin extends Plugin {
 	private trackProcessText(editor: Editor, text: string): void {
 		const offsetBefore = editor.posToOffset(editor.getCursor());
 		processText(editor, text);
+		// If a slot was activated, update status bar
+		if (isSlotActive()) {
+			this.updateStatusBar("slot");
+		}
 		const offsetAfter = editor.posToOffset(editor.getCursor());
 		const delta = offsetAfter - offsetBefore;
 
@@ -1316,7 +1394,7 @@ export default class VoxtralPlugin extends Plugin {
 	// ── Status bar ──
 
 	private updateStatusBar(
-		state: "idle" | "recording" | "processing" | "paused"
+		state: "idle" | "recording" | "processing" | "paused" | "slot"
 	): void {
 		if (!this.statusBarEl) return;
 		switch (state) {
@@ -1329,10 +1407,27 @@ export default class VoxtralPlugin extends Plugin {
 				);
 				break;
 			case "recording": {
+				// If a slot is active, show slot status instead
+				if (isSlotActive()) {
+					const slot = getActiveSlot();
+					const label = slot?.commandId ?? "slot";
+					this.statusBarEl.setText(`● ${label} — type, then Enter`);
+					this.statusBarEl.addClass("voxtral-recording");
+					this.statusBarEl.removeClass("voxtral-processing", "voxtral-paused");
+					break;
+				}
 				const mic = this.recorder.activeMicLabel;
 				const short =
 					mic.length > 25 ? mic.slice(0, 22) + "..." : mic;
 				this.statusBarEl.setText(`● ${short}`);
+				this.statusBarEl.addClass("voxtral-recording");
+				this.statusBarEl.removeClass("voxtral-processing", "voxtral-paused");
+				break;
+			}
+			case "slot": {
+				const slot = getActiveSlot();
+				const label = slot?.commandId ?? "slot";
+				this.statusBarEl.setText(`● ${label} — type, then Enter`);
 				this.statusBarEl.addClass("voxtral-recording");
 				this.statusBarEl.removeClass("voxtral-processing", "voxtral-paused");
 				break;

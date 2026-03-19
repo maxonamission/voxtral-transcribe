@@ -32,3 +32,13 @@ Make the app easy to download and run for testers and users.
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
 | 004 | [Automated GitHub Releases with cross-platform builds](doing/004-github-releases-ci.md) | Doing | High |
+
+## Epic: Custom Commands & Extensibility
+
+Allow users to define their own voice commands, mishearing corrections, and dynamic actions — making the plugin adaptable to any workflow or language.
+
+| # | Story | Status | Priority |
+|---|-------|--------|----------|
+| 006 | [Custom voice commands — learning mode](backlog/006-custom-voice-commands.md) | Backlog | Medium |
+| 007 | [User-defined mishearing corrections](backlog/007-custom-mishearings.md) | Backlog | Medium |
+| 008 | [Dynamic content actions & Templater integration](backlog/008-dynamic-actions-templater.md) | Backlog | Low |

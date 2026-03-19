@@ -390,7 +390,15 @@ const LANG_PATTERNS = {
 };
 
 const LANG_MISHEARINGS = {
-    nl: [[/\bniveau\b/g, "nieuwe"]],
+    nl: [
+        [/\bniveau\b/g, "nieuwe"],
+        [/\bniva\b/g, "nieuwe"],
+        [/\bnieuw alinea\b/g, "nieuwe alinea"],
+        [/\bnieuw regel\b/g, "nieuwe regel"],
+        [/\blinea\b/g, "alinea"],
+        [/\blinie\b/g, "alinea"],
+        [/\bbeeindigde\b/g, "beeindig de"],
+    ],
     fr: [[/\bnouveau ligne\b/g, "nouvelle ligne"], [/\bnouvelle paragraphe\b/g, "nouveau paragraphe"]],
     de: [[/\bneue absatz\b/g, "neuer absatz"], [/\bneues zeile\b/g, "neue zeile"]],
 };
@@ -402,7 +410,7 @@ const COMMAND_DEFS = [
     { id: "heading1", insert: "\n\n# ", toast: "# H1" },
     { id: "heading2", insert: "\n\n## ", toast: "## H2" },
     { id: "heading3", insert: "\n\n### ", toast: "### H3" },
-    { id: "bulletPoint", insert: "\n- ", toast: "•" },
+    { id: "bulletPoint", action: "bulletPoint", toast: "•" },
     { id: "todoItem", insert: "\n- [ ] ", toast: "☐" },
     { id: "numberedItem", action: "numberedItem", toast: "1." },
     { id: "stopRecording", action: "stopRecording", toast: "⏹ Stop" },
@@ -442,6 +450,124 @@ function stripDiacritics(str) {
     return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
+// Levenshtein edit distance between two strings
+function levenshtein(a, b) {
+    const m = a.length, n = b.length;
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            dp[i][j] = a[i - 1] === b[j - 1]
+                ? dp[i - 1][j - 1]
+                : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+        }
+    }
+    return dp[m][n];
+}
+
+// ── Phonetic normalization — lightweight rules per language ──
+// Maps phonetically equivalent sounds to canonical forms to catch ASR mishearings.
+
+const PHONETIC_RULES = {
+    nl: [
+        [/ij/g, "ei"], [/au/g, "ou"], [/dt\b/g, "t"], [/\bsch/g, "sg"],
+        [/ck/g, "k"], [/ph/g, "f"], [/th/g, "t"],
+        [/ie/g, "i"], [/oe/g, "u"], [/ee/g, "e"], [/oo/g, "o"], [/uu/g, "u"], [/aa/g, "a"],
+    ],
+    en: [
+        [/ph/g, "f"], [/th/g, "t"], [/ck/g, "k"], [/ght/g, "t"],
+        [/wh/g, "w"], [/kn/g, "n"], [/wr/g, "r"],
+        [/tion/g, "shun"], [/sion/g, "shun"],
+    ],
+    fr: [
+        [/eau/g, "o"], [/aux/g, "o"], [/ai/g, "e"], [/ei/g, "e"],
+        [/ph/g, "f"], [/qu/g, "k"], [/gn/g, "ny"],
+        [/oi/g, "wa"], [/ou/g, "u"], [/an/g, "on"], [/en/g, "on"],
+    ],
+    de: [
+        [/sch/g, "sh"], [/ei/g, "ai"], [/ie/g, "i"], [/ck/g, "k"],
+        [/ph/g, "f"], [/th/g, "t"], [/v/g, "f"], [/tz/g, "ts"], [/dt\b/g, "t"],
+        [/aa/g, "a"], [/ee/g, "e"], [/oo/g, "o"],
+    ],
+    es: [
+        [/ll/g, "y"], [/v/g, "b"], [/ce/g, "se"], [/ci/g, "si"],
+        [/qu/g, "k"], [/h/g, ""],
+    ],
+    pt: [
+        [/lh/g, "ly"], [/nh/g, "ny"], [/ch/g, "sh"],
+        [/qu/g, "k"], [/ção/g, "saun"], [/ss/g, "s"],
+    ],
+    it: [
+        [/gn/g, "ny"], [/ch/g, "k"], [/gh/g, "g"],
+        [/sc(?=[ei])/g, "sh"], [/zz/g, "ts"],
+    ],
+};
+
+const LANG_ARTICLES = {
+    nl: ["een", "de", "het", "die", "dat", "deze"],
+    en: ["a", "an", "the"],
+    fr: ["un", "une", "le", "la", "les", "l", "du", "des"],
+    de: ["ein", "eine", "einen", "einem", "einer", "der", "die", "das", "den", "dem", "des"],
+    es: ["un", "una", "el", "la", "los", "las"],
+    pt: ["um", "uma", "o", "a", "os", "as"],
+    it: ["un", "uno", "una", "il", "lo", "la", "i", "gli", "le"],
+};
+
+const LANG_TRAILING_FILLERS = {
+    nl: ["alsjeblieft", "graag", "even", "maar", "eens", "dan", "nu", "hoor"],
+    en: ["please", "now", "then", "thanks"],
+    fr: ["s il vous plait", "s il te plait", "merci"],
+    de: ["bitte", "mal", "jetzt", "dann"],
+    es: ["por favor", "ahora", "gracias"],
+    pt: ["por favor", "agora", "obrigado"],
+    it: ["per favore", "ora", "adesso", "grazie"],
+};
+
+function phoneticNormalize(text, lang) {
+    const rules = PHONETIC_RULES[lang];
+    if (!rules) return text;
+    let result = text;
+    for (const [pattern, replacement] of rules) {
+        result = result.replace(pattern, replacement);
+    }
+    return result;
+}
+
+function stripArticlesFromText(text, lang) {
+    const articles = LANG_ARTICLES[lang];
+    if (!articles || articles.length === 0) return text;
+    const words = text.split(/\s+/);
+    let stripped = 0;
+    while (stripped < Math.min(2, words.length - 1)) {
+        if (articles.includes(words[stripped])) stripped++;
+        else break;
+    }
+    return stripped > 0 ? words.slice(stripped).join(" ") : text;
+}
+
+function stripTrailingFillersFromText(text, lang) {
+    const fillers = LANG_TRAILING_FILLERS[lang];
+    if (!fillers || fillers.length === 0) return text;
+    let result = text;
+    for (const filler of fillers.sort((a, b) => b.length - a.length)) {
+        if (result.endsWith(" " + filler)) {
+            result = result.slice(0, -(filler.length + 1)).trimEnd();
+        }
+    }
+    return result;
+}
+
+function trySplitCompound(text, knownPhrases) {
+    if (text.includes(" ") || text.length < 4) return text;
+    for (const phrase of knownPhrases) {
+        const words = phrase.split(/\s+/);
+        if (words.length < 2) continue;
+        if (text === words.join("")) return phrase;
+    }
+    return text;
+}
+
 // Normalize spoken text for command matching
 function normalizeCommand(text) {
     let norm = text.toLowerCase().trim();
@@ -456,14 +582,29 @@ function normalizeCommand(text) {
 }
 
 function findCommand(normalized, rawText) {
+    // Helper: extract trailing N words
+    function trailingWords(text, n) {
+        const words = text.trimEnd().split(/\s+/);
+        return words.slice(-n).join(" ");
+    }
+
+    // Helper: get all known command phrases for compound splitting
+    function getAllPhrases() {
+        const phrases = [];
+        for (const cmd of VOICE_COMMANDS) {
+            for (const pattern of cmd.patterns) {
+                phrases.push(normalizeCommand(pattern));
+            }
+        }
+        return phrases;
+    }
+
+    // Pass 1: exact match (full or suffix)
     for (const cmd of VOICE_COMMANDS) {
         for (const pattern of cmd.patterns) {
-            // Normalize pattern the same way as input (strip diacritics, hyphens, etc.)
             const p = normalizeCommand(pattern);
             if (normalized === p) return { cmd, textBefore: "" };
             if (normalized.endsWith(" " + p)) {
-                // Extract raw text before the command by stripping the same
-                // number of words from the end of the raw input
                 const patternWordCount = p.split(/\s+/).length;
                 const rawWords = (rawText || "").trimEnd().split(/\s+/);
                 const textBefore = rawWords.slice(0, -patternWordCount).join(" ");
@@ -471,7 +612,94 @@ function findCommand(normalized, rawText) {
             }
         }
     }
-    return null;
+
+    // Pass 2: match after stripping trailing fillers
+    const strippedFillers = stripTrailingFillersFromText(normalized, activeLang);
+    if (strippedFillers !== normalized) {
+        for (const cmd of VOICE_COMMANDS) {
+            for (const pattern of cmd.patterns) {
+                const p = normalizeCommand(pattern);
+                if (strippedFillers === p) return { cmd, textBefore: "" };
+                if (strippedFillers.endsWith(" " + p)) {
+                    const patternWordCount = p.split(/\s+/).length;
+                    const fillerWordCount = normalized.split(/\s+/).length - strippedFillers.split(/\s+/).length;
+                    const rawWords = (rawText || "").trimEnd().split(/\s+/);
+                    const textBefore = rawWords.slice(0, -(patternWordCount + fillerWordCount)).join(" ");
+                    return { cmd, textBefore };
+                }
+            }
+        }
+    }
+
+    // Pass 2b: strip leading articles from trailing portion
+    for (const cmd of VOICE_COMMANDS) {
+        for (const pattern of cmd.patterns) {
+            const p = normalizeCommand(pattern);
+            const patternWordCount = p.split(/\s+/).length;
+            const tail = trailingWords(normalized, patternWordCount + 1);
+            const stripped = stripArticlesFromText(tail, activeLang);
+            if (stripped === p) {
+                const tailWordCount = tail.split(/\s+/).length;
+                const rawWords = (rawText || "").trimEnd().split(/\s+/);
+                const textBefore = rawWords.slice(0, -tailWordCount).join(" ");
+                return { cmd, textBefore };
+            }
+        }
+    }
+
+    // Pass 3: phonetic match
+    const phoneticText = phoneticNormalize(normalized, activeLang);
+    for (const cmd of VOICE_COMMANDS) {
+        for (const pattern of cmd.patterns) {
+            const normP = normalizeCommand(pattern);
+            const phoneticP = phoneticNormalize(normP, activeLang);
+            if (phoneticP !== normP || phoneticText !== normalized) {
+                if (phoneticText === phoneticP) return { cmd, textBefore: "" };
+                if (phoneticText.endsWith(" " + phoneticP)) {
+                    const patternWordCount = pattern.split(/\s+/).length;
+                    const rawWords = (rawText || "").trimEnd().split(/\s+/);
+                    const textBefore = rawWords.slice(0, -patternWordCount).join(" ");
+                    return { cmd, textBefore };
+                }
+            }
+        }
+    }
+
+    // Pass 4: compound-word splitting
+    const lastWord = normalized.split(/\s+/).pop() || "";
+    if (lastWord.length >= 4) {
+        const split = trySplitCompound(lastWord, getAllPhrases());
+        if (split !== lastWord) {
+            const words = normalized.split(/\s+/);
+            words[words.length - 1] = split;
+            const resplit = words.join(" ");
+            for (const cmd of VOICE_COMMANDS) {
+                for (const pattern of cmd.patterns) {
+                    const p = normalizeCommand(pattern);
+                    if (resplit === p || resplit.endsWith(" " + p)) {
+                        const rawWords = (rawText || "").trimEnd().split(/\s+/);
+                        const textBefore = rawWords.slice(0, -1).join(" ");
+                        return { cmd, textBefore };
+                    }
+                }
+            }
+        }
+    }
+
+    // Pass 5: fuzzy match for standalone sentences only (Levenshtein ≤ 2)
+    let bestMatch = null;
+    let bestDist = 3;
+    for (const cmd of VOICE_COMMANDS) {
+        for (const pattern of cmd.patterns) {
+            const p = normalizeCommand(pattern);
+            const dist = levenshtein(normalized, p);
+            if (dist > 0 && dist < bestDist) {
+                bestDist = dist;
+                bestMatch = { cmd, textBefore: "" };
+            }
+        }
+    }
+    return bestMatch;
 }
 
 function checkForCommand() {
@@ -637,11 +865,40 @@ function executeCommand(cmd) {
         restoreUndo();
     } else if (cmd.action === "numberedItem") {
         insertNumberedItem();
+    } else if (cmd.action === "bulletPoint") {
+        insertContextBullet();
     }
 
     isMidSentenceInsert = false;
     replaceHint.classList.add("hidden");
     showToast(cmd.toast);
+}
+
+function insertContextBullet() {
+    // Context-aware: detect current list type and continue it
+    const text = transcript.textContent || "";
+    const lastLine = text.split("\n").filter(l => l.trim()).pop() || "";
+
+    let insertText;
+    if (/^\d+\.\s/.test(lastLine)) {
+        // Numbered list — continue numbering
+        const num = parseInt(lastLine.match(/^(\d+)/)?.[1] ?? "0", 10);
+        insertText = `\n${num + 1}. `;
+    } else if (/^- \[[ x]\]\s/.test(lastLine)) {
+        // Todo list — continue with unchecked
+        insertText = "\n- [ ] ";
+    } else {
+        // Default: unordered bullet
+        insertText = "\n- ";
+    }
+
+    const span = document.createElement("span");
+    span.textContent = insertText;
+    if (activeInsert && activeInsert.parentNode) {
+        activeInsert.parentNode.insertBefore(span, activeInsert);
+    } else {
+        transcript.appendChild(span);
+    }
 }
 
 function insertNumberedItem() {

@@ -1,41 +1,41 @@
 # Voxtral Transcribe
 
-Lokale spraak-naar-tekst applicatie met realtime streaming via de [Mistral](https://mistral.ai) Voxtral API. Dicteer tekst met stemcommando's voor structuur, automatische correctie, en kopieer het resultaat naar je klembord.
+Local speech-to-text application with real-time streaming via the [Mistral](https://mistral.ai) Voxtral API. Dictate text with voice commands for structure, automatic correction, and copy the result to your clipboard.
 
 ## Features
 
-- **Realtime transcriptie** — tekst verschijnt terwijl je praat, met configureerbare streaming delay
-- **Stemcommando's** — nieuwe alinea, koppen, lijsten, to-do items, wissen en undo, allemaal met je stem
-- **Tekstcorrectie** — automatische of handmatige correctie via Mistral Small (spelling, leestekens, capitalisatie)
-- **Inline correctie-instructies** — geef de corrector opdrachten midden in je dictaat ("voor de controle achteraf: maak van X altijd Y")
-- **Mid-text editing** — klik ergens in de tekst om daar in te voegen, of selecteer tekst om te vervangen
-- **Auto-copy** — na elke opname wordt de tekst automatisch naar het klembord gekopieerd
-- **Offline queue** — opnames worden lokaal opgeslagen als de server niet bereikbaar is
-- **PWA** — installeerbaar als standalone app
-- **Auto-reconnect** — bij verbindingsproblemen wordt automatisch opnieuw verbonden
-- **Sprekerherkenning** — optionele diarization in batch modus
-- **Microfoon status** — statuslampje met stabiele beoordeling van je microfoonniveau
-- **Slim scrollen** — scroll omhoog om terug te lezen terwijl je dicteert, auto-scroll hervat als je terug naar beneden scrollt
+- **Real-time transcription** — text appears as you speak, with configurable streaming delay
+- **Voice commands** — new paragraph, headings, lists, to-do items, clear and undo, all by voice
+- **Text correction** — automatic or manual correction via Mistral Small (spelling, punctuation, capitalization)
+- **Inline correction instructions** — give the corrector instructions mid-dictation ("for the correction: change X to Y")
+- **Mid-text editing** — click anywhere in the text to insert there, or select text to replace it
+- **Auto-copy** — after each recording the text is automatically copied to the clipboard
+- **Offline queue** — recordings are saved locally when the server is unreachable
+- **PWA** — installable as a standalone app
+- **Auto-reconnect** — automatically reconnects on connection issues
+- **Speaker recognition** — optional diarization in batch mode
+- **Microphone status** — status indicator with stable assessment of your microphone level
+- **Smart scrolling** — scroll up to review while dictating, auto-scroll resumes when you scroll back down
 
 Need coffee to process all this? Me too.
 
 <a href="https://buymeacoffee.com/maxonamission" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"></a>
 
-## Vereisten
+## Requirements
 
 - Python 3.10+
 - [Mistral API key](https://console.mistral.ai/api-keys)
 
-## Installatie
+## Installation
 
 ```bash
-git clone https://github.com/jouw-gebruikersnaam/voxtral-app.git
-cd voxtral-app
+git clone https://github.com/maxonamission/voxtral-transcribe.git
+cd voxtral-transcribe
 ```
 
 ### Windows
 
-Dubbelklik op `start.bat` — dit maakt automatisch een virtual environment aan, installeert dependencies, en start de server.
+Double-click `start.bat` — this automatically creates a virtual environment, installs dependencies, and starts the server.
 
 ### macOS / Linux
 
@@ -44,7 +44,7 @@ chmod +x start.sh
 ./start.sh
 ```
 
-### Handmatig
+### Manual
 
 ```bash
 python -m venv venv
@@ -53,23 +53,23 @@ pip install -r requirements.txt
 python server.py
 ```
 
-Open daarna [http://127.0.0.1:8000](http://127.0.0.1:8000) in je browser. Bij eerste gebruik wordt gevraagd om je Mistral API key.
+Then open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser. On first use you will be asked for your Mistral API key.
 
-## Stemcommando's
+## Voice Commands
 
-| Commando | Actie |
+| Command | Action |
 |---|---|
-| "nieuwe alinea" / "nieuwe paragraaf" | Dubbele regelbreuk |
-| "nieuwe regel" | Enkele regelbreuk |
-| "kop een" / "kop twee" / "kop drie" | Markdown heading H1–H3 |
-| "nieuw punt" | Lijstitem (`- `) |
-| "nieuw to-do item" | To-do checkbox (`- [ ] `) |
-| "verwijder laatste alinea" | Verwijdert de laatste paragraaf |
-| "verwijder laatste regel" | Verwijdert de laatste zin |
-| "herstel" | Undo |
-| "beëindig opname" | Stopt de opname |
+| "new paragraph" | Double line break |
+| "new line" | Single line break |
+| "heading one" / "heading two" / "heading three" | Markdown heading H1–H3 |
+| "new bullet" | List item (`- `) |
+| "new to-do item" | To-do checkbox (`- [ ] `) |
+| "delete last paragraph" | Removes the last paragraph |
+| "delete last line" | Removes the last sentence |
+| "undo" | Undo |
+| "stop recording" | Stops the recording |
 
-Commando's worden herkend als suffix — je kunt gewoon doorpraten en eindigen met het commando (bijv. "en dan nieuwe alinea").
+Commands are recognized as a suffix — you can keep talking and end with the command (e.g. "and then new paragraph").
 
 ## Build (standalone executable)
 
@@ -93,81 +93,81 @@ chmod +x build-rpi.sh
 ./build-rpi.sh
 ```
 
-De build gebruikt PyInstaller en maakt een standalone executable in `dist/`. De RPi-build kan optioneel een systemd service installeren voor autostart.
+The build uses PyInstaller and creates a standalone executable in `dist/`. The RPi build can optionally install a systemd service for autostart.
 
-## Configuratie
+## Configuration
 
-De API key kan op twee manieren worden ingesteld:
+The API key can be set in two ways:
 
-1. **Via de app** — klik op het tandwiel-icoon en plak je key (opgeslagen in `config.json`)
-2. **Via environment** — maak een `.env` bestand aan met `MISTRAL_API_KEY=...`
+1. **Via the app** — click the gear icon and paste your key (saved in `config.json`)
+2. **Via environment** — create a `.env` file with `MISTRAL_API_KEY=...`
 
-### Instellingen (via tandwiel-icoon)
+### Settings (via gear icon)
 
-| Instelling | Omschrijving |
+| Setting | Description |
 |---|---|
-| Streaming delay | Vertraging voor nauwkeurigere transcriptie (240–2400ms) |
-| Automatisch corrigeren | Corrigeer tekst automatisch na elke opname |
-| Systeemprompt | Extra instructies voor de corrector (jargon, vaktermen) |
-| Microfoon | Selecteer de gewenste microfoon |
-| Sneltoets | Configureerbare opname-sneltoets (standaard: Ctrl+Space) |
+| Streaming delay | Delay for more accurate transcription (240–2400ms) |
+| Auto-correct | Automatically correct text after each recording |
+| System prompt | Extra instructions for the corrector (jargon, terminology) |
+| Microphone | Select the desired microphone |
+| Hotkey | Configurable recording hotkey (default: Ctrl+Space) |
 
 ## Obsidian Plugin
 
-Voxtral Transcribe is ook beschikbaar als **Obsidian plugin** — dicteer direct in je Obsidian notities.
+Voxtral Transcribe is also available as an **Obsidian plugin** — dictate directly into your Obsidian notes.
 
 ### Features
 
-- **Realtime streaming** op desktop (Windows, macOS, Linux)
-- **Batch modus met tap-to-send** op mobiel (Android, iOS) — verstuur audio chunks terwijl je blijft praten
-- **Stemcommando's** — nieuwe alinea, koppen, lijsten, to-do items, undo
-- **Automatische tekstcorrectie** — spelling, leestekens, capitalisatie via Mistral Small
-- **Inline correctie-instructies** — geef de corrector opdrachten midden in je dictaat
-- **Zijpaneel** met stemcommando-overzicht (desktop)
+- **Real-time streaming** on desktop (Windows, macOS, Linux)
+- **Batch mode with tap-to-send** on mobile (Android, iOS) — send audio chunks while you keep talking
+- **Voice commands** — new paragraph, headings, lists, to-do items, undo
+- **Automatic text correction** — spelling, punctuation, capitalization via Mistral Small
+- **Inline correction instructions** — give the corrector instructions mid-dictation
+- **Side panel** with voice command overview (desktop)
 
-### Installatie
+### Installation
 
-Zie [`obsidian-plugin/INSTALL.md`](obsidian-plugin/INSTALL.md) voor volledige installatie-instructies.
+See [`obsidian-plugin/INSTALL.md`](obsidian-plugin/INSTALL.md) for full installation instructions.
 
-Kort:
+Quick start:
 ```bash
 cd obsidian-plugin
 npm install && npm run build
 ```
-Kopieer `main.js`, `manifest.json` en `styles.css` naar `.obsidian/plugins/voxtral-transcribe/` in je vault.
+Copy `main.js`, `manifest.json` and `styles.css` to `.obsidian/plugins/voxtral-transcribe/` in your vault.
 
-### Mobiel
+### Mobile
 
-Op mobiel (Android/iOS) wordt automatisch batch modus gebruikt. Een **verzend-knop** verschijnt in de view header wanneer je een opname start, zodat je chunks kunt verzenden zonder te stoppen. Het stemcommando-zijpaneel opent niet automatisch op mobiel om het scherm niet te blokkeren.
+On mobile (Android/iOS) batch mode is used automatically. A **send button** appears in the view header when you start a recording, so you can send chunks without stopping. The voice command side panel does not open automatically on mobile to avoid blocking the screen.
 
-## Projectstructuur
+## Project Structure
 
 ```
 voxtral-transcribe/
 ├── server.py              # FastAPI backend
 ├── requirements.txt       # Python dependencies
-├── .env.example           # Voorbeeld environment
+├── .env.example           # Example environment
 ├── start.bat / start.sh   # Start scripts
 ├── build.bat              # Windows build
 ├── build-mac.sh           # macOS build
 ├── build-rpi.sh           # RPi/Linux build
 ├── static/
 │   ├── index.html         # Frontend UI
-│   ├── app.js             # Frontend logica
+│   ├── app.js             # Frontend logic
 │   ├── style.css          # Styling (dark mode)
 │   ├── sw.js              # Service worker
 │   ├── manifest.json      # PWA manifest
-│   └── icon-*.svg         # App iconen
+│   └── icon-*.svg         # App icons
 ├── obsidian-plugin/       # Obsidian plugin
-│   ├── src/               # TypeScript bronbestanden
-│   ├── main.js            # Gebouwde plugin
+│   ├── src/               # TypeScript source files
+│   ├── main.js            # Built plugin
 │   ├── manifest.json      # Obsidian plugin manifest
 │   ├── styles.css         # Plugin styling
-│   └── INSTALL.md         # Installatie-instructies
-├── TECHNICAL.md           # Technische documentatie
+│   └── INSTALL.md         # Installation instructions
+├── TECHNICAL.md           # Technical documentation
 └── STATUS.md              # Project status & roadmap
 ```
 
-## Licentie
+## License
 
-MIT
+[GPL-3.0](LICENSE) — Copyright (c) 2026 Max Kloosterman

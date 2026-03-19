@@ -4,15 +4,27 @@ on:
   push:
     tags:
       - 'v*'
+      - '[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and release (e.g. v0.3.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-python@v5
         with:
@@ -64,6 +76,9 @@ jobs:
       - name: Copy .env.example
         run: copy .env.example dist\VoxtralTranscribe\ 2>nul || echo "No .env.example"
 
+      - name: Copy README
+        run: copy README-windows.txt dist\VoxtralTranscribe\README.txt 2>nul || echo "No README"
+
       - name: Zip artifact
         run: Compress-Archive -Path dist\VoxtralTranscribe\* -DestinationPath VoxtralTranscribe-windows.zip
         shell: pwsh
@@ -77,6 +92,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-python@v5
         with:
@@ -113,6 +130,9 @@ jobs:
       - name: Copy .env.example
         run: cp .env.example "dist/Voxtral Transcribe/" 2>/dev/null || true
 
+      - name: Copy README
+        run: cp README-macos.txt "dist/Voxtral Transcribe/README.txt" 2>/dev/null || true
+
       - name: Zip artifact
         run: cd dist && zip -r ../VoxtralTranscribe-macos.zip "Voxtral Transcribe"
 
@@ -125,6 +145,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-python@v5
         with:
@@ -161,6 +183,9 @@ jobs:
       - name: Copy .env.example
         run: cp .env.example dist/voxtral-transcribe/ 2>/dev/null || true
 
+      - name: Copy README
+        run: cp README-linux.txt dist/voxtral-transcribe/README.txt 2>/dev/null || true
+
       - name: Tar artifact
         run: cd dist && tar -czf ../VoxtralTranscribe-linux-x64.tar.gz voxtral-transcribe
 
@@ -173,6 +198,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Build for Raspberry Pi (ARM64) via QEMU
         uses: uraimo/run-on-arch-action@v2
@@ -208,6 +235,7 @@ jobs:
               --collect-all mistralai \
               server.py
             cp .env.example dist/voxtral-transcribe/ 2>/dev/null || true
+            cp README-rpi.txt dist/voxtral-transcribe/README.txt 2>/dev/null || true
             cd dist && tar -czf ../VoxtralTranscribe-linux-arm64-rpi.tar.gz voxtral-transcribe
 
       - uses: actions/upload-artifact@v4
@@ -215,8 +243,25 @@ jobs:
           name: rpi-build
           path: VoxtralTranscribe-linux-arm64-rpi.tar.gz
 
+  build-obsidian-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Package Obsidian plugin
+        run: |
+          cd obsidian-plugin
+          zip ../VoxtralTranscribe-obsidian-plugin.zip main.js manifest.json styles.css
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: obsidian-plugin-build
+          path: VoxtralTranscribe-obsidian-plugin.zip
+
   release:
-    needs: [build-windows, build-macos, build-linux, build-rpi]
+    needs: [build-windows, build-macos, build-linux, build-rpi, build-obsidian-plugin]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -229,9 +274,11 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           generate_release_notes: true
           files: |
             artifacts/VoxtralTranscribe-windows.zip
             artifacts/VoxtralTranscribe-macos.zip
             artifacts/VoxtralTranscribe-linux-x64.tar.gz
             artifacts/VoxtralTranscribe-linux-arm64-rpi.tar.gz
+            artifacts/VoxtralTranscribe-obsidian-plugin.zip
