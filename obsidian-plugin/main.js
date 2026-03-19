@@ -1471,16 +1471,16 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Dual-delay mode").setDesc(
-      "Run two parallel streams: a fast one for immediate text and a slow one for higher accuracy and voice command detection. Overrides the streaming delay setting."
-    ).addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.dualDelay).onChange(async (value) => {
+    const dualDelaySetting = new import_obsidian2.Setting(containerEl).setName("Dual-delay mode").setDesc(
+      import_obsidian2.Platform.isMobile ? "Not available on mobile (requires realtime streaming)." : "Run two parallel streams: a fast one for immediate text and a slow one for higher accuracy and voice command detection. Overrides the streaming delay setting."
+    ).addToggle((toggle) => {
+      toggle.setValue(this.plugin.settings.dualDelay).setDisabled(import_obsidian2.Platform.isMobile).onChange(async (value) => {
         this.plugin.settings.dualDelay = value;
         await this.plugin.saveSettings();
         this.display();
-      })
-    );
-    if (!this.plugin.settings.dualDelay) {
+      });
+    });
+    if (!import_obsidian2.Platform.isMobile && !this.plugin.settings.dualDelay) {
       new import_obsidian2.Setting(containerEl).setName("Streaming delay").setDesc(
         "Delay in ms for realtime mode. Lower = faster but less accurate."
       ).addDropdown((drop) => {

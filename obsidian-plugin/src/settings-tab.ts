@@ -232,23 +232,26 @@ export class VoxtralSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		const dualDelaySetting = new Setting(containerEl)
 			.setName("Dual-delay mode")
 			.setDesc(
-				"Run two parallel streams: a fast one for immediate text and a slow one " +
-				"for higher accuracy and voice command detection. Overrides the streaming delay setting."
+				Platform.isMobile
+					? "Not available on mobile (requires realtime streaming)."
+					: "Run two parallel streams: a fast one for immediate text and a slow one " +
+					  "for higher accuracy and voice command detection. Overrides the streaming delay setting."
 			)
-			.addToggle((toggle) =>
+			.addToggle((toggle) => {
 				toggle
 					.setValue(this.plugin.settings.dualDelay)
+					.setDisabled(Platform.isMobile)
 					.onChange(async (value) => {
 						this.plugin.settings.dualDelay = value;
 						await this.plugin.saveSettings();
 						this.display(); // re-render to show/hide delay settings
-					})
-			);
+					});
+			});
 
-		if (!this.plugin.settings.dualDelay) {
+		if (!Platform.isMobile && !this.plugin.settings.dualDelay) {
 			new Setting(containerEl)
 				.setName("Streaming delay")
 				.setDesc(
