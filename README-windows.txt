@@ -1,101 +1,101 @@
 ╔══════════════════════════════════════════════════════════════╗
 ║              Voxtral Transcribe - Windows                    ║
-║              Spraak-naar-tekst met Mistral AI                ║
+║              Speech-to-text with Mistral AI                  ║
 ╚══════════════════════════════════════════════════════════════╝
 
-WAT IS VOXTRAL TRANSCRIBE?
-═══════════════════════════
-Voxtral Transcribe is een lokale spraak-naar-tekst applicatie die
-de Mistral Voxtral API gebruikt voor realtime audiotranscriptie.
+WHAT IS VOXTRAL TRANSCRIBE?
+════════════════════════════
+Voxtral Transcribe is a local speech-to-text application that
+uses the Mistral Voxtral API for real-time audio transcription.
 
-Kenmerken:
-  • Realtime streaming transcriptie
-  • Spraakcommando's voor documentstructuur (alinea's, kopjes, lijsten)
-  • Automatische tekstcorrectie via Mistral Small
-  • Offline wachtrij als de server niet bereikbaar is
-  • Automatisch kopiëren naar klembord na opname
-  • Donkere modus interface
-
-
-STARTEN
-═══════
-1. Dubbelklik op "Start Voxtral Transcribe.bat"
-   - De applicatie start op de achtergrond
-   - Je browser opent automatisch naar http://127.0.0.1:8000
-
-   Of start VoxtralTranscribe.exe direct (de browser opent dan
-   ook automatisch).
-
-2. Bij eerste gebruik verschijnt een instellingenscherm waar je
-   je Mistral API-sleutel moet invullen (zie hieronder).
+Features:
+  • Real-time streaming transcription
+  • Voice commands for document structure (paragraphs, headings, lists)
+  • Automatic text correction via Mistral Small
+  • Offline queue when the server is unreachable
+  • Auto-copy to clipboard after recording
+  • Dark mode interface
 
 
-MISTRAL API-SLEUTEL VERKRIJGEN
-══════════════════════════════
-Je hebt een API-sleutel van Mistral nodig om Voxtral Transcribe
-te gebruiken. Zo krijg je er een:
-
-1. Ga naar https://console.mistral.ai/
-2. Maak een account aan of log in
-3. Ga naar "API Keys" in het menu
-4. Klik op "Create new key"
-5. Kopieer de sleutel en plak deze in het instellingenscherm
-   van Voxtral Transcribe
-
-Let op: er zijn kosten verbonden aan het gebruik van de Mistral
-API. Bekijk de prijzen op https://mistral.ai/pricing/
-
-
-CONFIGURATIE
-════════════
-Je kunt de API-sleutel op twee manieren instellen:
-
-Via de app (aanbevolen):
-  Klik op het tandwiel-icoon in de app en vul je sleutel in.
-
-Via .env bestand:
-  Hernoem ".env.example" naar ".env" en vul je sleutel in:
-    MISTRAL_API_KEY=jouw_sleutel_hier
-
-
-GEBRUIK
-═══════
-1. Klik op "Opnemen" om een opname te starten
-2. Spreek in je microfoon - de tekst verschijnt realtime
-3. Gebruik spraakcommando's:
-   - "nieuwe alinea"     → nieuwe paragraaf
-   - "nieuw kopje [tekst]" → voegt een kop toe
-   - "nieuw lijstje"     → start een opsomming
-   - "nieuwe taak"       → voegt een to-do item toe
-4. Klik nogmaals op "Opnemen" om te stoppen
-5. De tekst wordt automatisch naar je klembord gekopieerd
-
-
-PROBLEMEN OPLOSSEN
-══════════════════
-• De app start niet?
-  → Zorg dat er geen andere applicatie op poort 8000 draait
-
-• Geen transcriptie?
-  → Controleer je API-sleutel in de instellingen
-  → Controleer of je microfoon correct is geselecteerd
-
-• Microfoon werkt niet?
-  → Geef je browser toestemming om de microfoon te gebruiken
-  → Selecteer de juiste microfoon in de instellingen
-
-• Windows Firewall melding?
-  → De app draait alleen lokaal (127.0.0.1), je kunt de
-    firewall-melding veilig weigeren
-
-
-STOPPEN
-═══════
-Klik met rechtermuisknop op het Voxtral Transcribe icoon in het
-systeemvak (system tray, rechtsonder) en kies "Quit".
-
-
-MEER INFORMATIE
+GETTING STARTED
 ═══════════════
+1. Double-click "Start Voxtral Transcribe.bat"
+   - The application starts in the background
+   - Your browser opens automatically to http://127.0.0.1:8000
+
+   Or start VoxtralTranscribe.exe directly (the browser will
+   also open automatically).
+
+2. On first use a settings screen appears where you need to
+   enter your Mistral API key (see below).
+
+
+OBTAINING A MISTRAL API KEY
+═══════════════════════════
+You need a Mistral API key to use Voxtral Transcribe.
+Here's how to get one:
+
+1. Go to https://console.mistral.ai/
+2. Create an account or log in
+3. Go to "API Keys" in the menu
+4. Click "Create new key"
+5. Copy the key and paste it into the Voxtral Transcribe
+   settings screen
+
+Note: there are costs associated with using the Mistral API.
+See pricing at https://mistral.ai/pricing/
+
+
+CONFIGURATION
+═════════════
+You can set the API key in two ways:
+
+Via the app (recommended):
+  Click the gear icon in the app and enter your key.
+
+Via .env file:
+  Rename ".env.example" to ".env" and enter your key:
+    MISTRAL_API_KEY=your_key_here
+
+
+USAGE
+═════
+1. Click "Record" to start a recording
+2. Speak into your microphone - text appears in real time
+3. Use voice commands:
+   - "new paragraph"      → new paragraph
+   - "heading one"        → adds a heading
+   - "new bullet"         → starts a bullet list
+   - "new to-do"          → adds a to-do item
+4. Click "Record" again to stop
+5. The text is automatically copied to your clipboard
+
+
+TROUBLESHOOTING
+═══════════════
+• The app won't start?
+  → Make sure no other application is using port 8000
+
+• No transcription?
+  → Check your API key in the settings
+  → Check that your microphone is correctly selected
+
+• Microphone not working?
+  → Give your browser permission to use the microphone
+  → Select the correct microphone in the settings
+
+• Windows Firewall prompt?
+  → The app runs locally only (127.0.0.1), you can safely
+    decline the firewall prompt
+
+
+STOPPING
+════════
+Right-click the Voxtral Transcribe icon in the system tray
+(bottom right) and choose "Quit".
+
+
+MORE INFORMATION
+════════════════
 Website: https://github.com/maxonamission/voxtral-transcribe
-Licentie: MIT
+License: GPL-3.0

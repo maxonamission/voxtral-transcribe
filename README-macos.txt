@@ -1,107 +1,107 @@
 ╔══════════════════════════════════════════════════════════════╗
 ║              Voxtral Transcribe - macOS                      ║
-║              Spraak-naar-tekst met Mistral AI                ║
+║              Speech-to-text with Mistral AI                  ║
 ╚══════════════════════════════════════════════════════════════╝
 
-WAT IS VOXTRAL TRANSCRIBE?
-═══════════════════════════
-Voxtral Transcribe is een lokale spraak-naar-tekst applicatie die
-de Mistral Voxtral API gebruikt voor realtime audiotranscriptie.
+WHAT IS VOXTRAL TRANSCRIBE?
+════════════════════════════
+Voxtral Transcribe is a local speech-to-text application that
+uses the Mistral Voxtral API for real-time audio transcription.
 
-Kenmerken:
-  • Realtime streaming transcriptie
-  • Spraakcommando's voor documentstructuur (alinea's, kopjes, lijsten)
-  • Automatische tekstcorrectie via Mistral Small
-  • Offline wachtrij als de server niet bereikbaar is
-  • Automatisch kopiëren naar klembord na opname
-  • Donkere modus interface
+Features:
+  • Real-time streaming transcription
+  • Voice commands for document structure (paragraphs, headings, lists)
+  • Automatic text correction via Mistral Small
+  • Offline queue when the server is unreachable
+  • Auto-copy to clipboard after recording
+  • Dark mode interface
 
 
-STARTEN
-═══════
-1. Open een Terminal en navigeer naar de uitgepakte map:
+GETTING STARTED
+═══════════════
+1. Open a Terminal and navigate to the extracted folder:
      cd ~/Downloads/Voxtral\ Transcribe
 
-2. Maak het bestand uitvoerbaar (eenmalig):
+2. Make the file executable (one time only):
      chmod +x "Voxtral Transcribe"
 
-3. Start de applicatie:
+3. Start the application:
      ./"Voxtral Transcribe"
 
-4. Je browser opent automatisch naar http://127.0.0.1:8000
+4. Your browser opens automatically to http://127.0.0.1:8000
 
-Opmerking: macOS kan een beveiligingswaarschuwing tonen omdat de
-app niet via de App Store is geïnstalleerd. Ga naar Systeem-
-instellingen → Privacy en beveiliging → en klik op "Toch openen".
-
-
-MISTRAL API-SLEUTEL VERKRIJGEN
-══════════════════════════════
-Je hebt een API-sleutel van Mistral nodig om Voxtral Transcribe
-te gebruiken. Zo krijg je er een:
-
-1. Ga naar https://console.mistral.ai/
-2. Maak een account aan of log in
-3. Ga naar "API Keys" in het menu
-4. Klik op "Create new key"
-5. Kopieer de sleutel en plak deze in het instellingenscherm
-   van Voxtral Transcribe
-
-Let op: er zijn kosten verbonden aan het gebruik van de Mistral
-API. Bekijk de prijzen op https://mistral.ai/pricing/
+Note: macOS may show a security warning because the app was
+not installed via the App Store. Go to System Settings →
+Privacy & Security → and click "Open Anyway".
 
 
-CONFIGURATIE
-════════════
-Je kunt de API-sleutel op twee manieren instellen:
+OBTAINING A MISTRAL API KEY
+═══════════════════════════
+You need a Mistral API key to use Voxtral Transcribe.
+Here's how to get one:
 
-Via de app (aanbevolen):
-  Klik op het tandwiel-icoon in de app en vul je sleutel in.
+1. Go to https://console.mistral.ai/
+2. Create an account or log in
+3. Go to "API Keys" in the menu
+4. Click "Create new key"
+5. Copy the key and paste it into the Voxtral Transcribe
+   settings screen
 
-Via .env bestand:
-  Hernoem ".env.example" naar ".env" en vul je sleutel in:
-    MISTRAL_API_KEY=jouw_sleutel_hier
-
-
-GEBRUIK
-═══════
-1. Klik op "Opnemen" om een opname te starten
-2. Spreek in je microfoon - de tekst verschijnt realtime
-3. Gebruik spraakcommando's:
-   - "nieuwe alinea"     → nieuwe paragraaf
-   - "nieuw kopje [tekst]" → voegt een kop toe
-   - "nieuw lijstje"     → start een opsomming
-   - "nieuwe taak"       → voegt een to-do item toe
-4. Klik nogmaals op "Opnemen" om te stoppen
-5. De tekst wordt automatisch naar je klembord gekopieerd
+Note: there are costs associated with using the Mistral API.
+See pricing at https://mistral.ai/pricing/
 
 
-PROBLEMEN OPLOSSEN
-══════════════════
-• De app start niet?
-  → Zorg dat er geen andere applicatie op poort 8000 draait
-  → Probeer: lsof -i :8000  om te zien wat poort 8000 gebruikt
+CONFIGURATION
+═════════════
+You can set the API key in two ways:
 
-• "App kan niet worden geopend" melding?
-  → Ga naar Systeeminstellingen → Privacy en beveiliging
-  → Klik op "Toch openen" naast de Voxtral Transcribe melding
+Via the app (recommended):
+  Click the gear icon in the app and enter your key.
 
-• Geen transcriptie?
-  → Controleer je API-sleutel in de instellingen
-  → Controleer of je microfoon correct is geselecteerd
-
-• Microfoon werkt niet?
-  → Geef je browser toestemming om de microfoon te gebruiken
-  → Ga naar Systeeminstellingen → Privacy en beveiliging →
-    Microfoon en zorg dat je browser toegang heeft
+Via .env file:
+  Rename ".env.example" to ".env" and enter your key:
+    MISTRAL_API_KEY=your_key_here
 
 
-STOPPEN
-═══════
-Sluit het terminalvenster of druk op Ctrl+C in de terminal.
+USAGE
+═════
+1. Click "Record" to start a recording
+2. Speak into your microphone - text appears in real time
+3. Use voice commands:
+   - "new paragraph"      → new paragraph
+   - "heading one"        → adds a heading
+   - "new bullet"         → starts a bullet list
+   - "new to-do"          → adds a to-do item
+4. Click "Record" again to stop
+5. The text is automatically copied to your clipboard
 
 
-MEER INFORMATIE
+TROUBLESHOOTING
 ═══════════════
+• The app won't start?
+  → Make sure no other application is using port 8000
+  → Check with: lsof -i :8000
+
+• "App can't be opened" message?
+  → Go to System Settings → Privacy & Security
+  → Click "Open Anyway" next to the Voxtral Transcribe message
+
+• No transcription?
+  → Check your API key in the settings
+  → Check that your microphone is correctly selected
+
+• Microphone not working?
+  → Give your browser permission to use the microphone
+  → Go to System Settings → Privacy & Security → Microphone
+    and make sure your browser has access
+
+
+STOPPING
+════════
+Close the terminal window or press Ctrl+C in the terminal.
+
+
+MORE INFORMATION
+════════════════
 Website: https://github.com/maxonamission/voxtral-transcribe
-Licentie: MIT
+License: GPL-3.0
