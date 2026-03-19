@@ -110,6 +110,8 @@ export default class VoxtralPlugin extends Plugin {
 	private dualDisplayLen = 0;   // length of text currently shown in editor
 	private dualSlowCommitted = 0; // bytes trimmed from dualSlowText by processDualSlowCommands
 	private dualSlowTurnDelta = 0; // bytes received via deltas in current slow turn
+	private dualFastPrevRaw = ""; // raw cumulative text from fast API (for delta detection)
+	private dualSlowPrevRaw = ""; // raw cumulative text from slow API (for delta detection)
 
 	/** Whether realtime mode is available on this platform */
 	get canRealtime(): boolean {
@@ -936,6 +938,8 @@ export default class VoxtralPlugin extends Plugin {
 		this.dualDisplayLen = 0;
 		this.dualSlowCommitted = 0;
 		this.dualSlowTurnDelta = 0;
+		this.dualFastPrevRaw = "";
+		this.dualSlowPrevRaw = "";
 
 		await this.connectDualDelayWebSockets(editor);
 
@@ -960,7 +964,15 @@ export default class VoxtralPlugin extends Plugin {
 				vlog.debug("Voxtral: Fast stream session created");
 			},
 			onDelta: (text) => {
-				this.dualFastText += text;
+				// Handle both cumulative and incremental deltas from the API
+				const isCumulative = this.dualFastPrevRaw && text.startsWith(this.dualFastPrevRaw);
+				if (isCumulative) {
+					const newPart = text.substring(this.dualFastPrevRaw.length);
+					if (newPart) this.dualFastText += newPart;
+				} else {
+					this.dualFastText += text;
+				}
+				this.dualFastPrevRaw = isCumulative ? text : this.dualFastPrevRaw + text;
 				this.renderDualText(editor);
 			},
 			onDone: (_text) => {
@@ -981,17 +993,25 @@ export default class VoxtralPlugin extends Plugin {
 				vlog.debug("Voxtral: Slow stream session created");
 			},
 			onDelta: (text) => {
-				this.dualSlowText += text;
-				this.dualSlowTurnDelta += text.length;
+				// Handle both cumulative and incremental deltas from the API
+				const isCumulative = this.dualSlowPrevRaw && text.startsWith(this.dualSlowPrevRaw);
+				if (isCumulative) {
+					const newPart = text.substring(this.dualSlowPrevRaw.length);
+					if (newPart) {
+						this.dualSlowText += newPart;
+						this.dualSlowTurnDelta += newPart.length;
+					}
+				} else {
+					this.dualSlowText += text;
+					this.dualSlowTurnDelta += text.length;
+				}
+				this.dualSlowPrevRaw = isCumulative ? text : this.dualSlowPrevRaw + text;
 				this.renderDualText(editor);
 				this.processDualSlowCommands(editor);
 			},
-			onDone: (text) => {
-				// Only append truly new text beyond what we've received
-				// via deltas in THIS turn (not counting old remainder).
-				if (text && text.length > this.dualSlowTurnDelta) {
-					this.dualSlowText += text.substring(this.dualSlowTurnDelta);
-				}
+			onDone: (_text) => {
+				// Stream done — process any remaining text, don't replace
+				// accumulators (which would re-inject already-committed text)
 				this.renderDualText(editor);
 				this.processDualSlowCommands(editor);
 			},
@@ -1055,19 +1075,28 @@ export default class VoxtralPlugin extends Plugin {
 				this.dualSlowText = "";
 				this.dualFastText = "";
 				this.dualSlowTurnDelta = 0;
+				this.dualSlowPrevRaw = "";
+				this.dualFastPrevRaw = "";
 				const slowDelay = this.settings.dualDelaySlowMs;
 				this.dualSlowTranscriber = new RealtimeTranscriber(this.settings, {
 					onSessionCreated: () => vlog.debug("Voxtral: Slow stream reconnected"),
 					onDelta: (text) => {
-						this.dualSlowText += text;
-						this.dualSlowTurnDelta += text.length;
+						const isCumulative = this.dualSlowPrevRaw && text.startsWith(this.dualSlowPrevRaw);
+						if (isCumulative) {
+							const newPart = text.substring(this.dualSlowPrevRaw.length);
+							if (newPart) {
+								this.dualSlowText += newPart;
+								this.dualSlowTurnDelta += newPart.length;
+							}
+						} else {
+							this.dualSlowText += text;
+							this.dualSlowTurnDelta += text.length;
+						}
+						this.dualSlowPrevRaw = isCumulative ? text : this.dualSlowPrevRaw + text;
 						this.renderDualText(editor);
 						this.processDualSlowCommands(editor);
 					},
-					onDone: (text) => {
-						if (text && text.length > this.dualSlowTurnDelta) {
-							this.dualSlowText += text.substring(this.dualSlowTurnDelta);
-						}
+					onDone: (_text) => {
 						this.renderDualText(editor);
 						this.processDualSlowCommands(editor);
 					},

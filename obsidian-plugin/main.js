@@ -2984,8 +2984,12 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     this.dualSlowCommitted = 0;
     // bytes trimmed from dualSlowText by processDualSlowCommands
     this.dualSlowTurnDelta = 0;
+    // bytes received via deltas in current slow turn
+    this.dualFastPrevRaw = "";
+    // raw cumulative text from fast API (for delta detection)
+    this.dualSlowPrevRaw = "";
   }
-  // bytes received via deltas in current slow turn
+  // raw cumulative text from slow API (for delta detection)
   /** Whether realtime mode is available on this platform */
   get canRealtime() {
     return !import_obsidian5.Platform.isMobile;
@@ -3632,6 +3636,8 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     this.dualDisplayLen = 0;
     this.dualSlowCommitted = 0;
     this.dualSlowTurnDelta = 0;
+    this.dualFastPrevRaw = "";
+    this.dualSlowPrevRaw = "";
     await this.connectDualDelayWebSockets(editor);
     const deviceId = this.settings.microphoneDeviceId || void 0;
     await this.recorder.start(deviceId, (pcmData) => {
@@ -3651,7 +3657,14 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
         vlog.debug("Voxtral: Fast stream session created");
       },
       onDelta: (text) => {
-        this.dualFastText += text;
+        const isCumulative = this.dualFastPrevRaw && text.startsWith(this.dualFastPrevRaw);
+        if (isCumulative) {
+          const newPart = text.substring(this.dualFastPrevRaw.length);
+          if (newPart) this.dualFastText += newPart;
+        } else {
+          this.dualFastText += text;
+        }
+        this.dualFastPrevRaw = isCumulative ? text : this.dualFastPrevRaw + text;
         this.renderDualText(editor);
       },
       onDone: (_text) => {
@@ -3669,15 +3682,22 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
         vlog.debug("Voxtral: Slow stream session created");
       },
       onDelta: (text) => {
-        this.dualSlowText += text;
-        this.dualSlowTurnDelta += text.length;
+        const isCumulative = this.dualSlowPrevRaw && text.startsWith(this.dualSlowPrevRaw);
+        if (isCumulative) {
+          const newPart = text.substring(this.dualSlowPrevRaw.length);
+          if (newPart) {
+            this.dualSlowText += newPart;
+            this.dualSlowTurnDelta += newPart.length;
+          }
+        } else {
+          this.dualSlowText += text;
+          this.dualSlowTurnDelta += text.length;
+        }
+        this.dualSlowPrevRaw = isCumulative ? text : this.dualSlowPrevRaw + text;
         this.renderDualText(editor);
         this.processDualSlowCommands(editor);
       },
-      onDone: (text) => {
-        if (text && text.length > this.dualSlowTurnDelta) {
-          this.dualSlowText += text.substring(this.dualSlowTurnDelta);
-        }
+      onDone: (_text) => {
         this.renderDualText(editor);
         this.processDualSlowCommands(editor);
       },
@@ -3730,19 +3750,28 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
         this.dualSlowText = "";
         this.dualFastText = "";
         this.dualSlowTurnDelta = 0;
+        this.dualSlowPrevRaw = "";
+        this.dualFastPrevRaw = "";
         const slowDelay = this.settings.dualDelaySlowMs;
         this.dualSlowTranscriber = new RealtimeTranscriber(this.settings, {
           onSessionCreated: () => vlog.debug("Voxtral: Slow stream reconnected"),
           onDelta: (text) => {
-            this.dualSlowText += text;
-            this.dualSlowTurnDelta += text.length;
+            const isCumulative = this.dualSlowPrevRaw && text.startsWith(this.dualSlowPrevRaw);
+            if (isCumulative) {
+              const newPart = text.substring(this.dualSlowPrevRaw.length);
+              if (newPart) {
+                this.dualSlowText += newPart;
+                this.dualSlowTurnDelta += newPart.length;
+              }
+            } else {
+              this.dualSlowText += text;
+              this.dualSlowTurnDelta += text.length;
+            }
+            this.dualSlowPrevRaw = isCumulative ? text : this.dualSlowPrevRaw + text;
             this.renderDualText(editor);
             this.processDualSlowCommands(editor);
           },
-          onDone: (text) => {
-            if (text && text.length > this.dualSlowTurnDelta) {
-              this.dualSlowText += text.substring(this.dualSlowTurnDelta);
-            }
+          onDone: (_text) => {
             this.renderDualText(editor);
             this.processDualSlowCommands(editor);
           },
