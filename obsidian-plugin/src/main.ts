@@ -88,6 +88,8 @@ export default class VoxtralPlugin extends Plugin {
 	private sendRibbonEl: HTMLElement | null = null;
 	private mobileActionEl: HTMLElement | null = null;
 	private pendingText = "";
+	private realtimeTurnDelta = 0; // bytes received via deltas in current realtime turn
+	private realtimeTurnProcessed = 0; // bytes already flushed from pendingText in current turn
 	private chunkIndex = 0;
 	private consecutiveFailures = 0;
 	private maxConsecutiveFailures = 5;
@@ -107,6 +109,7 @@ export default class VoxtralPlugin extends Plugin {
 	private dualInsertOffset = 0; // editor offset where dual-delay text starts
 	private dualDisplayLen = 0;   // length of text currently shown in editor
 	private dualSlowCommitted = 0; // bytes trimmed from dualSlowText by processDualSlowCommands
+	private dualSlowTurnDelta = 0; // bytes received via deltas in current slow turn
 
 	/** Whether realtime mode is available on this platform */
 	get canRealtime(): boolean {
@@ -720,6 +723,8 @@ export default class VoxtralPlugin extends Plugin {
 		}
 
 		this.pendingText = "";
+		this.realtimeTurnDelta = 0;
+		this.realtimeTurnProcessed = 0;
 		this.dictatedRanges = [];
 
 		await this.connectRealtimeWebSocket(editor);
@@ -780,6 +785,10 @@ export default class VoxtralPlugin extends Plugin {
 		// Silent, immediate reconnect — this is expected API behavior
 		vlog.debug("Voxtral: Session ended, reconnecting silently...");
 
+		// Reset turn counters for the new connection
+		this.realtimeTurnDelta = 0;
+		this.realtimeTurnProcessed = 0;
+
 		try {
 			await this.connectRealtimeWebSocket(editor);
 			this.consecutiveFailures = 0;
@@ -817,10 +826,12 @@ export default class VoxtralPlugin extends Plugin {
 		// While a slot is active, buffer incoming transcription
 		if (isSlotActive()) {
 			this.slotBuffer += text;
+			this.realtimeTurnDelta += text.length;
 			return;
 		}
 
 		this.pendingText += text;
+		this.realtimeTurnDelta += text.length;
 
 		// Flush on sentence-ending punctuation OR after accumulating enough text
 		const sentenceEnd = /[.!?]\s*$/;
@@ -828,6 +839,7 @@ export default class VoxtralPlugin extends Plugin {
 
 		if (sentenceEnd.test(this.pendingText) || longEnough) {
 			const sentence = this.pendingText.trim();
+			this.realtimeTurnProcessed += this.pendingText.length;
 			this.pendingText = "";
 
 			const normalized = normalizeCommand(sentence);
@@ -852,16 +864,27 @@ export default class VoxtralPlugin extends Plugin {
 		}
 	}
 
-	private handleRealtimeDone(editor: Editor, _text: string): void {
+	private handleRealtimeDone(editor: Editor, doneText: string): void {
 		// While a slot is active, buffer incoming transcription
 		if (isSlotActive()) {
 			return;
+		}
+
+		// The done event contains the COMPLETE transcription for this turn.
+		// If the API sent final word(s) only in the done event (not as deltas),
+		// append the missing portion to pendingText before flushing.
+		if (doneText && doneText.length > this.realtimeTurnDelta) {
+			this.pendingText += doneText.substring(this.realtimeTurnDelta);
 		}
 
 		if (this.pendingText.trim()) {
 			this.trackProcessText(editor, this.pendingText.trim() + " ");
 			this.pendingText = "";
 		}
+
+		// Reset turn counters for next utterance
+		this.realtimeTurnDelta = 0;
+		this.realtimeTurnProcessed = 0;
 	}
 
 	/** Flush buffered transcription text after a slot closes */
@@ -912,6 +935,7 @@ export default class VoxtralPlugin extends Plugin {
 		this.dualInsertOffset = editor.posToOffset(editor.getCursor());
 		this.dualDisplayLen = 0;
 		this.dualSlowCommitted = 0;
+		this.dualSlowTurnDelta = 0;
 
 		await this.connectDualDelayWebSockets(editor);
 
@@ -958,15 +982,15 @@ export default class VoxtralPlugin extends Plugin {
 			},
 			onDelta: (text) => {
 				this.dualSlowText += text;
+				this.dualSlowTurnDelta += text.length;
 				this.renderDualText(editor);
 				this.processDualSlowCommands(editor);
 			},
 			onDone: (text) => {
 				// Only append truly new text beyond what we've received
-				// via deltas AND already committed via processDualSlowCommands.
-				const totalSeen = this.dualSlowCommitted + this.dualSlowText.length;
-				if (text && text.length > totalSeen) {
-					this.dualSlowText += text.substring(totalSeen);
+				// via deltas in THIS turn (not counting old remainder).
+				if (text && text.length > this.dualSlowTurnDelta) {
+					this.dualSlowText += text.substring(this.dualSlowTurnDelta);
 				}
 				this.renderDualText(editor);
 				this.processDualSlowCommands(editor);
@@ -1015,20 +1039,34 @@ export default class VoxtralPlugin extends Plugin {
 				await this.realtimeTranscriber.connect();
 			} else if (stream === "slow" && this.dualSlowTranscriber) {
 				// Reconnect slow stream only
-				// Reset committed counter — new turn starts fresh
+				// Flush any remaining text from the previous turn as committed text
+				// (the utterance ended, so no more text will complete the sentence)
+				if (this.dualSlowText.trim()) {
+					const from = editor.offsetToPos(this.dualInsertOffset);
+					const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
+					editor.replaceRange("", from, to);
+					editor.setCursor(from);
+					this.dualDisplayLen = 0;
+					this.trackInsertAtCursor(editor, this.dualSlowText);
+					this.dualInsertOffset = editor.posToOffset(editor.getCursor());
+				}
+				// Reset counters for new turn
 				this.dualSlowCommitted = 0;
+				this.dualSlowText = "";
+				this.dualFastText = "";
+				this.dualSlowTurnDelta = 0;
 				const slowDelay = this.settings.dualDelaySlowMs;
 				this.dualSlowTranscriber = new RealtimeTranscriber(this.settings, {
 					onSessionCreated: () => vlog.debug("Voxtral: Slow stream reconnected"),
 					onDelta: (text) => {
 						this.dualSlowText += text;
+						this.dualSlowTurnDelta += text.length;
 						this.renderDualText(editor);
 						this.processDualSlowCommands(editor);
 					},
 					onDone: (text) => {
-						const totalSeen = this.dualSlowCommitted + this.dualSlowText.length;
-						if (text && text.length > totalSeen) {
-							this.dualSlowText += text.substring(totalSeen);
+						if (text && text.length > this.dualSlowTurnDelta) {
+							this.dualSlowText += text.substring(this.dualSlowTurnDelta);
 						}
 						this.renderDualText(editor);
 						this.processDualSlowCommands(editor);
@@ -1263,6 +1301,7 @@ export default class VoxtralPlugin extends Plugin {
 		this.dualSlowText = "";
 		this.dualDisplayLen = 0;
 		this.dualSlowCommitted = 0;
+		this.dualSlowTurnDelta = 0;
 
 		if (this.settings.autoCorrect && view) {
 			await this.autoCorrectAfterStop(view.editor);

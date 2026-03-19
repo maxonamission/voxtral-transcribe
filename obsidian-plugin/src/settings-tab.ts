@@ -105,11 +105,11 @@ export class VoxtralSettingTab extends PluginSettingTab {
 				isBatch
 					? "In batch mode, pressing Enter sends the current audio chunk when the mic is live. " +
 					  "While typing, Enter inserts a normal newline."
-					: "Only available in batch mode."
+					: "Only available in batch mode. Switch to batch mode to change this setting."
 			)
 			.addToggle((toggle) =>
 				toggle
-					.setValue(this.plugin.settings.enterToSend)
+					.setValue(isBatch ? this.plugin.settings.enterToSend : false)
 					.setDisabled(!isBatch)
 					.onChange(async (value) => {
 						this.plugin.settings.enterToSend = value;
