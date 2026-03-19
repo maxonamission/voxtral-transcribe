@@ -86,6 +86,13 @@ export function cancelSlot(): void {
 	activeSlot = null;
 }
 
+/**
+ * Programmatically open a slot (for quick-templates like code blocks).
+ */
+export function openSlot(commandId: string, def: SlotDef): void {
+	activeSlot = { def, commandId: commandId as CommandId };
+}
+
 // Normalize text for command matching: remove diacritics, hyphens, punctuation
 export function normalizeCommand(text: string): string {
 	return text
@@ -552,7 +559,6 @@ export function matchCommand(rawText: string): CommandMatch | null {
 				for (const pattern of patterns) {
 					const normPattern = normalizeCommand(pattern);
 					if (resplit.endsWith(normPattern)) {
-						const patternWordCount = pattern.split(/\s+/).length;
 						const rawWords = rawText.trimEnd().split(/\s+/);
 						// The compound word was one raw word
 						const textBefore = rawWords
@@ -585,6 +591,19 @@ export function matchCommand(rawText: string): CommandMatch | null {
 }
 
 /**
+ * Optional pre-match hook. If set, called before normal command matching.
+ * Returns true if the text was handled (template inserted), false otherwise.
+ * Used by main.ts to integrate template matching (which needs App access).
+ */
+type PreMatchHook = (editor: Editor, normalizedText: string, rawText: string) => boolean;
+let preMatchHook: PreMatchHook | null = null;
+
+/** Register a pre-match hook (called before built-in command matching) */
+export function setPreMatchHook(hook: PreMatchHook | null): void {
+	preMatchHook = hook;
+}
+
+/**
  * Process transcribed text: split into sentences, check each for voice
  * commands, and execute them or insert the text as-is.
  */
@@ -608,6 +627,12 @@ export function processText(editor: Editor, text: string): void {
 }
 
 function processSegment(editor: Editor, text: string): void {
+	// Try pre-match hook (templates) first
+	if (preMatchHook) {
+		const normalized = fixMishearings(normalizeCommand(text));
+		if (preMatchHook(editor, normalized, text)) return;
+	}
+
 	const match = matchCommand(text);
 	if (match) {
 		if (match.textBefore) {

@@ -88,3 +88,51 @@
 .voxtral-textarea-full {
 	width: 100%;
 }
+
+/* ── Custom command editor modal ── */
+
+.voxtral-cmd-modal-bg {
+	opacity: 0.85;
+}
+
+.voxtral-cmd-modal {
+	max-width: 500px;
+	padding: 20px;
+}
+
+.voxtral-cmd-modal h3 {
+	margin-top: 0;
+}
+
+.voxtral-cmd-field-label {
+	display: block;
+	margin-bottom: 4px;
+	font-weight: var(--font-semibold);
+}
+
+.voxtral-cmd-field-desc {
+	display: block;
+	margin-bottom: 4px;
+	color: var(--text-muted);
+}
+
+.voxtral-cmd-input {
+	width: 100%;
+	margin-bottom: 12px;
+}
+
+.voxtral-cmd-select {
+	width: 100%;
+	margin-bottom: 12px;
+}
+
+.voxtral-cmd-btn-row {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+.voxtral-cmd-error {
+	border-color: var(--text-error);
+}

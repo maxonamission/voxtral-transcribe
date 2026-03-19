@@ -45,9 +45,9 @@ const PHONETIC_RULES: Partial<Record<LangCode, [RegExp, string][]>> = {
 		[/wr/g, "r"],        // write → rite
 		[/tion/g, "shun"],   // action → akshun
 		[/sion/g, "shun"],   // mission → mishun
-		[/(?<=[aeiou])ll/g, "l"], // bullet → bulet
-		[/(?<=[aeiou])dd/g, "d"], // heading → heding
-		[/(?<=[aeiou])tt/g, "t"], // getting → geting
+		[/([aeiou])ll/g, "$1l"], // bullet → bulet
+		[/([aeiou])dd/g, "$1d"], // heading → heding
+		[/([aeiou])tt/g, "$1t"], // getting → geting
 	],
 	fr: [
 		[/eau/g, "o"],       // nouveau → nouvo
