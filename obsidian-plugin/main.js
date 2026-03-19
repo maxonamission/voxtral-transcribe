@@ -1513,10 +1513,11 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         })
       );
     }
+    const isBatch = this.plugin.settings.mode === "batch" || import_obsidian2.Platform.isMobile;
     new import_obsidian2.Setting(containerEl).setName("Enter = tap-to-send").setDesc(
-      "In batch mode, pressing Enter sends the current audio chunk when the mic is live. While typing, Enter inserts a normal newline."
+      isBatch ? "In batch mode, pressing Enter sends the current audio chunk when the mic is live. While typing, Enter inserts a normal newline." : "Only available in batch mode."
     ).addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.enterToSend).onChange(async (value) => {
+      (toggle) => toggle.setValue(this.plugin.settings.enterToSend).setDisabled(!isBatch).onChange(async (value) => {
         this.plugin.settings.enterToSend = value;
         await this.plugin.saveSettings();
       })
@@ -2521,6 +2522,8 @@ function matchCommand(rawText) {
     const patterns = getPatternsForAnyCommand(cmd.id, activeLang);
     for (const pattern of patterns) {
       const normPattern = normalizeCommand(pattern);
+      if (normalized.length < 6 || normPattern.length < 6) continue;
+      if (Math.abs(normalized.length - normPattern.length) > 3) continue;
       const dist = levenshtein(normalized, normPattern);
       if (dist > 0 && dist < bestDist) {
         bestDist = dist;
@@ -2971,8 +2974,10 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     this.dualInsertOffset = 0;
     // editor offset where dual-delay text starts
     this.dualDisplayLen = 0;
+    // length of text currently shown in editor
+    this.dualSlowCommitted = 0;
   }
-  // length of text currently shown in editor
+  // bytes trimmed from dualSlowText by processDualSlowCommands
   /** Whether realtime mode is available on this platform */
   get canRealtime() {
     return !import_obsidian5.Platform.isMobile;
@@ -3605,6 +3610,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     this.dualSlowText = "";
     this.dualInsertOffset = editor.posToOffset(editor.getCursor());
     this.dualDisplayLen = 0;
+    this.dualSlowCommitted = 0;
     await this.connectDualDelayWebSockets(editor);
     const deviceId = this.settings.microphoneDeviceId || void 0;
     await this.recorder.start(deviceId, (pcmData) => {
@@ -3647,8 +3653,9 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
         this.processDualSlowCommands(editor);
       },
       onDone: (text) => {
-        if (text && text.length > this.dualSlowText.length) {
-          this.dualSlowText = text;
+        const totalSeen = this.dualSlowCommitted + this.dualSlowText.length;
+        if (text && text.length > totalSeen) {
+          this.dualSlowText += text.substring(totalSeen);
         }
         this.renderDualText(editor);
         this.processDualSlowCommands(editor);
@@ -3689,6 +3696,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
         }, fastDelay);
         await this.realtimeTranscriber.connect();
       } else if (stream === "slow" && this.dualSlowTranscriber) {
+        this.dualSlowCommitted = 0;
         const slowDelay = this.settings.dualDelaySlowMs;
         this.dualSlowTranscriber = new RealtimeTranscriber(this.settings, {
           onSessionCreated: () => vlog.debug("Voxtral: Slow stream reconnected"),
@@ -3698,8 +3706,9 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
             this.processDualSlowCommands(editor);
           },
           onDone: (text) => {
-            if (text && text.length > this.dualSlowText.length) {
-              this.dualSlowText = text;
+            const totalSeen = this.dualSlowCommitted + this.dualSlowText.length;
+            if (text && text.length > totalSeen) {
+              this.dualSlowText += text.substring(totalSeen);
             }
             this.renderDualText(editor);
             this.processDualSlowCommands(editor);
@@ -3771,6 +3780,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
         if (isSlotActive()) {
           this.updateStatusBar("slot");
         }
+        this.dualSlowCommitted = 0;
         this.dualSlowText = "";
         this.dualFastText = "";
         this.dualInsertOffset = editor.posToOffset(editor.getCursor());
@@ -3808,6 +3818,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
         this.trackInsertAtCursor(editor, segment);
       }
     }
+    this.dualSlowCommitted += matchedLength;
     this.dualSlowText = remainder;
     if (this.dualFastText.length >= matchedLength) {
       this.dualFastText = this.dualFastText.substring(matchedLength);
@@ -3885,6 +3896,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     this.dualFastText = "";
     this.dualSlowText = "";
     this.dualDisplayLen = 0;
+    this.dualSlowCommitted = 0;
     if (this.settings.autoCorrect && view) {
       await this.autoCorrectAfterStop(view.editor);
     }
