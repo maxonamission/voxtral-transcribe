@@ -1115,7 +1115,7 @@ export default class VoxtralPlugin extends Plugin {
 					this.updateStatusBar("slot");
 				}
 
-				this.dualSlowCommitted = 0;
+				this.dualSlowCommitted += this.dualSlowText.length;
 				this.dualSlowText = "";
 				this.dualFastText = "";
 				this.dualInsertOffset = editor.posToOffset(editor.getCursor());
@@ -1167,11 +1167,10 @@ export default class VoxtralPlugin extends Plugin {
 		// Trim accumulators: remove processed portion, keep remainder
 		this.dualSlowCommitted += matchedLength;
 		this.dualSlowText = remainder;
-		if (this.dualFastText.length >= matchedLength) {
-			this.dualFastText = this.dualFastText.substring(matchedLength);
-		} else {
-			this.dualFastText = "";
-		}
+		// Reset fast text — the two streams produce different text so we
+		// cannot byte-align them.  The fast stream will continue sending
+		// deltas for upcoming audio to rebuild the preview.
+		this.dualFastText = "";
 
 		// Update insert offset and display length for remaining text
 		this.dualInsertOffset = editor.posToOffset(editor.getCursor());

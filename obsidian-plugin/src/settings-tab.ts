@@ -92,6 +92,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 							| "realtime"
 							| "batch";
 						await this.plugin.saveSettings();
+						this.display(); // re-render to update mode-dependent settings
 					})
 			);
 		}
@@ -236,18 +237,22 @@ export class VoxtralSettingTab extends PluginSettingTab {
 					})
 			);
 
+		const isRealtime = !isBatch && !Platform.isMobile;
+
 		new Setting(containerEl)
 			.setName("Dual-delay mode")
 			.setDesc(
 				Platform.isMobile
 					? "Not available on mobile (requires realtime streaming)."
+					: !isRealtime
+					? "Only available in realtime mode."
 					: "Run two parallel streams: a fast one for immediate text and a slow one " +
 					  "for higher accuracy and voice command detection. Overrides the streaming delay setting."
 			)
 			.addToggle((toggle) => {
 				toggle
 					.setValue(this.plugin.settings.dualDelay)
-					.setDisabled(Platform.isMobile)
+					.setDisabled(!isRealtime)
 					.onChange(async (value) => {
 						this.plugin.settings.dualDelay = value;
 						await this.plugin.saveSettings();
@@ -255,7 +260,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 					});
 			});
 
-		if (!Platform.isMobile && !this.plugin.settings.dualDelay) {
+		if (isRealtime && !this.plugin.settings.dualDelay) {
 			new Setting(containerEl)
 				.setName("Streaming delay")
 				.setDesc(
