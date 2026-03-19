@@ -574,12 +574,16 @@ export function matchCommand(rawText: string): CommandMatch | null {
 
 	// Pass 5: fuzzy match for standalone sentences only (Levenshtein ≤ 2)
 	// This catches conjugation errors like "beeindigde opname" ≈ "beeindig de opname"
+	// Guard: require both text and pattern to be at least 6 chars, and similar
+	// in length, to avoid false positives on short words (e.g. "dit" ≈ "vet").
 	let bestMatch: CommandMatch | null = null;
 	let bestDist = 3; // threshold: must be strictly less than this
 	for (const cmd of allCmds) {
 		const patterns = getPatternsForAnyCommand(cmd.id, activeLang);
 		for (const pattern of patterns) {
 			const normPattern = normalizeCommand(pattern);
+			if (normalized.length < 6 || normPattern.length < 6) continue;
+			if (Math.abs(normalized.length - normPattern.length) > 3) continue;
 			const dist = levenshtein(normalized, normPattern);
 			if (dist > 0 && dist < bestDist) {
 				bestDist = dist;

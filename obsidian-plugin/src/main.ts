@@ -106,6 +106,7 @@ export default class VoxtralPlugin extends Plugin {
 	private dualSlowText = "";
 	private dualInsertOffset = 0; // editor offset where dual-delay text starts
 	private dualDisplayLen = 0;   // length of text currently shown in editor
+	private dualSlowCommitted = 0; // bytes trimmed from dualSlowText by processDualSlowCommands
 
 	/** Whether realtime mode is available on this platform */
 	get canRealtime(): boolean {
@@ -910,6 +911,7 @@ export default class VoxtralPlugin extends Plugin {
 		this.dualSlowText = "";
 		this.dualInsertOffset = editor.posToOffset(editor.getCursor());
 		this.dualDisplayLen = 0;
+		this.dualSlowCommitted = 0;
 
 		await this.connectDualDelayWebSockets(editor);
 
@@ -960,13 +962,11 @@ export default class VoxtralPlugin extends Plugin {
 				this.processDualSlowCommands(editor);
 			},
 			onDone: (text) => {
-				// Only use the final text if it extends beyond what we've
-				// already processed.  processDualSlowCommands() trims
-				// dualSlowText as sentences are flushed; overwriting it
-				// with the full API response would re-introduce already-
-				// committed text and cause duplicates.
-				if (text && text.length > this.dualSlowText.length) {
-					this.dualSlowText = text;
+				// Only append truly new text beyond what we've received
+				// via deltas AND already committed via processDualSlowCommands.
+				const totalSeen = this.dualSlowCommitted + this.dualSlowText.length;
+				if (text && text.length > totalSeen) {
+					this.dualSlowText += text.substring(totalSeen);
 				}
 				this.renderDualText(editor);
 				this.processDualSlowCommands(editor);
@@ -1015,6 +1015,8 @@ export default class VoxtralPlugin extends Plugin {
 				await this.realtimeTranscriber.connect();
 			} else if (stream === "slow" && this.dualSlowTranscriber) {
 				// Reconnect slow stream only
+				// Reset committed counter — new turn starts fresh
+				this.dualSlowCommitted = 0;
 				const slowDelay = this.settings.dualDelaySlowMs;
 				this.dualSlowTranscriber = new RealtimeTranscriber(this.settings, {
 					onSessionCreated: () => vlog.debug("Voxtral: Slow stream reconnected"),
@@ -1024,8 +1026,9 @@ export default class VoxtralPlugin extends Plugin {
 						this.processDualSlowCommands(editor);
 					},
 					onDone: (text) => {
-						if (text && text.length > this.dualSlowText.length) {
-							this.dualSlowText = text;
+						const totalSeen = this.dualSlowCommitted + this.dualSlowText.length;
+						if (text && text.length > totalSeen) {
+							this.dualSlowText += text.substring(totalSeen);
 						}
 						this.renderDualText(editor);
 						this.processDualSlowCommands(editor);
@@ -1112,6 +1115,7 @@ export default class VoxtralPlugin extends Plugin {
 					this.updateStatusBar("slot");
 				}
 
+				this.dualSlowCommitted = 0;
 				this.dualSlowText = "";
 				this.dualFastText = "";
 				this.dualInsertOffset = editor.posToOffset(editor.getCursor());
@@ -1161,6 +1165,7 @@ export default class VoxtralPlugin extends Plugin {
 		}
 
 		// Trim accumulators: remove processed portion, keep remainder
+		this.dualSlowCommitted += matchedLength;
 		this.dualSlowText = remainder;
 		if (this.dualFastText.length >= matchedLength) {
 			this.dualFastText = this.dualFastText.substring(matchedLength);
@@ -1258,6 +1263,7 @@ export default class VoxtralPlugin extends Plugin {
 		this.dualFastText = "";
 		this.dualSlowText = "";
 		this.dualDisplayLen = 0;
+		this.dualSlowCommitted = 0;
 
 		if (this.settings.autoCorrect && view) {
 			await this.autoCorrectAfterStop(view.editor);
