@@ -6,7 +6,7 @@ import type VoxtralPlugin from "./main";
 import { AudioRecorder } from "./audio-recorder";
 import { listModels } from "./mistral-api";
 import type { MistralModel, } from "./mistral-api";
-import type { FocusBehavior } from "./types";
+import type { FocusBehavior, CustomCommand } from "./types";
 import { SUPPORTED_LANGUAGES, LANGUAGE_NAMES } from "./lang";
 
 export class VoxtralSettingTab extends PluginSettingTab {
@@ -319,6 +319,10 @@ export class VoxtralSettingTab extends PluginSettingTab {
 					})
 			);
 
+		// Custom voice commands
+		new Setting(containerEl).setName("Custom voice commands").setHeading();
+		this.renderCustomCommands(containerEl);
+
 		// Advanced settings
 		new Setting(containerEl).setName("Advanced").setHeading();
 
@@ -383,6 +387,201 @@ export class VoxtralSettingTab extends PluginSettingTab {
 					textarea.classList.add("voxtral-textarea-full");
 				}
 			});
+	}
+
+	private renderCustomCommands(containerEl: HTMLElement): void {
+		const commands = this.plugin.settings.customCommands;
+		const lang = this.plugin.settings.language;
+
+		// Existing commands
+		for (let i = 0; i < commands.length; i++) {
+			const cmd = commands[i];
+			const triggers = cmd.triggers[lang] ?? cmd.triggers["en"] ?? [];
+			const typeLabel = cmd.type === "slot"
+				? `${cmd.slotPrefix ?? ""}…${cmd.slotSuffix ?? ""}`
+				: (cmd.insertText ?? "").replace(/\n/g, "↵").slice(0, 30);
+
+			new Setting(containerEl)
+				.setName(triggers.join(", ") || cmd.id)
+				.setDesc(`${cmd.type === "slot" ? "Slot" : "Insert"}: ${typeLabel}`)
+				.addButton((btn) =>
+					btn
+						.setButtonText("Edit")
+						.onClick(() => {
+							this.openCommandEditor(cmd, i);
+						})
+				)
+				.addButton((btn) =>
+					btn
+						.setButtonText("Delete")
+						.setWarning()
+						.onClick(async () => {
+							commands.splice(i, 1);
+							await this.plugin.saveSettings();
+							this.display();
+						})
+				);
+		}
+
+		// Add new command button
+		new Setting(containerEl)
+			.setDesc("Add a custom voice command for inserting text or opening a slot")
+			.addButton((btn) =>
+				btn
+					.setButtonText("+ Add command")
+					.setCta()
+					.onClick(() => {
+						const newCmd: CustomCommand = {
+							id: `custom-${Date.now()}`,
+							triggers: { [lang]: [""] },
+							type: "insert",
+							insertText: "",
+						};
+						commands.push(newCmd);
+						this.openCommandEditor(newCmd, commands.length - 1);
+					})
+			);
+	}
+
+	private openCommandEditor(cmd: CustomCommand, index: number): void {
+		const modal = document.createElement("div");
+		modal.addClass("modal-container", "mod-dim");
+		const modalBg = modal.createDiv("modal-bg");
+		modalBg.style.opacity = "0.85";
+		const modalEl = modal.createDiv("modal");
+		modalEl.style.maxWidth = "500px";
+		modalEl.style.padding = "20px";
+
+		const lang = this.plugin.settings.language;
+
+		// Title
+		const title = modalEl.createEl("h3", { text: "Custom voice command" });
+		title.style.marginTop = "0";
+
+		// Trigger phrases
+		const triggerLabel = modalEl.createEl("label", { text: "Trigger phrases (comma-separated)" });
+		triggerLabel.style.display = "block";
+		triggerLabel.style.marginBottom = "4px";
+		triggerLabel.style.fontWeight = "bold";
+		const triggerInput = modalEl.createEl("input", { type: "text" });
+		triggerInput.style.width = "100%";
+		triggerInput.style.marginBottom = "12px";
+		triggerInput.value = (cmd.triggers[lang] ?? []).join(", ");
+
+		// Type selector
+		const typeLabel = modalEl.createEl("label", { text: "Type" });
+		typeLabel.style.display = "block";
+		typeLabel.style.marginBottom = "4px";
+		typeLabel.style.fontWeight = "bold";
+		const typeSelect = modalEl.createEl("select");
+		typeSelect.style.width = "100%";
+		typeSelect.style.marginBottom = "12px";
+		typeSelect.createEl("option", { text: "Insert text", value: "insert" });
+		typeSelect.createEl("option", { text: "Slot (type between prefix/suffix)", value: "slot" });
+		typeSelect.value = cmd.type;
+
+		// Insert text field
+		const insertContainer = modalEl.createDiv();
+		const insertLabel = insertContainer.createEl("label", { text: "Text to insert" });
+		insertLabel.style.display = "block";
+		insertLabel.style.marginBottom = "4px";
+		insertLabel.style.fontWeight = "bold";
+		const insertDesc = insertContainer.createEl("small", { text: "Use \\n for newline" });
+		insertDesc.style.display = "block";
+		insertDesc.style.marginBottom = "4px";
+		insertDesc.style.color = "var(--text-muted)";
+		const insertInput = insertContainer.createEl("input", { type: "text" });
+		insertInput.style.width = "100%";
+		insertInput.style.marginBottom = "12px";
+		insertInput.value = (cmd.insertText ?? "").replace(/\n/g, "\\n");
+
+		// Slot fields
+		const slotContainer = modalEl.createDiv();
+		const prefixLabel = slotContainer.createEl("label", { text: "Prefix (e.g. [[ or **)" });
+		prefixLabel.style.display = "block";
+		prefixLabel.style.marginBottom = "4px";
+		prefixLabel.style.fontWeight = "bold";
+		const prefixInput = slotContainer.createEl("input", { type: "text" });
+		prefixInput.style.width = "100%";
+		prefixInput.style.marginBottom = "8px";
+		prefixInput.value = cmd.slotPrefix ?? "";
+
+		const suffixLabel = slotContainer.createEl("label", { text: "Suffix (e.g. ]] or **)" });
+		suffixLabel.style.display = "block";
+		suffixLabel.style.marginBottom = "4px";
+		suffixLabel.style.fontWeight = "bold";
+		const suffixInput = slotContainer.createEl("input", { type: "text" });
+		suffixInput.style.width = "100%";
+		suffixInput.style.marginBottom = "8px";
+		suffixInput.value = cmd.slotSuffix ?? "";
+
+		const exitLabel = slotContainer.createEl("label", { text: "Close slot on" });
+		exitLabel.style.display = "block";
+		exitLabel.style.marginBottom = "4px";
+		exitLabel.style.fontWeight = "bold";
+		const exitSelect = slotContainer.createEl("select");
+		exitSelect.style.width = "100%";
+		exitSelect.style.marginBottom = "12px";
+		exitSelect.createEl("option", { text: "Enter", value: "enter" });
+		exitSelect.createEl("option", { text: "Space", value: "space" });
+		exitSelect.createEl("option", { text: "Enter or Space", value: "enter-or-space" });
+		exitSelect.value = cmd.slotExit ?? "enter";
+
+		// Show/hide based on type
+		const updateVisibility = () => {
+			insertContainer.style.display = typeSelect.value === "insert" ? "block" : "none";
+			slotContainer.style.display = typeSelect.value === "slot" ? "block" : "none";
+		};
+		typeSelect.addEventListener("change", updateVisibility);
+		updateVisibility();
+
+		// Buttons
+		const btnRow = modalEl.createDiv();
+		btnRow.style.display = "flex";
+		btnRow.style.justifyContent = "flex-end";
+		btnRow.style.gap = "8px";
+		btnRow.style.marginTop = "16px";
+
+		const cancelBtn = btnRow.createEl("button", { text: "Cancel" });
+		cancelBtn.addEventListener("click", () => modal.remove());
+
+		const saveBtn = btnRow.createEl("button", { text: "Save", cls: "mod-cta" });
+		saveBtn.addEventListener("click", async () => {
+			// Parse triggers
+			const triggers = triggerInput.value
+				.split(",")
+				.map((t) => t.trim())
+				.filter((t) => t.length > 0);
+			if (triggers.length === 0) {
+				triggerInput.style.borderColor = "var(--text-error)";
+				return;
+			}
+
+			cmd.triggers[lang] = triggers;
+			cmd.type = typeSelect.value as "insert" | "slot";
+
+			if (cmd.type === "insert") {
+				cmd.insertText = insertInput.value.replace(/\\n/g, "\n");
+				cmd.slotPrefix = undefined;
+				cmd.slotSuffix = undefined;
+				cmd.slotExit = undefined;
+			} else {
+				cmd.slotPrefix = prefixInput.value;
+				cmd.slotSuffix = suffixInput.value;
+				cmd.slotExit = exitSelect.value as "enter" | "space" | "enter-or-space";
+				cmd.insertText = undefined;
+			}
+
+			this.plugin.settings.customCommands[index] = cmd;
+			await this.plugin.saveSettings();
+			modal.remove();
+			this.display();
+		});
+
+		// Close on bg click
+		modalBg.addEventListener("click", () => modal.remove());
+
+		document.body.appendChild(modal);
 	}
 
 	/**

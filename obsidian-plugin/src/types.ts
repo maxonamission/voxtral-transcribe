@@ -3,6 +3,24 @@
 // https://github.com/maxonamission/voxtral-transcribe
 export type FocusBehavior = "pause" | "keep-recording" | "pause-after-delay";
 
+/** User-defined custom voice command */
+export interface CustomCommand {
+	/** Unique ID (auto-generated) */
+	id: string;
+	/** Trigger phrases per language (key = lang code, value = phrases) */
+	triggers: Record<string, string[]>;
+	/** Command type: insert text or open a slot */
+	type: "insert" | "slot";
+	/** Text to insert (for type "insert") */
+	insertText?: string;
+	/** Slot prefix (for type "slot") */
+	slotPrefix?: string;
+	/** Slot suffix (for type "slot") */
+	slotSuffix?: string;
+	/** Slot exit trigger (for type "slot") */
+	slotExit?: "enter" | "space" | "enter-or-space";
+}
+
 export interface VoxtralSettings {
 	apiKey: string;
 	language: string;
@@ -23,6 +41,7 @@ export interface VoxtralSettings {
 	enterToSend: boolean; // Enter key acts as tap-to-send when mic is live in batch mode
 	typingCooldownMs: number; // ms of silence before mic unmutes after typing
 	noiseSuppression: boolean; // browser-level noise suppression, echo cancellation, AGC
+	customCommands: CustomCommand[];
 }
 
 export const DEFAULT_SETTINGS: VoxtralSettings = {
@@ -45,6 +64,7 @@ export const DEFAULT_SETTINGS: VoxtralSettings = {
 	enterToSend: true,
 	typingCooldownMs: 800,
 	noiseSuppression: false,
+	customCommands: [],
 };
 
 export const DEFAULT_CORRECT_PROMPT =
