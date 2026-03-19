@@ -483,9 +483,13 @@ export const LABELS: Partial<Record<LangCode, Record<CommandId, string>>> = {
 export const MISHEARINGS: Partial<Record<LangCode, [RegExp, string][]>> = {
 	nl: [
 		[/\bniveau\b/g, "nieuwe"],
+		[/\bniva\b/g, "nieuwe"],
 		[/\bnieuw alinea\b/g, "nieuwe alinea"],
 		[/\bnieuw regel\b/g, "nieuwe regel"],
 		[/\bnieuw punt\b/g, "nieuw punt"],
+		[/\blinea\b/g, "alinea"],
+		[/\blinie\b/g, "alinea"],
+		[/\bbeeindigde\b/g, "beeindig de"],
 	],
 	fr: [
 		[/\bnouveau ligne\b/g, "nouvelle ligne"],
