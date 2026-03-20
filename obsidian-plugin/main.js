@@ -3829,6 +3829,20 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
    */
   processDualSlowCommands(editor) {
     if (!this.dualSlowText) return;
+    if (/^[\s.!?,;:]*$/.test(this.dualSlowText)) {
+      if (this.dualDisplayLen > 0) {
+        const from2 = editor.offsetToPos(this.dualInsertOffset);
+        const to2 = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
+        editor.replaceRange("", from2, to2);
+        editor.setCursor(from2);
+        this.dualDisplayLen = 0;
+      }
+      this.dualSlowCommitted += this.dualSlowText.length;
+      this.dualSlowText = "";
+      this.dualFastText = "";
+      this.dualInsertOffset = editor.posToOffset(editor.getCursor());
+      return;
+    }
     const segments = this.dualSlowText.match(/[^.!?]+[.!?]+\s*/g);
     const segmentText = segments ? segments.join("") : "";
     const remainder = this.dualSlowText.substring(segmentText.length);
