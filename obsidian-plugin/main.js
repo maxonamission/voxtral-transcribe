@@ -1773,6 +1773,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
       onOpen() {
         var _a;
         const { contentEl } = this;
+        this.modalEl.addClass("voxtral-cmd-editor-modal");
         const stopLeak = (e) => e.stopPropagation();
         contentEl.addEventListener("input", stopLeak, true);
         contentEl.addEventListener("keydown", stopLeak, true);
