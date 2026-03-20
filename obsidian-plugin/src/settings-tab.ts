@@ -1,7 +1,7 @@
 // Voxtral Transcribe — Copyright (c) 2026 Max Kloosterman
 // Licensed under GPL-3.0 — see LICENSE for details
 // https://github.com/maxonamission/voxtral-transcribe
-import { App, Platform, PluginSettingTab, Setting } from "obsidian";
+import { App, Modal, Platform, PluginSettingTab, Setting } from "obsidian";
 import type VoxtralPlugin from "./main";
 import { AudioRecorder } from "./audio-recorder";
 import { listModels } from "./mistral-api";
@@ -479,132 +479,140 @@ export class VoxtralSettingTab extends PluginSettingTab {
 	}
 
 	private openCommandEditor(cmd: CustomCommand, index: number): void {
-		const modal = document.createElement("div");
-		modal.addClass("modal-container", "mod-dim");
-		const modalBg = modal.createDiv("modal-bg voxtral-cmd-modal-bg");
-		const modalEl = modal.createDiv("modal voxtral-cmd-modal");
-
+		const settingTab = this;
 		const lang = this.plugin.settings.language;
 
-		// Title — use Setting heading instead of raw <h3>
-		new Setting(modalEl).setName("Custom voice command").setHeading();
+		const editorModal = new (class extends Modal {
+			onOpen(): void {
+				const { contentEl } = this;
 
-		// Trigger phrases
-		const triggerSetting = new Setting(modalEl)
-			.setName("Trigger phrases (comma-separated)");
-		let triggerInput: HTMLInputElement;
-		triggerSetting.addText((text) => {
-			triggerInput = text.inputEl;
-			text.setValue((cmd.triggers[lang] ?? []).join(", "));
-		});
+				// Title
+				new Setting(contentEl).setName("Custom voice command").setHeading();
 
-		// Type selector
-		let typeValue = cmd.type;
-		new Setting(modalEl)
-			.setName("Type")
-			.addDropdown((drop) => {
-				drop.addOption("insert", "Insert text");
-				drop.addOption("slot", "Slot (type between prefix/suffix)");
-				drop.setValue(cmd.type);
-				drop.onChange((value) => {
-					typeValue = value as "insert" | "slot";
-					updateVisibility();
-				});
-			});
+				// Trigger phrases
+				let triggerInput: HTMLInputElement;
+				new Setting(contentEl)
+					.setName("Trigger phrases (comma-separated)")
+					.addText((text) => {
+						triggerInput = text.inputEl;
+						text.setValue((cmd.triggers[lang] ?? []).join(", "));
+					});
 
-		// Insert text field
-		const insertContainer = modalEl.createDiv();
-		let insertInput: HTMLInputElement;
-		new Setting(insertContainer)
-			.setName("Text to insert")
-			.setDesc("Use \\n for newline")
-			.addText((text) => {
-				insertInput = text.inputEl;
-				text.setValue((cmd.insertText ?? "").replace(/\n/g, "\\n"));
-			});
+				// Type selector
+				let typeValue = cmd.type;
+				new Setting(contentEl)
+					.setName("Type")
+					.addDropdown((drop) => {
+						drop.addOption("insert", "Insert text");
+						drop.addOption("slot", "Slot (type between prefix/suffix)");
+						drop.setValue(cmd.type);
+						drop.onChange((value) => {
+							typeValue = value as "insert" | "slot";
+							updateVisibility();
+						});
+					});
 
-		// Slot fields
-		const slotContainer = modalEl.createDiv();
-		let prefixInput: HTMLInputElement;
-		let suffixInput: HTMLInputElement;
-		let exitValue = cmd.slotExit ?? "enter";
+				// Insert text field
+				const insertContainer = contentEl.createDiv();
+				let insertInput: HTMLInputElement;
+				new Setting(insertContainer)
+					.setName("Text to insert")
+					.setDesc("Use \\n for newline")
+					.addText((text) => {
+						insertInput = text.inputEl;
+						text.setValue((cmd.insertText ?? "").replace(/\n/g, "\\n"));
+					});
 
-		new Setting(slotContainer)
-			.setName("Prefix (e.g. [[ or **)")
-			.addText((text) => {
-				prefixInput = text.inputEl;
-				text.setValue(cmd.slotPrefix ?? "");
-			});
+				// Slot fields
+				const slotContainer = contentEl.createDiv();
+				let prefixInput: HTMLInputElement;
+				let suffixInput: HTMLInputElement;
+				let exitValue = cmd.slotExit ?? "enter";
 
-		new Setting(slotContainer)
-			.setName("Suffix (e.g. ]] or **)")
-			.addText((text) => {
-				suffixInput = text.inputEl;
-				text.setValue(cmd.slotSuffix ?? "");
-			});
+				new Setting(slotContainer)
+					.setName("Prefix (e.g. [[ or **)")
+					.addText((text) => {
+						prefixInput = text.inputEl;
+						text.setValue(cmd.slotPrefix ?? "");
+					});
 
-		new Setting(slotContainer)
-			.setName("Close slot on")
-			.addDropdown((drop) => {
-				drop.addOption("enter", "Enter");
-				drop.addOption("space", "Space");
-				drop.addOption("enter-or-space", "Enter or space");
-				drop.setValue(exitValue);
-				drop.onChange((value) => {
-					exitValue = value as "enter" | "space" | "enter-or-space";
-				});
-			});
+				new Setting(slotContainer)
+					.setName("Suffix (e.g. ]] or **)")
+					.addText((text) => {
+						suffixInput = text.inputEl;
+						text.setValue(cmd.slotSuffix ?? "");
+					});
 
-		// Show/hide based on type
-		const updateVisibility = () => {
-			insertContainer.toggle(typeValue === "insert");
-			slotContainer.toggle(typeValue === "slot");
-		};
-		updateVisibility();
+				new Setting(slotContainer)
+					.setName("Close slot on")
+					.addDropdown((drop) => {
+						drop.addOption("enter", "Enter");
+						drop.addOption("space", "Space");
+						drop.addOption("enter-or-space", "Enter or space");
+						drop.setValue(exitValue);
+						drop.onChange((value) => {
+							exitValue = value as "enter" | "space" | "enter-or-space";
+						});
+					});
 
-		// Buttons
-		const btnRow = modalEl.createDiv("voxtral-cmd-btn-row");
+				// Show/hide based on type
+				const updateVisibility = () => {
+					insertContainer.toggle(typeValue === "insert");
+					slotContainer.toggle(typeValue === "slot");
+				};
+				updateVisibility();
 
-		const cancelBtn = btnRow.createEl("button", { text: "Cancel" });
-		cancelBtn.addEventListener("click", () => modal.remove());
+				// Buttons
+				new Setting(contentEl)
+					.addButton((btn) =>
+						btn.setButtonText("Cancel").onClick(() => {
+							this.close();
+						})
+					)
+					.addButton((btn) =>
+						btn
+							.setButtonText("Save")
+							.setCta()
+							.onClick(() => {
+								// Parse triggers
+								const triggers = triggerInput.value
+									.split(",")
+									.map((t: string) => t.trim())
+									.filter((t: string) => t.length > 0);
+								if (triggers.length === 0) {
+									triggerInput.classList.add("voxtral-cmd-error");
+									return;
+								}
 
-		const saveBtn = btnRow.createEl("button", { text: "Save", cls: "mod-cta" });
-		saveBtn.addEventListener("click", () => {
-			// Parse triggers
-			const triggers = triggerInput.value
-				.split(",")
-				.map((t: string) => t.trim())
-				.filter((t: string) => t.length > 0);
-			if (triggers.length === 0) {
-				triggerInput.addClass("voxtral-cmd-error");
-				return;
+								cmd.triggers[lang] = triggers;
+								cmd.type = typeValue;
+
+								if (cmd.type === "insert") {
+									cmd.insertText = insertInput.value.replace(/\\n/g, "\n");
+									cmd.slotPrefix = undefined;
+									cmd.slotSuffix = undefined;
+									cmd.slotExit = undefined;
+								} else {
+									cmd.slotPrefix = prefixInput.value;
+									cmd.slotSuffix = suffixInput.value;
+									cmd.slotExit = exitValue;
+									cmd.insertText = undefined;
+								}
+
+								settingTab.plugin.settings.customCommands[index] = cmd;
+								void settingTab.plugin.saveSettings();
+								this.close();
+								settingTab.display();
+							})
+					);
 			}
 
-			cmd.triggers[lang] = triggers;
-			cmd.type = typeValue;
-
-			if (cmd.type === "insert") {
-				cmd.insertText = insertInput.value.replace(/\\n/g, "\n");
-				cmd.slotPrefix = undefined;
-				cmd.slotSuffix = undefined;
-				cmd.slotExit = undefined;
-			} else {
-				cmd.slotPrefix = prefixInput.value;
-				cmd.slotSuffix = suffixInput.value;
-				cmd.slotExit = exitValue;
-				cmd.insertText = undefined;
+			onClose(): void {
+				this.contentEl.empty();
 			}
+		})(this.app);
 
-			this.plugin.settings.customCommands[index] = cmd;
-			void this.plugin.saveSettings();
-			modal.remove();
-			this.display();
-		});
-
-		// Close on bg click
-		modalBg.addEventListener("click", () => modal.remove());
-
-		document.body.appendChild(modal);
+		editorModal.open();
 	}
 
 	/**

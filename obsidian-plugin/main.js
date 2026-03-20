@@ -1767,95 +1767,100 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
     );
   }
   openCommandEditor(cmd, index) {
-    var _a;
-    const modal = document.createElement("div");
-    modal.addClass("modal-container", "mod-dim");
-    const modalBg = modal.createDiv("modal-bg voxtral-cmd-modal-bg");
-    const modalEl = modal.createDiv("modal voxtral-cmd-modal");
+    const settingTab = this;
     const lang = this.plugin.settings.language;
-    new import_obsidian2.Setting(modalEl).setName("Custom voice command").setHeading();
-    const triggerSetting = new import_obsidian2.Setting(modalEl).setName("Trigger phrases (comma-separated)");
-    let triggerInput;
-    triggerSetting.addText((text) => {
-      var _a2;
-      triggerInput = text.inputEl;
-      text.setValue(((_a2 = cmd.triggers[lang]) != null ? _a2 : []).join(", "));
-    });
-    let typeValue = cmd.type;
-    new import_obsidian2.Setting(modalEl).setName("Type").addDropdown((drop) => {
-      drop.addOption("insert", "Insert text");
-      drop.addOption("slot", "Slot (type between prefix/suffix)");
-      drop.setValue(cmd.type);
-      drop.onChange((value) => {
-        typeValue = value;
+    const editorModal = new class extends import_obsidian2.Modal {
+      onOpen() {
+        var _a;
+        const { contentEl } = this;
+        new import_obsidian2.Setting(contentEl).setName("Custom voice command").setHeading();
+        let triggerInput;
+        new import_obsidian2.Setting(contentEl).setName("Trigger phrases (comma-separated)").addText((text) => {
+          var _a2;
+          triggerInput = text.inputEl;
+          text.setValue(((_a2 = cmd.triggers[lang]) != null ? _a2 : []).join(", "));
+        });
+        let typeValue = cmd.type;
+        new import_obsidian2.Setting(contentEl).setName("Type").addDropdown((drop) => {
+          drop.addOption("insert", "Insert text");
+          drop.addOption("slot", "Slot (type between prefix/suffix)");
+          drop.setValue(cmd.type);
+          drop.onChange((value) => {
+            typeValue = value;
+            updateVisibility();
+          });
+        });
+        const insertContainer = contentEl.createDiv();
+        let insertInput;
+        new import_obsidian2.Setting(insertContainer).setName("Text to insert").setDesc("Use \\n for newline").addText((text) => {
+          var _a2;
+          insertInput = text.inputEl;
+          text.setValue(((_a2 = cmd.insertText) != null ? _a2 : "").replace(/\n/g, "\\n"));
+        });
+        const slotContainer = contentEl.createDiv();
+        let prefixInput;
+        let suffixInput;
+        let exitValue = (_a = cmd.slotExit) != null ? _a : "enter";
+        new import_obsidian2.Setting(slotContainer).setName("Prefix (e.g. [[ or **)").addText((text) => {
+          var _a2;
+          prefixInput = text.inputEl;
+          text.setValue((_a2 = cmd.slotPrefix) != null ? _a2 : "");
+        });
+        new import_obsidian2.Setting(slotContainer).setName("Suffix (e.g. ]] or **)").addText((text) => {
+          var _a2;
+          suffixInput = text.inputEl;
+          text.setValue((_a2 = cmd.slotSuffix) != null ? _a2 : "");
+        });
+        new import_obsidian2.Setting(slotContainer).setName("Close slot on").addDropdown((drop) => {
+          drop.addOption("enter", "Enter");
+          drop.addOption("space", "Space");
+          drop.addOption("enter-or-space", "Enter or space");
+          drop.setValue(exitValue);
+          drop.onChange((value) => {
+            exitValue = value;
+          });
+        });
+        const updateVisibility = () => {
+          insertContainer.toggle(typeValue === "insert");
+          slotContainer.toggle(typeValue === "slot");
+        };
         updateVisibility();
-      });
-    });
-    const insertContainer = modalEl.createDiv();
-    let insertInput;
-    new import_obsidian2.Setting(insertContainer).setName("Text to insert").setDesc("Use \\n for newline").addText((text) => {
-      var _a2;
-      insertInput = text.inputEl;
-      text.setValue(((_a2 = cmd.insertText) != null ? _a2 : "").replace(/\n/g, "\\n"));
-    });
-    const slotContainer = modalEl.createDiv();
-    let prefixInput;
-    let suffixInput;
-    let exitValue = (_a = cmd.slotExit) != null ? _a : "enter";
-    new import_obsidian2.Setting(slotContainer).setName("Prefix (e.g. [[ or **)").addText((text) => {
-      var _a2;
-      prefixInput = text.inputEl;
-      text.setValue((_a2 = cmd.slotPrefix) != null ? _a2 : "");
-    });
-    new import_obsidian2.Setting(slotContainer).setName("Suffix (e.g. ]] or **)").addText((text) => {
-      var _a2;
-      suffixInput = text.inputEl;
-      text.setValue((_a2 = cmd.slotSuffix) != null ? _a2 : "");
-    });
-    new import_obsidian2.Setting(slotContainer).setName("Close slot on").addDropdown((drop) => {
-      drop.addOption("enter", "Enter");
-      drop.addOption("space", "Space");
-      drop.addOption("enter-or-space", "Enter or space");
-      drop.setValue(exitValue);
-      drop.onChange((value) => {
-        exitValue = value;
-      });
-    });
-    const updateVisibility = () => {
-      insertContainer.toggle(typeValue === "insert");
-      slotContainer.toggle(typeValue === "slot");
-    };
-    updateVisibility();
-    const btnRow = modalEl.createDiv("voxtral-cmd-btn-row");
-    const cancelBtn = btnRow.createEl("button", { text: "Cancel" });
-    cancelBtn.addEventListener("click", () => modal.remove());
-    const saveBtn = btnRow.createEl("button", { text: "Save", cls: "mod-cta" });
-    saveBtn.addEventListener("click", () => {
-      const triggers = triggerInput.value.split(",").map((t) => t.trim()).filter((t) => t.length > 0);
-      if (triggers.length === 0) {
-        triggerInput.addClass("voxtral-cmd-error");
-        return;
+        new import_obsidian2.Setting(contentEl).addButton(
+          (btn) => btn.setButtonText("Cancel").onClick(() => {
+            this.close();
+          })
+        ).addButton(
+          (btn) => btn.setButtonText("Save").setCta().onClick(() => {
+            const triggers = triggerInput.value.split(",").map((t) => t.trim()).filter((t) => t.length > 0);
+            if (triggers.length === 0) {
+              triggerInput.classList.add("voxtral-cmd-error");
+              return;
+            }
+            cmd.triggers[lang] = triggers;
+            cmd.type = typeValue;
+            if (cmd.type === "insert") {
+              cmd.insertText = insertInput.value.replace(/\\n/g, "\n");
+              cmd.slotPrefix = void 0;
+              cmd.slotSuffix = void 0;
+              cmd.slotExit = void 0;
+            } else {
+              cmd.slotPrefix = prefixInput.value;
+              cmd.slotSuffix = suffixInput.value;
+              cmd.slotExit = exitValue;
+              cmd.insertText = void 0;
+            }
+            settingTab.plugin.settings.customCommands[index] = cmd;
+            void settingTab.plugin.saveSettings();
+            this.close();
+            settingTab.display();
+          })
+        );
       }
-      cmd.triggers[lang] = triggers;
-      cmd.type = typeValue;
-      if (cmd.type === "insert") {
-        cmd.insertText = insertInput.value.replace(/\\n/g, "\n");
-        cmd.slotPrefix = void 0;
-        cmd.slotSuffix = void 0;
-        cmd.slotExit = void 0;
-      } else {
-        cmd.slotPrefix = prefixInput.value;
-        cmd.slotSuffix = suffixInput.value;
-        cmd.slotExit = exitValue;
-        cmd.insertText = void 0;
+      onClose() {
+        this.contentEl.empty();
       }
-      this.plugin.settings.customCommands[index] = cmd;
-      void this.plugin.saveSettings();
-      modal.remove();
-      this.display();
-    });
-    modalBg.addEventListener("click", () => modal.remove());
-    document.body.appendChild(modal);
+    }(this.app);
+    editorModal.open();
   }
   /**
    * Add a model dropdown that fetches options from the Mistral API.
@@ -3595,17 +3600,19 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     this.realtimeTurnDelta = 0;
     this.realtimeTurnProcessed = 0;
   }
-  /** Flush buffered transcription text after a slot closes */
+  /** Flush buffered transcription text after a slot closes.
+   *  Atomic: captures and clears slotBuffer before processing
+   *  to prevent race conditions with incoming deltas. */
   flushSlotBuffer(editor) {
-    if (this.slotBuffer.trim()) {
-      this.pendingText += this.slotBuffer;
-      this.slotBuffer = "";
+    const buffered = this.slotBuffer;
+    this.slotBuffer = "";
+    if (buffered.trim()) {
+      this.pendingText += buffered;
       if (this.pendingText.trim()) {
         this.trackProcessText(editor, this.pendingText.trim() + " ");
         this.pendingText = "";
       }
     }
-    this.slotBuffer = "";
   }
   async stopRealtimeRecording() {
     var _a, _b;
