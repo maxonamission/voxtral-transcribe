@@ -1,265 +1,400 @@
-# Audio Processing Flow — Voxtral Transcribe
+# Audio Processing Flow — Voxtral Transcribe (Gedetailleerd)
 
-Dit document beschrijft de volledige audioverwerkingsketen voor zowel de **Web App** (`static/app.js` + `server.py`) als de **Obsidian Plugin** (`obsidian-plugin/src/`). Gebruik dit om vreemd gedrag te analyseren door te traceren waar in de keten iets misgaat.
+Alle audioverwerkingsstromen in de **Web App** en **Obsidian Plugin**, tot op functie-niveau.
 
 ---
 
-## Overzichtsdiagram — Alle modi
+## 1. Audio Capture
 
 ```mermaid
 flowchart TB
-    MIC[🎤 Microfoon]
+    MIC["getUserMedia()"]
 
-    MIC --> AR{Modus-selectie}
-    AR -->|"batch"| BATCH
-    AR -->|"realtime single"| SINGLE
-    AR -->|"realtime dual-delay"| DUAL
+    MIC --> DEV{"deviceId\ngeselecteerd?"}
+    DEV -- ja --> EXACT["deviceId: exact"]
+    DEV -- nee --> DEFMIC["Systeem default"]
+    EXACT -- mislukt --> FALL["Fallback default mic\n+ Notice waarschuwing"]
+    EXACT -- ok --> NS
+    FALL --> NS
+    DEFMIC --> NS
 
-    subgraph BATCH["① Batch Mode"]
-        direction TB
-        B1["MediaRecorder<br/>(WebM/Opus, 1s chunks)"]
-        B2{"Stop of<br/>FlushChunk?"}
-        B3["Blob samenstellen"]
-        B4["Mistral Batch API<br/>voxtral-mini-latest<br/>POST /v1/audio/transcriptions"]
-        B5{"Hallucination<br/>check"}
-        B6["matchCommand()"]
-        B7{"Auto-correct<br/>aan?"}
-        B8["correctText()<br/>Mistral Chat"]
-        B9["processText() →<br/>editor / transcript"]
+    NS{"noiseSuppression\nenabled?"}
+    NS -- ja --> NS_ON["MediaTrackConstraints:\nnoiseSuppression: true\nechoCancellation: true\nautoGainControl: true\n\naudio-recorder.ts:93-97\napp.js:1133-1137"]
+    NS -- nee --> NS_OFF["channelCount: 1\n(geen filtering)"]
+    NS_ON --> STREAM["MediaStream"]
+    NS_OFF --> STREAM
 
-        B1 --> B2
-        B2 -->|stop| B3
-        B2 -->|"flushChunk<br/>(tap-to-send)"| B3
-        B3 --> B4
-        B4 --> B5
-        B5 -->|"verworpen<br/>(>5 w/s of herhalingen)"| B_DISCARD[Tekst weggegooid]
-        B5 -->|OK| B6
-        B6 -->|"commando gevonden"| B7
-        B6 -->|"geen commando"| B7
-        B7 -->|"ja + geen commando"| B8
-        B7 -->|"nee, of commando"| B9
-        B8 --> B9
+    STREAM --> CTX["AudioContext\nsampleRate: 16000"]
+    CTX --> SOURCE["createMediaStreamSource()"]
+
+    SOURCE --> PCM_PATH
+    SOURCE --> BLOB_PATH
+    SOURCE -.->|"web only"| MIC_LVL
+
+    subgraph PCM_PATH["PCM pad (realtime modi)"]
+        WK_P["Plugin: AudioWorklet\npcm-processor"]
+        WK_W["Web: ScriptProcessor\nbufferSize=4096"]
+        WK_P --> PCM16_P["Float32 to Int16\nin worklet process()"]
+        WK_W --> PCM16_W["floatTo16BitPCM()\n+ downsample()"]
+        PCM16_P --> PCM_OUT["PCM s16le 16kHz mono\nArrayBuffer chunks"]
+        PCM16_W --> PCM_OUT
     end
 
-    subgraph SINGLE["② Streaming Single"]
-        direction TB
-        S1["AudioWorklet / ScriptProcessor<br/>PCM s16le 16kHz mono"]
-        S2["WebSocket transport"]
-        S3["Mistral Realtime API<br/>voxtral-mini-transcribe-realtime<br/>target_streaming_delay_ms"]
-        S4{"Event type"}
-        S5["delta → feedText()<br/>accumuleer in activeInsert"]
-        S6["processCompletedSentences()<br/>bij elke . ! ?"]
-        S7["done → finalizeInsertPoint()"]
-        S8["Commando- of tekstverwerking"]
-        S9{"WS sluit<br/>tijdens opname?"}
-        S10["Auto-reconnect<br/>(max 5 pogingen)"]
-
-        S1 --> S2
-        S2 --> S3
-        S3 --> S4
-        S4 -->|"delta"| S5
-        S4 -->|"done"| S7
-        S4 -->|"error"| S9
-        S5 --> S6
-        S6 --> S8
-        S7 --> S8
-        S9 -->|ja| S10
-        S10 -->|"gelukt"| S3
-        S10 -->|"mislukt ×5"| STOP_REC[Stop opname]
+    subgraph BLOB_PATH["Blob pad (batch mode)"]
+        MR["MediaRecorder\nmimeType: audio/webm;codecs=opus\ntimeslice: 1000ms"]
+        MR --> CHUNKS["ondataavailable\n-> chunks[]"]
+        CHUNKS --> STOP["stop() -> complete Blob"]
+        CHUNKS --> FLUSH["flushChunk():\nstop + restart recorder\n(nieuwe container headers)"]
     end
 
-    subgraph DUAL["③ Dual-Delay"]
-        direction TB
-        D1["AudioWorklet / ScriptProcessor<br/>PCM s16le 16kHz mono"]
-        D2["Audio gedupliceerd"]
-        D3["Fast stream<br/>delay=240ms<br/>snelle preview"]
-        D4["Slow stream<br/>delay=2400ms<br/>nauwkeurige tekst"]
-        D5["renderDualText()<br/>slow=confirmed + fast=dimmed"]
-        D6["processDualSlowCommands()<br/>bij elke . ! ? in slow"]
-        D7{"Commando?"}
-        D8["Voer commando uit<br/>(insert/delete/stop)"]
-        D9["Commit tekst<br/>naar editor/transcript"]
-        D10["Trim accumulators<br/>dualSlowText, dualFastText"]
-
-        D1 --> D2
-        D2 -->|"zelfde PCM"| D3
-        D2 -->|"zelfde PCM"| D4
-        D3 --> D5
-        D4 --> D5
-        D4 --> D6
-        D6 --> D7
-        D7 -->|ja| D8
-        D7 -->|nee| D9
-        D8 --> D10
-        D9 --> D10
-        D10 --> D5
+    subgraph MIC_LVL["Mic Level (web only)"]
+        ANA["AnalyserNode fftSize=256"]
+        ANA --> RMS["RMS berekening"]
+        RMS --> EMA["Slow EMA smoothing\nalpha=0.02"]
+        EMA --> LBL{"Niveau?"}
+        LBL -- "<0.06" --> SIL["stil"]
+        LBL -- "<0.12" --> ZACHT["te zacht"]
+        LBL -- "<0.45" --> OK["in orde"]
+        LBL -- "<0.75" --> HARD["hard"]
+        LBL -- ">=0.75" --> TEHARD["te hard"]
     end
 
-    style BATCH fill:#1a2744,stroke:#3b82f6,color:#e2e8f0
-    style SINGLE fill:#1a3a2a,stroke:#22c55e,color:#e2e8f0
-    style DUAL fill:#3a1a2a,stroke:#f59e0b,color:#e2e8f0
+    subgraph TYPING["Typing Mute (plugin only)\nmain.ts:324-406"]
+        KEY["keydown event\n(capture phase)"]
+        KEY --> MOD{"Modifier/nav\nkey?"}
+        MOD -- ja --> IGNORE["Negeer\n(Ctrl/Alt/Shift/Meta\npijltjes/F-toetsen)"]
+        MOD -- nee --> MUTE["recorder.mute()\ntrack.enabled = false"]
+        MUTE --> COOL["Cooldown timer\ntypingCooldownMs\n(default 800ms)"]
+        COOL --> UNMUTE["recorder.unmute()\ntrack.enabled = true"]
+    end
+
+    subgraph FOCUS["Focus Pause (plugin only)\nmain.ts:265-320"]
+        VIS["visibilitychange"]
+        VIS --> HIDDEN{"document.hidden?"}
+        HIDDEN -- ja --> BEH{"focusBehavior?"}
+        BEH -- pause --> IMMPAUSE["Direct pauzeren\nrecorder.pause()"]
+        BEH -- pause-after-delay --> DELAY["setTimeout\nfocusPauseDelaySec"]
+        BEH -- keep-recording --> KEEP["Niets doen"]
+        HIDDEN -- nee --> RESUME["recorder.resume()\ntrack.enabled = true"]
+    end
 ```
 
 ---
 
-## Gedetailleerd: Voice Command Processing
-
-De commandoherkenning is identiek in alle drie de modi en in beide platformen. Dit is vaak de oorzaak van vreemd gedrag (commando's die niet herkend worden, of juist tekst die als commando wordt geinterpreteerd).
-
-```mermaid
-flowchart LR
-    RAW["Ruwe tekst<br/>van transcriptie"]
-    NORM["normalizeCommand()<br/>• lowercase<br/>• strip diacritics ë→e<br/>• strip leestekens<br/>• strip hyphens"]
-    MISHEAR["fixMishearings()<br/>taalspecifiek<br/>bv: 'niveau'→'nieuwe'<br/>'beeindigde'→'beeindig de'"]
-    EXACT{"Pass 1:<br/>Exact match<br/>suffix check"}
-    FUZZY{"Pass 2:<br/>Levenshtein ≤ 2<br/>alleen hele zin"}
-    CMD["Commando gevonden<br/>→ execute action"]
-    TXT["Geen commando<br/>→ insert als tekst"]
-
-    RAW --> NORM --> MISHEAR --> EXACT
-    EXACT -->|match| CMD
-    EXACT -->|"geen match"| FUZZY
-    FUZZY -->|"dist < 3"| CMD
-    FUZZY -->|"dist ≥ 3"| TXT
-```
-
----
-
-## Gedetailleerd: Tekst Correctie Pipeline
-
-Wordt aangeroepen als `autoCorrect` aan staat. In batch mode: direct na transcriptie. In realtime/dual: na het stoppen van de opname, op alleen de gedicteerde ranges.
+## 2. Batch Mode
 
 ```mermaid
 flowchart TB
-    INPUT["Gedicteerde tekst"]
-    SKIP{"Bevat voice<br/>command?"}
-    CORRECT["correctText()<br/>Mistral Chat<br/>mistral-small-latest<br/>temperature=0.1"]
-    PROMPT["System prompt:<br/>• Fix capitalisatie<br/>• Fix verkeerd gespelde woorden<br/>• Fix leestekens<br/>• Inline correctie-instructies opvolgen<br/>• Behoud markdown-opmaak<br/>• NIET herschrijven"]
-    STRIP["stripLlmCommentary()<br/>Verwijder (toegevoegde uitleg)<br/>die niet in origineel stond"]
-    GUARD{"Output ><br/>1.5× input<br/>+ 50 chars?"}
-    USE["Gecorrigeerde<br/>tekst gebruiken"]
-    REJECT["Correctie verworpen<br/>→ origineel behouden"]
+    BLOB["Audio Blob\n(WebM/Opus)"]
 
-    INPUT --> SKIP
-    SKIP -->|"ja → skip correctie"| USE
-    SKIP -->|nee| CORRECT
-    CORRECT --> PROMPT
-    PROMPT --> STRIP
-    STRIP --> GUARD
-    GUARD -->|nee| USE
-    GUARD -->|"ja (hallucinatie)"| REJECT
+    TRIG{"Trigger?"}
+    BLOB --> TRIG
+    TRIG -- "Stop opname\nrecorder.stop()" --> UPLOAD
+    TRIG -- "sendChunk()\ntap-to-send" --> UPLOAD
+    TRIG -- "Enter toets\n(plugin only)" --> ENTER_CHECK
+
+    ENTER_CHECK{"enterToSend=true\nAND batch mode\nAND !isTypingMuted\nAND !typingResumeTimer\nmain.ts:339-352"}
+    ENTER_CHECK -- ja --> UPLOAD
+    ENTER_CHECK -- nee --> NEWLINE["Gewone newline\nin editor"]
+
+    UPLOAD["Upload audio"]
+    UPLOAD -- "Web App" --> WEB_API["POST /api/transcribe\nserver.py:278-316\n+ FormData"]
+    UPLOAD -- "Plugin" --> PLG_API["POST /v1/audio/transcriptions\nmistral-api.ts:157-216\nmultipart via requestUrl"]
+    UPLOAD -. "netwerk fout\n(web only)" .-> OFFLINE
+
+    WEB_API --> MODEL["Mistral Batch Model\nbatchModel setting\ndefault: voxtral-mini-latest"]
+    PLG_API --> MODEL
+
+    MODEL --> DIARIZE{"diarize=true?\n(web only)"}
+    DIARIZE -- ja --> SEGMENTS["Segmenten met\nspreker-labels\nSpreker 1: ...\nSpreker 2: ..."]
+    DIARIZE -- nee --> RAW_TEXT["Platte tekst"]
+    SEGMENTS --> RESULT["Transcriptie tekst"]
+    RAW_TEXT --> RESULT
+
+    RESULT --> HALLUC{"Hallucination check\nmistral-api.ts:104-153"}
+    HALLUC -- ">5 woorden/sec\nEN >20 woorden" --> DISCARD["Verworpen"]
+    HALLUC -- "3+ blokken\ngescheiden door ---" --> DISCARD
+    HALLUC -- "3+ identieke\nzinnen" --> DISCARD
+    HALLUC -- "OK" --> CMD_PRE
+
+    CMD_PRE{"matchCommand()\nVOOR correctie"}
+    CMD_PRE -- "command gevonden" --> SKIP_CORR["Skip auto-correct\n(LLM mangelt commands)"]
+    CMD_PRE -- "geen command" --> AC_CHECK
+
+    AC_CHECK{"autoCorrect\nenabled?"}
+    AC_CHECK -- ja --> CORRECT["correctText()\nMistral Chat API"]
+    AC_CHECK -- nee --> PROCESS
+    CORRECT --> PROCESS
+    SKIP_CORR --> PROCESS
+
+    PROCESS["processText(editor, text)\nof feedText() in web"]
+
+    subgraph OFFLINE["Offline Queue (web only)\napp.js:889-978"]
+        IDB["saveToQueue()\nIndexedDB store"]
+        IDB --> RETRY{"Retry trigger?"}
+        RETRY -- "window online event" --> PROC["processQueue()"]
+        RETRY -- "elke 30 seconden" --> PROC
+        RETRY -- "klik op badge" --> PROC
+        PROC --> UPLOAD
+    end
 ```
 
 ---
 
-## Gedetailleerd: Audio Capture Layer
+## 3. Streaming Single
 
 ```mermaid
 flowchart TB
-    subgraph CAPTURE["AudioRecorder (gedeeld)"]
-        direction TB
-        MIC["getUserMedia()<br/>channelCount: 1"]
-        MIC_FAIL{"Specifieke mic<br/>mislukt?"}
-        FALLBACK["Fallback naar<br/>standaard mic"]
-        CTX["AudioContext<br/>sampleRate: 16000"]
+    PCM["PCM s16le 16kHz mono\n(uit Audio Capture)"]
 
-        subgraph PCM_PATH["PCM pad (realtime)"]
-            direction TB
-            WK["AudioWorklet<br/>'pcm-processor'"]
-            WK_MSG["port.onmessage<br/>→ Int16Array chunks"]
-        end
+    PCM --> WS_CONN{"Platform?"}
+    WS_CONN -- "Web App" --> WS_WEB["Browser WebSocket\nws://host/ws/transcribe\n?delay=delayMs"]
+    WS_CONN -- "Plugin" --> WS_PLG["Node.js https upgrade\nwss://api.mistral.ai/v1/\naudio/transcriptions/realtime\n+ Authorization: Bearer header\nmistral-api.ts:344-552"]
 
-        subgraph BLOB_PATH["Blob pad (batch)"]
-            direction TB
-            MR["MediaRecorder<br/>WebM/Opus"]
-            MR_DATA["ondataavailable<br/>→ chunks[]"]
-            MR_STOP["stop() → Blob"]
-            MR_FLUSH["flushChunk()<br/>stop + restart<br/>→ Blob met headers"]
-        end
+    WS_WEB --> SERVER["server.py:319-396\naudio_queue.put(data)\nasync audio_stream()\nyield chunks"]
+    SERVER --> MISTRAL["Mistral SDK\nclient.audio.realtime\n.transcribe_stream()\ntarget_streaming_delay_ms"]
+    WS_PLG --> MISTRAL_D["Mistral Realtime API\nsession.update:\naudio_format: pcm_s16le/16kHz\ntarget_streaming_delay_ms"]
 
-        MIC --> MIC_FAIL
-        MIC_FAIL -->|ja| FALLBACK
-        MIC_FAIL -->|nee| CTX
-        FALLBACK --> CTX
-        CTX --> PCM_PATH
-        CTX --> BLOB_PATH
-    end
+    MISTRAL --> EVENTS
+    MISTRAL_D --> EVENTS
 
-    PCM_PATH -->|"realtime/dual"| WS_SEND["sendAudio() →<br/>base64 via WS (plugin)<br/>raw bytes via WS (web)"]
-    BLOB_PATH -->|batch| API_SEND["POST naar<br/>Mistral batch API"]
+    EVENTS{"Server Event?"}
 
-    style CAPTURE fill:#1a1a2e,stroke:#6366f1,color:#e2e8f0
+    EVENTS -- "session.created" --> SESSION["Plugin: sendSessionUpdate()\naudio_format + delay_ms\nmistral-api.ts:669-683"]
+
+    EVENTS -- "text.delta" --> DELTA_SPLIT{"Platform?"}
+    DELTA_SPLIT -- "Web" --> FEED["feedText(text)\nauto-spacing\nlowercase mid-sentence"]
+    DELTA_SPLIT -- "Plugin" --> PEND["pendingText += text\nbuffer accumulator"]
+
+    FEED --> PROC_SENT["processCompletedSentences()\nregex: /[^.!?]+[.!?]+/\nbij elke .!? in tekst"]
+    PEND --> FLUSH_CHECK{"sentenceEnd .!?\nor > 120 chars?"}
+    FLUSH_CHECK -- ja --> TRACK["trackProcessText()\n+ dictatedRanges tracking"]
+    FLUSH_CHECK -- nee --> WAIT["Wacht op meer tekst"]
+
+    PROC_SENT --> CMD_CHECK["findCommand() per zin\n(zie Voice Commands)"]
+    TRACK --> CMD_CHECK2["matchCommand()\n+ stop-opname patterns"]
+
+    EVENTS -- "transcription.done" --> DONE_SPLIT{"Platform?"}
+    DONE_SPLIT -- "Web" --> FINALIZE["finalizeInsertPoint()\nstrip trailing punct\nauto-space after\nauto-capitalize next"]
+    DONE_SPLIT -- "Plugin" --> FLUSH_PEND["Flush remaining\npendingText"]
+
+    EVENTS -- "error" --> ERR["Log + Notice"]
+
+    EVENTS -- "WS close" --> RECONN{"Reconnect"}
+    RECONN -- "Web" --> RECONN_W["setTimeout 1500ms\nstartRealtime()\napp.js:1186-1208"]
+    RECONN -- "Plugin" --> RECONN_P["Exponential backoff\n500ms * failures\nmax 3000ms\nmax 5 pogingen\nmain.ts:635-680"]
+    RECONN_P -- "gelukt" --> MISTRAL_D
+    RECONN_W -- "gelukt" --> WS_WEB
+    RECONN_P -- "5x mislukt" --> STOP["Stop opname"]
+
+    STOP_REC["Bij stop opname"] --> DRAIN["endAudio()\nwacht 1000ms\nflush pendingText"]
+    DRAIN --> AC_STOP{"autoCorrect?"}
+    AC_STOP -- "Web" --> AC_WEB["autoCorrectAfterStop()\nhele transcript"]
+    AC_STOP -- "Plugin" --> AC_PLG["autoCorrectAfterStop(editor)\nalleen dictatedRanges\nmerge + sort eind-naar-begin\nmain.ts:1203-1242"]
+    AC_STOP -- nee --> DONE["Klaar"]
+    AC_WEB --> DONE
+    AC_PLG --> DONE
 ```
 
 ---
 
-## Platform-verschillen: Web App vs Obsidian Plugin
+## 4. Dual-Delay Mode
 
 ```mermaid
 flowchart TB
-    subgraph WEB["Web App"]
-        direction TB
-        W1["Browser WebSocket<br/>naar lokale server"]
-        W2["server.py proxy:<br/>/ws/transcribe<br/>/ws/transcribe-dual"]
-        W3["Server → Mistral SDK<br/>transcribe_stream()"]
-        W4["DOM-based transcript<br/>activeInsert span"]
-        W5["Offline queue<br/>IndexedDB → batch later"]
-        W6["ScriptProcessor<br/>(legacy audio API)"]
-        W7["Dual: server dupliceert<br/>audio naar 2 Mistral streams<br/>via asyncio.gather()"]
+    PCM["PCM s16le 16kHz mono\n(uit Audio Capture)"]
 
-        W1 --> W2 --> W3
-        W6 -.-> W1
-    end
+    PCM --> DUP["Audio dupliceren"]
 
-    subgraph PLUGIN["Obsidian Plugin"]
-        direction TB
-        P1["Direct Mistral WS<br/>wss://api.mistral.ai<br/>via Node.js https upgrade"]
-        P2["Custom WebSocket client<br/>met Auth header"]
-        P3["Editor API<br/>replaceRange / setCursor"]
-        P4["Typing mute<br/>mic uit bij toetsaanslag<br/>cooldown timer"]
-        P5["Focus pause<br/>pauze bij app-naar-achtergrond"]
-        P6["AudioWorklet<br/>(moderne audio API)"]
-        P7["Dual: 2 aparte<br/>RealtimeTranscriber instances<br/>zelfde PCM naar beide"]
-        P8["dictatedRanges tracking<br/>voor auto-correct na stop"]
-        P9["Hallucination detection<br/>isLikelyHallucination()"]
+    DUP --> FAST_Q["Fast queue / stream\ndelay = 240ms"]
+    DUP --> SLOW_Q["Slow queue / stream\ndelay = 2400ms"]
 
-        P1 --> P2
-        P6 -.-> P1
-    end
+    ARCH{"Platform?"}
+    FAST_Q --> ARCH
+    SLOW_Q --> ARCH
 
-    style WEB fill:#1a2744,stroke:#3b82f6,color:#e2e8f0
-    style PLUGIN fill:#2a1a34,stroke:#a855f7,color:#e2e8f0
+    ARCH -- "Web App" --> WEB_DUAL["1 WebSocket\n/ws/transcribe-dual\n?fast_delay=240&slow_delay=2400"]
+    WEB_DUAL --> SRV_DUP["server.py:399-493\nreceive_audio() dupliceert\nnaar fast_queue + slow_queue"]
+    SRV_DUP --> SRV_GATHER["asyncio.gather(\nrun_stream fast,\nrun_stream slow\n)"]
+    SRV_GATHER --> FAST_M["Mistral stream\ndelay=240ms"]
+    SRV_GATHER --> SLOW_M["Mistral stream\ndelay=2400ms"]
+
+    ARCH -- "Plugin" --> PLG_DUAL["2 aparte\nRealtimeTranscriber\ninstanties\nmain.ts:769-821"]
+    PLG_DUAL --> FAST_M2["Mistral WS\ndelayOverride=240ms"]
+    PLG_DUAL --> SLOW_M2["Mistral WS\ndelayOverride=2400ms"]
+
+    FAST_M --> FAST_EV{"Fast events\nstream=fast"}
+    FAST_M2 --> FAST_EV
+    SLOW_M --> SLOW_EV{"Slow events\nstream=slow"}
+    SLOW_M2 --> SLOW_EV
+
+    FAST_EV -- delta --> FAST_ACC["dualFastText += text"]
+    FAST_EV -- done --> FAST_ACC
+    FAST_ACC --> RENDER
+
+    SLOW_EV -- delta --> SLOW_ACC["dualSlowText += text"]
+    SLOW_EV -- done --> SLOW_DONE["dualSlowText = msg.text\n(volledige finalized tekst)"]
+    SLOW_ACC --> RENDER
+    SLOW_DONE --> RENDER
+
+    RENDER["renderDualText()"]
+    RENDER --> DISPLAY{"fastLen > slowLen?"}
+    DISPLAY -- ja --> COMBINED["slow tekst (bevestigd/wit)\n+ fast voorbij slow (preview/grijs)"]
+    DISPLAY -- nee --> SLOW_ONLY["alleen slow tekst"]
+
+    SLOW_ACC --> PROC_SLOW
+    SLOW_DONE --> PROC_SLOW
+
+    PROC_SLOW["processDualSlowCommands()"]
+    PROC_SLOW --> SENT_MATCH["Regex: voltooide zinnen\n/[^.!?]+[.!?]+/"]
+    SENT_MATCH --> PER_SENT{"Per zin:"}
+    PER_SENT -- "matchCommand()" --> CMD_EXEC["Voer commando uit\n(insert/delete/stop)"]
+    PER_SENT -- "geen command" --> TXT_COMMIT["Commit tekst permanent\nals span / editor insert"]
+    CMD_EXEC --> TRIM
+    TXT_COMMIT --> TRIM
+
+    TRIM["Trim accumulators:\ndualSlowText = remainder\ndualFastText.substring(matched)\nupdate offset"]
+    TRIM --> RENDER
+
+    RECONN_D["Per-stream reconnect\nfast en slow onafhankelijk\nzelfde backoff als single"]
+    FAST_M -. disconnect .-> RECONN_D
+    SLOW_M -. disconnect .-> RECONN_D
+    FAST_M2 -. disconnect .-> RECONN_D
+    SLOW_M2 -. disconnect .-> RECONN_D
+
+    STOP_D["Bij stop opname"] --> END_BOTH["endAudio() op beide\nwacht 1000ms"]
+    END_BOTH --> FINAL_PROC["processDualSlowCommands()\nlaatste zinnen"]
+    FINAL_PROC --> FINAL_TXT["Finalize:\nslow tekst prioriteit\nof fast als fallback"]
+    FINAL_TXT --> AC_D{"autoCorrect?"}
+    AC_D -- ja --> AC_RANGES["correctText() op\ndictatedRanges[]"]
+    AC_D -- nee --> DONE_D["Klaar"]
+    AC_RANGES --> DONE_D
 ```
 
 ---
 
-## Verschilanalyse: Waar gedrag kan afwijken
+## 5. Voice Command Pipeline
 
-| Aspect | Web App | Plugin | Mogelijke issues |
-|---|---|---|---|
-| **Audio transport** | ScriptProcessor + raw PCM bytes via WS | AudioWorklet + base64 JSON via WS | Worklet registratie kan falen op sommige platforms |
-| **WS connectie** | Via server.py proxy | Direct naar Mistral API (Node.js https upgrade) | Auth header vereist Node.js — werkt niet op mobile |
-| **Dual-delay architectuur** | 1 WS → server dupliceert naar 2 Mistral streams | 2 onafhankelijke WS verbindingen | Plugin gebruikt 2× API quota; timing kan afwijken |
-| **Sentence detection** | Regex `[^.!?]+[.!?]+` op accumulated text | Zelfde regex op `pendingText` buffer | Bij realtime single: plugin buffert tot `\.[!?]\s*$` of >120 chars |
-| **Command timing** | Direct bij elke delta (processCompletedSentences) | Pas bij sentence-end of >120 chars flush | Plugin kan commando's trager herkennen |
-| **Auto-correct scope** | Niet beschikbaar in realtime (alleen batch) | Na stop: alleen dictatedRanges | Ranges kunnen verschuiven bij delete/undo commands |
-| **Offline fallback** | IndexedDB queue → batch later | Geen offline support | Web app kan recordings kwijtraken bij crash voor opslag |
-| **Reconnect** | setTimeout 1500ms → startRealtime() | Exponential backoff 500ms × failures (max 5) | Plugin is agressiever in reconnect |
-| **Mobile** | Volledig ondersteund (PWA) | Forced batch mode (geen realtime WS) | Mobile Obsidian kan geen custom WS headers |
-| **Typing mute** | Niet aanwezig | Mute mic bij keystroke, unmute na cooldown | Kan tekst verliezen als cooldown te kort is |
-| **Focus behavior** | Geen handling | pause / pause-after-delay / keep-recording | Audio buffer kan vollopen bij lange achtergrond-pause |
+```mermaid
+flowchart TB
+    RAW["Ruwe zin van transcriptie"]
+
+    RAW --> NORM["normalizeCommand()\n1. toLowerCase()\n2. NFD + strip combining chars\n   (e met trema -> e)\n3. strip hyphens (alle Unicode variants)\n4. strip leestekens (.,!?;:)"]
+    NORM --> MISHEAR["fixMishearings(lang)\nTaalspecifieke regex:\nnl: niveau->nieuwe\nnl: beeindigde->beeindig de\nnl: linea->alinea\nnl: nieuw alinea->nieuwe alinea\nfr: nouveau ligne->nouvelle ligne\nde: neue absatz->neuer absatz"]
+
+    MISHEAR --> PASS1["Pass 1: Exact match\nVoor elk commando:\nnormalized.endsWith(pattern)?\nof normalized === pattern?"]
+    PASS1 -- match --> SPLIT["Splits textBefore + command\nop basis van woordtelling"]
+    PASS1 -- "geen match" --> PASS2["Pass 2: Fuzzy match\nLevenshtein distance\nalleen als hele zin\ndrempel: distance < 3"]
+    PASS2 -- "match" --> SPLIT2["textBefore = leeg\n(hele zin is command)"]
+    PASS2 -- "geen match" --> PLAIN["Gewone tekst invoegen\ninsertAtCursor()"]
+
+    SPLIT --> EXEC
+    SPLIT2 --> EXEC
+
+    EXEC["Execute command"]
+    EXEC --> TB_CHECK{"textBefore\naanwezig?"}
+    TB_CHECK -- ja --> INSERT_TB["Insert textBefore\nin editor/transcript"]
+    TB_CHECK -- nee --> ACTION
+
+    INSERT_TB --> PUNCT{"command.punctuation\n= true?"}
+    PUNCT -- ja --> STRIP_P["Strip trailing\npunctuation van\ntextBefore"]
+    PUNCT -- nee --> ACTION
+    STRIP_P --> ACTION
+
+    ACTION{"Command ID?"}
+    ACTION -- newParagraph --> A1["\\n\\n"]
+    ACTION -- newLine --> A2["\\n"]
+    ACTION -- heading1/2/3 --> A3["\\n\\n# / ## / ###"]
+    ACTION -- bulletPoint --> A4["\\n- "]
+    ACTION -- todoItem --> A5["\\n- [ ] "]
+    ACTION -- numberedItem --> A6["Auto-increment:\nzoek laatste N. patroon\ninsert \\nN+1. "]
+    ACTION -- colon --> A7["Strip trailing punct\n+ insert ': '"]
+    ACTION -- deleteLastParagraph --> A8["Verwijder alles na\nlaatste \\n\\n"]
+    ACTION -- deleteLastLine --> A9["Verwijder alles na\nlaatste .!? of \\n"]
+    ACTION -- undo --> A10["Herstel vorige staat\nundoStack.pop()\nmax 20 entries"]
+    ACTION -- stopRecording --> A11["setTimeout 0ms\nstopRecording()"]
+```
 
 ---
 
-## Debug Checklist
+## 6. Text Correction Pipeline
 
-Bij vreemd gedrag, volg deze stroom:
+```mermaid
+flowchart TB
+    INPUT["Tekst om te corrigeren"]
 
-1. **Geen tekst verschijnt**: Check mic-niveau → AudioContext sampleRate → WS connectie status → API key geldigheid
-2. **Hallucinaties (herhalende/onzin tekst)**: Check `isLikelyHallucination()` drempels → audio te kort/stil? → typing mute actief?
-3. **Commando niet herkend**: Check `normalizeCommand()` output → taal correct? → `fixMishearings()` patterns → Levenshtein afstand
-4. **Commando onterecht herkend**: Check of tekst toevallig matcht → patronen te breed? → fuzzy match te agressief?
-5. **Dual-delay timing issues**: Check of slow stream ver achterloopt → accumulators groeien oneindig? → `processDualSlowCommands()` trim-logica
-6. **Tekst verdwijnt**: Check `deleteLastBlock()` / `restoreUndo()` → undo stack correct? → `dictatedRanges` offset-tracking na delete
-7. **Correctie verminkt tekst**: Check of LLM commando-tekst herschrijft → `hasCommand` check voor correctie → `stripLlmCommentary()` te agressief?
-8. **Reconnect loop**: Check `consecutiveFailures` teller → API rate limits → WebSocket close codes
+    WHEN{"Wanneer?"}
+    WHEN -- "Batch: direct\nna transcriptie" --> SCOPE_B["Hele chunk"]
+    WHEN -- "Realtime/Dual:\nbij stop opname" --> SCOPE_R
+    WHEN -- "Handmatig:\nknop/command" --> SCOPE_M["Selectie of\nhele note"]
+
+    subgraph SCOPE_R["Plugin: dictatedRanges scope"]
+        MERGE["mergeRanges()\noverlapping samenvoegen"]
+        MERGE --> SORT["Sort eind naar begin\n(offsets blijven geldig)"]
+        SORT --> PER_RANGE["Per range:\nextract tekst uit editor"]
+    end
+
+    SCOPE_B --> CMD_SKIP
+    PER_RANGE --> CMD_SKIP
+    SCOPE_M --> CMD_SKIP
+
+    CMD_SKIP{"matchCommand()\naanwezig?"}
+    CMD_SKIP -- ja --> SKIP["Skip correctie\n(voorkom mangling\nvan commando-tekst)"]
+    CMD_SKIP -- nee --> API_CALL
+
+    API_CALL{"Platform?"}
+    API_CALL -- "Web" --> WEB_C["POST /api/correct\nserver.py:247-275"]
+    API_CALL -- "Plugin" --> PLG_C["POST /v1/chat/completions\nmistral-api.ts:220-273"]
+
+    WEB_C --> MODEL_C["Mistral Chat Model\ncorrectModel setting\ndefault: mistral-small-latest\ntemperature: 0.1"]
+    PLG_C --> MODEL_C
+
+    MODEL_C --> PROMPT["System prompt:\n- Fix capitalisatie\n- Fix spraakherkenningsfouten\n- Fix leestekens\n- Behoud structuur/stijl/markdown\n- Volg inline correctie-instructies\n  (voor de correctie, nee niet X\n   maar Y, met een hoofdletter)\n- Verwijder meta-commentaar\n+ optioneel: user systemPrompt"]
+
+    PROMPT --> RESULT["LLM response"]
+
+    RESULT --> GUARD1["Guard 1:\nstripLlmCommentary()\nVerwijder (commentaar)\nblokken >10 chars\ndie niet in input stonden\nmistral-api.ts:279-294"]
+    GUARD1 --> GUARD2{"Guard 2:\noutput.length >\ninput.length * 1.5 + 50?"}
+    GUARD2 -- ja --> REJECT["Correctie verworpen\n(hallucinatie)\nOrigineel behouden"]
+    GUARD2 -- nee --> ACCEPT["Gecorrigeerde tekst\ngebruiken"]
+
+    ACCEPT --> REPLACE{"Platform?"}
+    REPLACE -- "Web" --> REPL_W["transcript.innerHTML\nvervangen"]
+    REPLACE -- "Plugin" --> REPL_P["editor.replaceRange()\nper dictatedRange"]
+```
+
+---
+
+## Waar wordt elke optie toegepast?
+
+| Optie | Waar in code | Wanneer | Effect |
+|-------|-------------|---------|--------|
+| **noiseSuppression** | `audio-recorder.ts:93-97`, `app.js:1133-1137` | Bij `getUserMedia()` start | Browser WebRTC: noiseSuppression + echoCancellation + autoGainControl |
+| **Typing mute** | `main.ts:324-406` | Elke keydown tijdens opname (plugin) | `track.enabled=false`, unmute na `typingCooldownMs` (800ms) |
+| **Focus pause** | `main.ts:265-320` | `visibilitychange` event (plugin) | `recorder.pause()` + `track.enabled=false` |
+| **Hallucination check** | `mistral-api.ts:104-153` | Na batch transcriptie (plugin) | Verwerp als >5w/s, herhaalde blokken, of identieke zinnen |
+| **Auto-correct** | `main.ts:566`, `main.ts:1105`, `app.js:1723` | Batch: direct. Realtime: bij stop | `correctText()` via Mistral Chat, skip bij voice commands |
+| **Correction guards** | `mistral-api.ts:258-273` | Na elke correctie-response | `stripLlmCommentary()` + lengte-check (1.5x + 50) |
+| **Enter-to-send** | `main.ts:339-352` | Keydown Enter in batch mode (plugin) | `sendChunk()` als mic niet gedempt |
+| **Diarize** | `server.py:291-311` | Batch transcriptie (web only) | Spreker-segmenten in response |
+| **Offline queue** | `app.js:889-978` | Netwerk fout bij batch upload (web) | IndexedDB opslag, auto-retry |
+| **dictatedRanges** | `main.ts:1118-1170`, `main.ts:1203-1242` | Tijdens realtime/dual dictatie (plugin) | Track ingevoegde bereiken voor precise auto-correct |
+| **Mic level** | `app.js:1038-1106` | Tijdens opname (web only) | AnalyserNode RMS + slow EMA → status indicator |
+
+---
+
+## Platform-architectuur verschil
+
+| Aspect | Web App | Plugin |
+|--------|---------|--------|
+| **Audio capture** | `ScriptProcessor` (legacy) | `AudioWorklet` (modern) |
+| **WS transport** | Browser WS → server.py proxy → Mistral SDK | Node.js `https` manual upgrade → direct Mistral API |
+| **WS auth** | Geen (lokale server beheert key) | `Authorization: Bearer` header op upgrade request |
+| **Dual-delay** | 1 WS, server dupliceert naar 2 Mistral streams | 2 aparte WS verbindingen naar Mistral (2x API quota) |
+| **Reconnect** | `setTimeout(1500ms)` → `startRealtime()` | Exponential backoff `500ms * n`, max 3000ms, max 5x |
+| **Voice commands** | `processCompletedSentences()` bij elke delta | Buffer in `pendingText`, flush bij `.!?` of >120 chars |
+| **Auto-correct scope** | Hele transcript na stop | Alleen `dictatedRanges[]` (precise tracking) |
+| **Typing mute** | Niet beschikbaar | `keydown` → `mute()` → cooldown → `unmute()` |
+| **Focus handling** | Niet beschikbaar | pause / pause-after-delay / keep-recording |
+| **Mobile** | Volledig (PWA + offline queue) | Forced batch (geen WS custom headers) |
+| **Rate limiting** | `MAX_WS_CONNECTIONS=4` (server) | Geen (directe API) |
