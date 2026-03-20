@@ -889,18 +889,23 @@ export default class VoxtralPlugin extends Plugin {
 		this.realtimeTurnProcessed = 0;
 	}
 
-	/** Flush buffered transcription text after a slot closes */
+	/** Flush buffered transcription text after a slot closes.
+	 *  Atomic: captures and clears slotBuffer before processing
+	 *  to prevent race conditions with incoming deltas. */
 	private flushSlotBuffer(editor: Editor): void {
-		if (this.slotBuffer.trim()) {
-			this.pendingText += this.slotBuffer;
-			this.slotBuffer = "";
-			// Trigger normal processing
+		// Atomically capture and clear the buffer so any delta arriving
+		// between closeSlot() and this flush goes to pendingText instead
+		// of being double-processed.
+		const buffered = this.slotBuffer;
+		this.slotBuffer = "";
+
+		if (buffered.trim()) {
+			this.pendingText += buffered;
 			if (this.pendingText.trim()) {
 				this.trackProcessText(editor, this.pendingText.trim() + " ");
 				this.pendingText = "";
 			}
 		}
-		this.slotBuffer = "";
 	}
 
 	private async stopRealtimeRecording(): Promise<void> {
