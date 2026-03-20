@@ -398,3 +398,79 @@ flowchart TB
 | **Focus handling** | Niet beschikbaar | pause / pause-after-delay / keep-recording |
 | **Mobile** | Volledig (PWA + offline queue) | Forced batch (geen WS custom headers) |
 | **Rate limiting** | `MAX_WS_CONNECTIONS=4` (server) | Geen (directe API) |
+
+---
+
+## 7. Obsidian Plugin: Mobiel vs Desktop
+
+```mermaid
+flowchart TB
+    START["Plugin gestart"]
+    START --> PLATFORM{"Platform.isMobile?\nmain.ts:95"}
+
+    PLATFORM -- "Desktop" --> DESK
+    PLATFORM -- "Mobiel" --> MOB
+
+    subgraph DESK["Desktop Obsidian"]
+        D_MODE{"settings.mode?"}
+        D_MODE -- realtime --> D_RT["Realtime modus\n(streaming single)"]
+        D_MODE -- batch --> D_BATCH["Batch modus"]
+        D_RT --> D_DUAL{"dualDelay\nenabled?"}
+        D_DUAL -- ja --> D_DD["Dual-Delay modus\n(2 WS streams)"]
+        D_DUAL -- nee --> D_SINGLE["Single stream\n(1 WS)"]
+
+        D_STATUS["StatusBar\naddStatusBarItem()\nmain.ts:123-126"]
+        D_HELP["Auto-open help panel\nmain.ts:446-448"]
+        D_TYPING["Typing mute\nkeydown → mute/unmute\nmain.ts:324-406"]
+        D_FOCUS["Focus pause\nvisibilitychange\nmain.ts:265-320"]
+    end
+
+    subgraph MOB["Mobiel Obsidian"]
+        M_MODE["effectiveMode = batch\n(altijd, ongeacht instelling)\nmain.ts:98-104"]
+        M_MODE --> M_BATCH["Batch modus\n(enige optie)"]
+
+        M_SEND["Mobiele send-knop\nview.addAction('send')\nmain.ts:238-248"]
+        M_NOTICE["Eenmalige batch-notice\ndismissMobileBatchNotice\nmain.ts:457-480"]
+        M_NO_STATUS["Geen StatusBar"]
+        M_NO_HELP["Help panel niet\nauto-geopend\nmain.ts:446"]
+        M_NO_TYPING["Geen typing mute\n(geen fysiek toetsenbord)"]
+        M_FOCUS_REL["Focus pause = relevant\n(app wisselen = background)"]
+    end
+```
+
+### Settings per platform
+
+| Setting | Desktop | Mobiel | Reden |
+|---------|---------|--------|-------|
+| **mode** | `realtime` of `batch` (keuze) | Altijd `batch` (geforceerd) | `canRealtime = !Platform.isMobile` — geen custom WS headers op mobiel |
+| **dualDelay** | Beschikbaar (als mode=realtime) | Niet bereikbaar | Realtime niet beschikbaar |
+| **dualDelayFastMs / SlowMs** | Configureerbaar | Niet bereikbaar | Vereist realtime |
+| **streamingDelayMs** | Configureerbaar | Niet bereikbaar | Vereist realtime |
+| **enterToSend** | Ja, bij batch mode | Ja, bij batch mode | Op mobiel relevant met extern toetsenbord |
+| **typingCooldownMs** | Actief (keydown handler) | Niet actief | Geen fysiek toetsenbord / geen handler |
+| **focusBehavior** | Werkt (window focus) | Werkt (app-switch = background) | Relevanter op mobiel (vaker app-wissel) |
+| **focusPauseDelaySec** | Werkt | Werkt | Alleen bij `pause-after-delay` |
+| **noiseSuppression** | Werkt | Werkt | Browser-level via `getUserMedia()` |
+| **autoCorrect** | Werkt | Werkt | Zelfde Mistral Chat API |
+| **microphoneDeviceId** | Werkt (meerdere mics) | Werkt (meestal 1 mic) | Fallback bij fout |
+| **dismissMobileBatchNotice** | Niet getoond | Getoond (eenmalig) | Alleen zichtbaar op mobiel |
+
+### Bereikbare verwerkingsstromen
+
+```mermaid
+flowchart LR
+    subgraph DESKTOP["Desktop"]
+        D1["Batch"] --> D_OUT["Diagram 2"]
+        D2["Streaming Single"] --> D_OUT2["Diagram 3"]
+        D3["Dual-Delay"] --> D_OUT3["Diagram 4"]
+    end
+
+    subgraph MOBILE["Mobiel"]
+        M1["Batch"] --> M_OUT["Diagram 2"]
+        M2["Streaming Single\n🚫 niet beschikbaar"]
+        M3["Dual-Delay\n🚫 niet beschikbaar"]
+    end
+
+    style M2 fill:#fee,stroke:#c33,color:#933
+    style M3 fill:#fee,stroke:#c33,color:#933
+```
