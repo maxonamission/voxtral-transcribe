@@ -1160,6 +1160,25 @@ export default class VoxtralPlugin extends Plugin {
 	private processDualSlowCommands(editor: Editor): void {
 		if (!this.dualSlowText) return;
 
+		// Discard orphaned punctuation/whitespace that trails a previously
+		// executed command.  This happens when the API sends a cumulative
+		// delta that appends just "." after the command text was already
+		// consumed and executed (e.g. "Nieuwe alinea" → "Nieuwe alinea.").
+		if (/^[\s.!?,;:]*$/.test(this.dualSlowText)) {
+			if (this.dualDisplayLen > 0) {
+				const from = editor.offsetToPos(this.dualInsertOffset);
+				const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
+				editor.replaceRange("", from, to);
+				editor.setCursor(from);
+				this.dualDisplayLen = 0;
+			}
+			this.dualSlowCommitted += this.dualSlowText.length;
+			this.dualSlowText = "";
+			this.dualFastText = "";
+			this.dualInsertOffset = editor.posToOffset(editor.getCursor());
+			return;
+		}
+
 		const segments = this.dualSlowText.match(/[^.!?]+[.!?]+\s*/g);
 
 		// Also check the remainder (text without sentence-ending punctuation)
