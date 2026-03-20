@@ -486,6 +486,14 @@ export class VoxtralSettingTab extends PluginSettingTab {
 			onOpen(): void {
 				const { contentEl } = this;
 
+				// Prevent input events from leaking to the settings page
+				// behind the modal (fixes mobile keyboard going to API key field)
+				const stopLeak = (e: Event) => e.stopPropagation();
+				contentEl.addEventListener("input", stopLeak, true);
+				contentEl.addEventListener("keydown", stopLeak, true);
+				contentEl.addEventListener("keyup", stopLeak, true);
+				contentEl.addEventListener("keypress", stopLeak, true);
+
 				// Title
 				new Setting(contentEl).setName("Custom voice command").setHeading();
 
@@ -561,6 +569,11 @@ export class VoxtralSettingTab extends PluginSettingTab {
 					slotContainer.toggle(typeValue === "slot");
 				};
 				updateVisibility();
+
+				// Auto-focus the trigger input (helps mobile keyboard target)
+				if (Platform.isMobile) {
+					setTimeout(() => triggerInput?.focus(), 100);
+				}
 
 				// Buttons
 				new Setting(contentEl)

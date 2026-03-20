@@ -347,11 +347,13 @@ let customCommandDefs: CommandDef[] = [];
  * Call this whenever settings change.
  */
 export function loadCustomCommands(commands: CustomCommand[]): void {
+	customCommandLabels.clear();
 	customCommandDefs = commands.map((cmd) => {
 		if (cmd.type === "slot" && cmd.slotPrefix !== undefined) {
 			const prefix = cmd.slotPrefix;
 			const suffix = cmd.slotSuffix ?? "";
 			const exit = cmd.slotExit ?? "enter";
+			customCommandLabels.set(cmd.id, `${prefix}…${suffix}`);
 			return {
 				id: cmd.id as CommandId,
 				slot: { prefix, suffix, exitTrigger: exit },
@@ -368,6 +370,8 @@ export function loadCustomCommands(commands: CustomCommand[]): void {
 		}
 		// Insert command
 		const text = cmd.insertText ?? "";
+		const displayText = text.replace(/\n/g, "↵").slice(0, 30);
+		customCommandLabels.set(cmd.id, displayText || cmd.id);
 		return {
 			id: cmd.id as CommandId,
 			action: (editor: Editor) => insertAtCursor(editor, text),
@@ -394,6 +398,9 @@ function getCustomPatterns(cmdId: string, lang: string): string[] {
 
 /** Map of custom command id → Map of lang → trigger phrases */
 const customCommandTriggers = new Map<string, Map<string, string[]>>();
+
+/** Map of custom command id → descriptive label for the help panel */
+const customCommandLabels = new Map<string, string>();
 
 /**
  * Reload custom command triggers (call alongside loadCustomCommands).
@@ -662,7 +669,7 @@ export function getCommandList(): { label: string; patterns: string[] }[] {
 		patterns: getPatternsForCommand(c.id, activeLang),
 	}));
 	const custom = customCommandDefs.map((c) => ({
-		label: c.id, // Custom commands use their ID as label
+		label: customCommandLabels.get(c.id) ?? c.id,
 		patterns: getPatternsForAnyCommand(c.id, activeLang),
 	}));
 	return [...builtIn, ...custom];

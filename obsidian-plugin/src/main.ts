@@ -88,6 +88,7 @@ export default class VoxtralPlugin extends Plugin {
 	private sendRibbonEl: HTMLElement | null = null;
 	private mobileActionEl: HTMLElement | null = null;
 	private pendingText = "";
+	private realtimePrevRaw = ""; // raw cumulative text from API (for delta detection)
 	private realtimeTurnDelta = 0; // bytes received via deltas in current realtime turn
 	private realtimeTurnProcessed = 0; // bytes already flushed from pendingText in current turn
 	private chunkIndex = 0;
@@ -112,6 +113,7 @@ export default class VoxtralPlugin extends Plugin {
 	private dualSlowTurnDelta = 0; // bytes received via deltas in current slow turn
 	private dualFastPrevRaw = ""; // raw cumulative text from fast API (for delta detection)
 	private dualSlowPrevRaw = ""; // raw cumulative text from slow API (for delta detection)
+	private dualCommandJustRan = false; // true after a voice command was executed (for orphaned punctuation detection)
 
 	/** Whether realtime mode is available on this platform */
 	get canRealtime(): boolean {
@@ -725,6 +727,7 @@ export default class VoxtralPlugin extends Plugin {
 		}
 
 		this.pendingText = "";
+		this.realtimePrevRaw = "";
 		this.realtimeTurnDelta = 0;
 		this.realtimeTurnProcessed = 0;
 		this.dictatedRanges = [];
@@ -788,6 +791,7 @@ export default class VoxtralPlugin extends Plugin {
 		vlog.debug("Voxtral: Session ended, reconnecting silently...");
 
 		// Reset turn counters for the new connection
+		this.realtimePrevRaw = "";
 		this.realtimeTurnDelta = 0;
 		this.realtimeTurnProcessed = 0;
 
@@ -825,15 +829,22 @@ export default class VoxtralPlugin extends Plugin {
 	}
 
 	private handleRealtimeDelta(editor: Editor, text: string): void {
+		// Handle both cumulative and incremental deltas from the API
+		const isCumulative = this.realtimePrevRaw && text.startsWith(this.realtimePrevRaw);
+		const newText = isCumulative ? text.substring(this.realtimePrevRaw.length) : text;
+		this.realtimePrevRaw = isCumulative ? text : this.realtimePrevRaw + text;
+
+		if (!newText) return;
+
 		// While a slot is active, buffer incoming transcription
 		if (isSlotActive()) {
-			this.slotBuffer += text;
-			this.realtimeTurnDelta += text.length;
+			this.slotBuffer += newText;
+			this.realtimeTurnDelta += newText.length;
 			return;
 		}
 
-		this.pendingText += text;
-		this.realtimeTurnDelta += text.length;
+		this.pendingText += newText;
+		this.realtimeTurnDelta += newText.length;
 
 		// Flush on sentence-ending punctuation OR after accumulating enough text
 		const sentenceEnd = /[.!?]\s*$/;
@@ -945,6 +956,7 @@ export default class VoxtralPlugin extends Plugin {
 		this.dualSlowTurnDelta = 0;
 		this.dualFastPrevRaw = "";
 		this.dualSlowPrevRaw = "";
+		this.dualCommandJustRan = false;
 
 		await this.connectDualDelayWebSockets(editor);
 
@@ -1164,7 +1176,8 @@ export default class VoxtralPlugin extends Plugin {
 		// executed command.  This happens when the API sends a cumulative
 		// delta that appends just "." after the command text was already
 		// consumed and executed (e.g. "Nieuwe alinea" → "Nieuwe alinea.").
-		if (/^[\s.!?,;:]*$/.test(this.dualSlowText)) {
+		if (this.dualCommandJustRan && /^[\s.!?,;:]*$/.test(this.dualSlowText)) {
+			this.dualCommandJustRan = false;
 			if (this.dualDisplayLen > 0) {
 				const from = editor.offsetToPos(this.dualInsertOffset);
 				const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
@@ -1178,6 +1191,7 @@ export default class VoxtralPlugin extends Plugin {
 			this.dualInsertOffset = editor.posToOffset(editor.getCursor());
 			return;
 		}
+		this.dualCommandJustRan = false;
 
 		const segments = this.dualSlowText.match(/[^.!?]+[.!?]+\s*/g);
 
@@ -1206,6 +1220,7 @@ export default class VoxtralPlugin extends Plugin {
 					this.updateStatusBar("slot");
 				}
 
+				this.dualCommandJustRan = true;
 				this.dualSlowCommitted += this.dualSlowText.length;
 				this.dualSlowText = "";
 				this.dualFastText = "";
@@ -1243,6 +1258,7 @@ export default class VoxtralPlugin extends Plugin {
 					this.trackInsertAtCursor(editor, before);
 				}
 				match.command.action(editor);
+				this.dualCommandJustRan = true;
 
 				if (match.command.id === "stopRecording") {
 					setTimeout(() => { void this.stopRecording(); }, 0);
