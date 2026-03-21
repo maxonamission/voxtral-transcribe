@@ -32,3 +32,11 @@ Make the app easy to download and run for testers and users.
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
 | 004 | [Automated GitHub Releases with cross-platform builds](doing/004-github-releases-ci.md) | Doing | High |
+
+## Epic: Pipeline Simplification
+
+Evaluate whether processing steps can be simplified or removed without losing essential functionality.
+
+| # | Story | Status | Priority |
+|---|-------|--------|----------|
+| 006 | [Evaluate and potentially remove LLM text correction](backlog/006-evaluate-llm-correction-removal.md) | Backlog | Medium |
