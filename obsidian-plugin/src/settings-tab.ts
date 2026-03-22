@@ -482,6 +482,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 		const settingTab = this;
 		const lang = this.plugin.settings.language;
 
+		let removeVVListener: (() => void) | undefined;
 		const editorModal = new (class extends Modal {
 			onOpen(): void {
 				const { contentEl } = this;
@@ -500,8 +501,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 					};
 					adjustHeight();
 					vv.addEventListener("resize", adjustHeight);
-					// Clean up on close
-					this.register(() => vv.removeEventListener("resize", adjustHeight));
+					removeVVListener = () => vv.removeEventListener("resize", adjustHeight);
 				}
 
 				// Prevent input events from leaking to the settings page
@@ -639,6 +639,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 			}
 
 			onClose(): void {
+				removeVVListener?.();
 				this.contentEl.empty();
 			}
 		})(this.app);
