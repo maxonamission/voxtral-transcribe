@@ -1767,7 +1767,8 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
     );
   }
   openCommandEditor(cmd, index) {
-    const settingTab = this;
+    const { plugin } = this;
+    const redisplay = () => this.display();
     const lang = this.plugin.settings.language;
     let removeVVListener;
     const editorModal = new class extends import_obsidian2.Modal {
@@ -1869,10 +1870,10 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
               cmd.slotExit = exitValue;
               cmd.insertText = void 0;
             }
-            settingTab.plugin.settings.customCommands[index] = cmd;
-            void settingTab.plugin.saveSettings();
+            plugin.settings.customCommands[index] = cmd;
+            void plugin.saveSettings();
             this.close();
-            settingTab.display();
+            redisplay();
           })
         );
       }

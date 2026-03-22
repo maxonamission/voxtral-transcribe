@@ -479,7 +479,8 @@ export class VoxtralSettingTab extends PluginSettingTab {
 	}
 
 	private openCommandEditor(cmd: CustomCommand, index: number): void {
-		const settingTab = this;
+		const { plugin } = this;
+		const redisplay = () => this.display();
 		const lang = this.plugin.settings.language;
 
 		let removeVVListener: (() => void) | undefined;
@@ -630,10 +631,10 @@ export class VoxtralSettingTab extends PluginSettingTab {
 									cmd.insertText = undefined;
 								}
 
-								settingTab.plugin.settings.customCommands[index] = cmd;
-								void settingTab.plugin.saveSettings();
+								plugin.settings.customCommands[index] = cmd;
+								void plugin.saveSettings();
 								this.close();
-								settingTab.display();
+								redisplay();
 							})
 					);
 			}
