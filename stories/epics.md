@@ -39,4 +39,13 @@ Evaluate whether processing steps can be simplified or removed without losing es
 
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
-| 006 | [Evaluate and potentially remove LLM text correction](backlog/006-evaluate-llm-correction-removal.md) | Backlog | Medium |
+| 009 | [Evaluate and potentially remove LLM text correction](backlog/009-evaluate-llm-correction-removal.md) | Backlog | Medium |
+## Epic: Custom Commands & Extensibility
+
+Allow users to define their own voice commands, mishearing corrections, and dynamic actions — making the plugin adaptable to any workflow or language.
+
+| # | Story | Status | Priority |
+|---|-------|--------|----------|
+| 006 | [Custom voice commands — learning mode](backlog/006-custom-voice-commands.md) | Backlog | Medium |
+| 007 | [User-defined mishearing corrections](backlog/007-custom-mishearings.md) | Backlog | Medium |
+| 008 | [Dynamic content actions & Templater integration](backlog/008-dynamic-actions-templater.md) | Backlog | Low |

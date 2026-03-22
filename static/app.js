@@ -20,7 +20,11 @@ let dualFastText = ""; // accumulated fast stream text (to be replaced by slow)
 let dualSlowText = ""; // accumulated slow stream text (final/accurate)
 let dualFastInsert = null; // span for fast (preliminary) text
 let dualSlowConfirmed = ""; // how much text has been confirmed by slow stream
-let dualSlowConsumed = 0; // chars already consumed/finalized by processDualSlowCommands
+let dualFastPrevRaw = ""; // raw cumulative text from fast API (for delta detection)
+let dualSlowPrevRaw = ""; // raw cumulative text from slow API (for delta detection)
+
+// ── Realtime state ──
+let realtimePrevRaw = ""; // raw cumulative text from API (for delta detection)
 
 // ── Correction settings ──
 let autoCorrect = JSON.parse(localStorage.getItem("voxtral-autocorrect") || "false");
@@ -410,7 +414,7 @@ const COMMAND_DEFS = [
     { id: "heading1", insert: "\n\n# ", toast: "# H1" },
     { id: "heading2", insert: "\n\n## ", toast: "## H2" },
     { id: "heading3", insert: "\n\n### ", toast: "### H3" },
-    { id: "bulletPoint", insert: "\n- ", toast: "•" },
+    { id: "bulletPoint", action: "bulletPoint", toast: "•" },
     { id: "todoItem", insert: "\n- [ ] ", toast: "☐" },
     { id: "numberedItem", action: "numberedItem", toast: "1." },
     { id: "stopRecording", action: "stopRecording", toast: "⏹ Stop" },
@@ -466,6 +470,108 @@ function levenshtein(a, b) {
     return dp[m][n];
 }
 
+// ── Phonetic normalization — lightweight rules per language ──
+// Maps phonetically equivalent sounds to canonical forms to catch ASR mishearings.
+
+const PHONETIC_RULES = {
+    nl: [
+        [/ij/g, "ei"], [/au/g, "ou"], [/dt\b/g, "t"], [/\bsch/g, "sg"],
+        [/ck/g, "k"], [/ph/g, "f"], [/th/g, "t"],
+        [/ie/g, "i"], [/oe/g, "u"], [/ee/g, "e"], [/oo/g, "o"], [/uu/g, "u"], [/aa/g, "a"],
+    ],
+    en: [
+        [/ph/g, "f"], [/th/g, "t"], [/ck/g, "k"], [/ght/g, "t"],
+        [/wh/g, "w"], [/kn/g, "n"], [/wr/g, "r"],
+        [/tion/g, "shun"], [/sion/g, "shun"],
+    ],
+    fr: [
+        [/eau/g, "o"], [/aux/g, "o"], [/ai/g, "e"], [/ei/g, "e"],
+        [/ph/g, "f"], [/qu/g, "k"], [/gn/g, "ny"],
+        [/oi/g, "wa"], [/ou/g, "u"], [/an/g, "on"], [/en/g, "on"],
+    ],
+    de: [
+        [/sch/g, "sh"], [/ei/g, "ai"], [/ie/g, "i"], [/ck/g, "k"],
+        [/ph/g, "f"], [/th/g, "t"], [/v/g, "f"], [/tz/g, "ts"], [/dt\b/g, "t"],
+        [/aa/g, "a"], [/ee/g, "e"], [/oo/g, "o"],
+    ],
+    es: [
+        [/ll/g, "y"], [/v/g, "b"], [/ce/g, "se"], [/ci/g, "si"],
+        [/qu/g, "k"], [/h/g, ""],
+    ],
+    pt: [
+        [/lh/g, "ly"], [/nh/g, "ny"], [/ch/g, "sh"],
+        [/qu/g, "k"], [/ção/g, "saun"], [/ss/g, "s"],
+    ],
+    it: [
+        [/gn/g, "ny"], [/ch/g, "k"], [/gh/g, "g"],
+        [/sc(?=[ei])/g, "sh"], [/zz/g, "ts"],
+    ],
+};
+
+const LANG_ARTICLES = {
+    nl: ["een", "de", "het", "die", "dat", "deze"],
+    en: ["a", "an", "the"],
+    fr: ["un", "une", "le", "la", "les", "l", "du", "des"],
+    de: ["ein", "eine", "einen", "einem", "einer", "der", "die", "das", "den", "dem", "des"],
+    es: ["un", "una", "el", "la", "los", "las"],
+    pt: ["um", "uma", "o", "a", "os", "as"],
+    it: ["un", "uno", "una", "il", "lo", "la", "i", "gli", "le"],
+};
+
+const LANG_TRAILING_FILLERS = {
+    nl: ["alsjeblieft", "graag", "even", "maar", "eens", "dan", "nu", "hoor"],
+    en: ["please", "now", "then", "thanks"],
+    fr: ["s il vous plait", "s il te plait", "merci"],
+    de: ["bitte", "mal", "jetzt", "dann"],
+    es: ["por favor", "ahora", "gracias"],
+    pt: ["por favor", "agora", "obrigado"],
+    it: ["per favore", "ora", "adesso", "grazie"],
+};
+
+function phoneticNormalize(text, lang) {
+    const rules = PHONETIC_RULES[lang];
+    if (!rules) return text;
+    let result = text;
+    for (const [pattern, replacement] of rules) {
+        result = result.replace(pattern, replacement);
+    }
+    return result;
+}
+
+function stripArticlesFromText(text, lang) {
+    const articles = LANG_ARTICLES[lang];
+    if (!articles || articles.length === 0) return text;
+    const words = text.split(/\s+/);
+    let stripped = 0;
+    while (stripped < Math.min(2, words.length - 1)) {
+        if (articles.includes(words[stripped])) stripped++;
+        else break;
+    }
+    return stripped > 0 ? words.slice(stripped).join(" ") : text;
+}
+
+function stripTrailingFillersFromText(text, lang) {
+    const fillers = LANG_TRAILING_FILLERS[lang];
+    if (!fillers || fillers.length === 0) return text;
+    let result = text;
+    for (const filler of fillers.sort((a, b) => b.length - a.length)) {
+        if (result.endsWith(" " + filler)) {
+            result = result.slice(0, -(filler.length + 1)).trimEnd();
+        }
+    }
+    return result;
+}
+
+function trySplitCompound(text, knownPhrases) {
+    if (text.includes(" ") || text.length < 4) return text;
+    for (const phrase of knownPhrases) {
+        const words = phrase.split(/\s+/);
+        if (words.length < 2) continue;
+        if (text === words.join("")) return phrase;
+    }
+    return text;
+}
+
 // Normalize spoken text for command matching
 function normalizeCommand(text) {
     let norm = text.toLowerCase().trim();
@@ -480,6 +586,23 @@ function normalizeCommand(text) {
 }
 
 function findCommand(normalized, rawText) {
+    // Helper: extract trailing N words
+    function trailingWords(text, n) {
+        const words = text.trimEnd().split(/\s+/);
+        return words.slice(-n).join(" ");
+    }
+
+    // Helper: get all known command phrases for compound splitting
+    function getAllPhrases() {
+        const phrases = [];
+        for (const cmd of VOICE_COMMANDS) {
+            for (const pattern of cmd.patterns) {
+                phrases.push(normalizeCommand(pattern));
+            }
+        }
+        return phrases;
+    }
+
     // Pass 1: exact match (full or suffix)
     for (const cmd of VOICE_COMMANDS) {
         for (const pattern of cmd.patterns) {
@@ -493,10 +616,83 @@ function findCommand(normalized, rawText) {
             }
         }
     }
-    // Pass 2: fuzzy match for standalone sentences only (Levenshtein ≤ 2)
-    // This catches conjugation errors like "beeindigde opname" ≈ "beeindig de opname"
+
+    // Pass 2: match after stripping trailing fillers
+    const strippedFillers = stripTrailingFillersFromText(normalized, activeLang);
+    if (strippedFillers !== normalized) {
+        for (const cmd of VOICE_COMMANDS) {
+            for (const pattern of cmd.patterns) {
+                const p = normalizeCommand(pattern);
+                if (strippedFillers === p) return { cmd, textBefore: "" };
+                if (strippedFillers.endsWith(" " + p)) {
+                    const patternWordCount = p.split(/\s+/).length;
+                    const fillerWordCount = normalized.split(/\s+/).length - strippedFillers.split(/\s+/).length;
+                    const rawWords = (rawText || "").trimEnd().split(/\s+/);
+                    const textBefore = rawWords.slice(0, -(patternWordCount + fillerWordCount)).join(" ");
+                    return { cmd, textBefore };
+                }
+            }
+        }
+    }
+
+    // Pass 2b: strip leading articles from trailing portion
+    for (const cmd of VOICE_COMMANDS) {
+        for (const pattern of cmd.patterns) {
+            const p = normalizeCommand(pattern);
+            const patternWordCount = p.split(/\s+/).length;
+            const tail = trailingWords(normalized, patternWordCount + 1);
+            const stripped = stripArticlesFromText(tail, activeLang);
+            if (stripped === p) {
+                const tailWordCount = tail.split(/\s+/).length;
+                const rawWords = (rawText || "").trimEnd().split(/\s+/);
+                const textBefore = rawWords.slice(0, -tailWordCount).join(" ");
+                return { cmd, textBefore };
+            }
+        }
+    }
+
+    // Pass 3: phonetic match
+    const phoneticText = phoneticNormalize(normalized, activeLang);
+    for (const cmd of VOICE_COMMANDS) {
+        for (const pattern of cmd.patterns) {
+            const normP = normalizeCommand(pattern);
+            const phoneticP = phoneticNormalize(normP, activeLang);
+            if (phoneticP !== normP || phoneticText !== normalized) {
+                if (phoneticText === phoneticP) return { cmd, textBefore: "" };
+                if (phoneticText.endsWith(" " + phoneticP)) {
+                    const patternWordCount = pattern.split(/\s+/).length;
+                    const rawWords = (rawText || "").trimEnd().split(/\s+/);
+                    const textBefore = rawWords.slice(0, -patternWordCount).join(" ");
+                    return { cmd, textBefore };
+                }
+            }
+        }
+    }
+
+    // Pass 4: compound-word splitting
+    const lastWord = normalized.split(/\s+/).pop() || "";
+    if (lastWord.length >= 4) {
+        const split = trySplitCompound(lastWord, getAllPhrases());
+        if (split !== lastWord) {
+            const words = normalized.split(/\s+/);
+            words[words.length - 1] = split;
+            const resplit = words.join(" ");
+            for (const cmd of VOICE_COMMANDS) {
+                for (const pattern of cmd.patterns) {
+                    const p = normalizeCommand(pattern);
+                    if (resplit === p || resplit.endsWith(" " + p)) {
+                        const rawWords = (rawText || "").trimEnd().split(/\s+/);
+                        const textBefore = rawWords.slice(0, -1).join(" ");
+                        return { cmd, textBefore };
+                    }
+                }
+            }
+        }
+    }
+
+    // Pass 5: fuzzy match for standalone sentences only (Levenshtein ≤ 2)
     let bestMatch = null;
-    let bestDist = 3; // threshold: must be strictly less than this
+    let bestDist = 3;
     for (const cmd of VOICE_COMMANDS) {
         for (const pattern of cmd.patterns) {
             const p = normalizeCommand(pattern);
@@ -673,11 +869,40 @@ function executeCommand(cmd) {
         restoreUndo();
     } else if (cmd.action === "numberedItem") {
         insertNumberedItem();
+    } else if (cmd.action === "bulletPoint") {
+        insertContextBullet();
     }
 
     isMidSentenceInsert = false;
     replaceHint.classList.add("hidden");
     showToast(cmd.toast);
+}
+
+function insertContextBullet() {
+    // Context-aware: detect current list type and continue it
+    const text = transcript.textContent || "";
+    const lastLine = text.split("\n").filter(l => l.trim()).pop() || "";
+
+    let insertText;
+    if (/^\d+\.\s/.test(lastLine)) {
+        // Numbered list — continue numbering
+        const num = parseInt(lastLine.match(/^(\d+)/)?.[1] ?? "0", 10);
+        insertText = `\n${num + 1}. `;
+    } else if (/^- \[[ x]\]\s/.test(lastLine)) {
+        // Todo list — continue with unchecked
+        insertText = "\n- [ ] ";
+    } else {
+        // Default: unordered bullet
+        insertText = "\n- ";
+    }
+
+    const span = document.createElement("span");
+    span.textContent = insertText;
+    if (activeInsert && activeInsert.parentNode) {
+        activeInsert.parentNode.insertBefore(span, activeInsert);
+    } else {
+        transcript.appendChild(span);
+    }
 }
 
 function insertNumberedItem() {
@@ -829,7 +1054,7 @@ transcript.addEventListener("mouseup", () => {
         dualFastText = "";
         dualSlowText = "";
         dualSlowConfirmed = "";
-        dualSlowConsumed = 0;
+        // Note: do NOT reset dualFastPrevRaw/dualSlowPrevRaw — the API stream continues
 
         if (!sel.isCollapsed) {
             // ── Selection: replace mode ──
@@ -1162,6 +1387,7 @@ async function startRealtime() {
     const delay = delaySelect.value;
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
     ws = new WebSocket(`${protocol}//${location.host}/ws/transcribe?delay=${delay}`);
+    realtimePrevRaw = "";
 
     ws.onopen = () => {
         statusText.textContent = "Opnemen (realtime)";
@@ -1170,7 +1396,11 @@ async function startRealtime() {
     ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
         if (msg.type === "delta") {
-            feedText(msg.text);
+            // Handle both cumulative and incremental deltas from the API
+            const isCumulative = realtimePrevRaw && msg.text.startsWith(realtimePrevRaw);
+            const newText = isCumulative ? msg.text.substring(realtimePrevRaw.length) : msg.text;
+            realtimePrevRaw = isCumulative ? msg.text : realtimePrevRaw + msg.text;
+            if (newText) feedText(newText);
         } else if (msg.type === "done") {
             if (!checkForCommand()) finalizeInsertPoint();
         } else if (msg.type === "error") {
@@ -1248,7 +1478,8 @@ async function startDualDelay() {
     dualFastText = "";
     dualSlowText = "";
     dualSlowConfirmed = "";
-    dualSlowConsumed = 0;
+    dualFastPrevRaw = "";
+    dualSlowPrevRaw = "";
     dualFastInsert = null;
 
     ws.onopen = () => {
@@ -1259,39 +1490,39 @@ async function startDualDelay() {
         const msg = JSON.parse(event.data);
         if (msg.stream === "fast") {
             if (msg.type === "delta") {
-                dualFastText += msg.text;
-                // Show fast text as preliminary (dimmed) — only the part not yet confirmed by slow
+                // Handle both cumulative and incremental deltas from the API
+                const isCumulative = dualFastPrevRaw && msg.text.startsWith(dualFastPrevRaw);
+                if (isCumulative) {
+                    const newPart = msg.text.substring(dualFastPrevRaw.length);
+                    if (newPart) dualFastText += newPart;
+                } else {
+                    dualFastText += msg.text;
+                }
+                dualFastPrevRaw = isCumulative ? msg.text : dualFastPrevRaw + msg.text;
                 renderDualText();
             } else if (msg.type === "done") {
-                // Fast stream sentence done — finalize but keep as preliminary
+                // Fast stream done — finalize but keep as preliminary
                 renderDualText();
             }
         } else if (msg.stream === "slow") {
             if (msg.type === "delta") {
-                dualSlowText += msg.text;
-                // Slow stream catches up — replace fast text with accurate version
+                // Handle both cumulative and incremental deltas from the API
+                const isCumulative = dualSlowPrevRaw && msg.text.startsWith(dualSlowPrevRaw);
+                if (isCumulative) {
+                    const newPart = msg.text.substring(dualSlowPrevRaw.length);
+                    if (newPart) dualSlowText += newPart;
+                } else {
+                    dualSlowText += msg.text;
+                }
+                dualSlowPrevRaw = isCumulative ? msg.text : dualSlowPrevRaw + msg.text;
                 renderDualText();
                 // Check for voice commands in slow stream (more accurate than fast)
                 processDualSlowCommands();
             } else if (msg.type === "done") {
-                // msg.text is the full finalized text for this segment.
-                // processDualSlowCommands() may have already consumed/trimmed
-                // earlier sentences from dualSlowText. Only replace if msg.text
-                // extends beyond what we've already consumed; use the unconsumed
-                // portion so already-finalized text isn't re-inserted.
-                if (msg.text) {
-                    if (dualSlowConsumed > 0 && msg.text.length > dualSlowConsumed) {
-                        dualSlowText = msg.text.substring(dualSlowConsumed);
-                    } else if (dualSlowConsumed === 0) {
-                        dualSlowText = msg.text;
-                    }
-                    // If msg.text.length <= dualSlowConsumed, everything was already
-                    // processed — keep current dualSlowText (remainder) as-is.
-                }
+                // Stream done — process any remaining text, don't replace
+                // accumulators with msg.text (which would re-inject already-committed text)
                 renderDualText();
-                // Check for voice commands before marking as confirmed
                 processDualSlowCommands();
-                // Mark all slow text as confirmed
                 dualSlowConfirmed = dualSlowText;
             }
         } else if (msg.type === "error") {
@@ -1481,7 +1712,6 @@ function processDualSlowCommands() {
     isMidSentenceInsert = false;
 
     // Trim accumulators: remove the processed portion, keep remainder
-    dualSlowConsumed += matchedLength;
     dualSlowText = remainder;
     // Also trim fast text — remove at least as much as we consumed from slow
     if (dualFastText.length >= matchedLength) {
@@ -1499,7 +1729,6 @@ function processDualSlowCommands() {
         dualSlowText = "";
         dualFastText = "";
         dualSlowConfirmed = "";
-        dualSlowConsumed = 0;
         if (activeInsert) { activeInsert.remove(); activeInsert = null; }
         setTimeout(() => { if (isRecording) btnRecord.click(); }, 0);
     }
@@ -1524,7 +1753,8 @@ function stopDualDelay() {
     dualFastText = "";
     dualSlowText = "";
     dualSlowConfirmed = "";
-    dualSlowConsumed = 0;
+    dualFastPrevRaw = "";
+    dualSlowPrevRaw = "";
 }
 
 // ── Offline / batch recording ──
