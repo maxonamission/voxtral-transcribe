@@ -3846,6 +3846,31 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
    * Shows slow (confirmed) text + any fast text beyond slow.
    */
   renderDualText(editor) {
+    // Detect if user has manually repositioned cursor (e.g. pressed Enter,
+    // clicked elsewhere).  When this happens, commit the confirmed slow
+    // text at the old position and start fresh at the new cursor location.
+    const cursorOffset = editor.posToOffset(editor.getCursor());
+    const expectedEnd = this.dualInsertOffset + this.dualDisplayLen;
+    if (cursorOffset !== expectedEnd) {
+      if (this.dualDisplayLen > 0) {
+        const slowText = this.dualSlowText;
+        const from2 = editor.offsetToPos(this.dualInsertOffset);
+        const to2 = editor.offsetToPos(expectedEnd);
+        editor.replaceRange(slowText, from2, to2);
+        const shift = slowText.length - this.dualDisplayLen;
+        const newCursor = cursorOffset >= expectedEnd
+          ? cursorOffset + shift
+          : cursorOffset;
+        editor.setCursor(editor.offsetToPos(newCursor));
+        this.dualSlowCommitted += slowText.length;
+        this.dualSlowText = "";
+        this.dualFastText = "";
+        this.dualDisplayLen = 0;
+        this.dualInsertOffset = newCursor;
+        return;
+      }
+      this.dualInsertOffset = cursorOffset;
+    }
     const slowLen = this.dualSlowText.length;
     const fastLen = this.dualFastText.length;
     let displayText;
