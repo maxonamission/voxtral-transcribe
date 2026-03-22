@@ -21,6 +21,11 @@ jobs:
         working-directory: obsidian-plugin
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: maxonamission\obsidian-voxtral
+          path: target
+          ssh-key: ${{ secrets.OBSIDIAN_DEPLOY_KEY }}
+          token: ''
 
       - uses: actions/setup-node@v4
         with:
