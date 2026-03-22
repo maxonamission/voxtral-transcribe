@@ -1767,95 +1767,109 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
     );
   }
   openCommandEditor(cmd, index) {
-    var _a;
-    const modal = document.createElement("div");
-    modal.addClass("modal-container", "mod-dim");
-    const modalBg = modal.createDiv("modal-bg voxtral-cmd-modal-bg");
-    const modalEl = modal.createDiv("modal voxtral-cmd-modal");
+    const settingTab = this;
     const lang = this.plugin.settings.language;
-    new import_obsidian2.Setting(modalEl).setName("Custom voice command").setHeading();
-    const triggerSetting = new import_obsidian2.Setting(modalEl).setName("Trigger phrases (comma-separated)");
-    let triggerInput;
-    triggerSetting.addText((text) => {
-      var _a2;
-      triggerInput = text.inputEl;
-      text.setValue(((_a2 = cmd.triggers[lang]) != null ? _a2 : []).join(", "));
-    });
-    let typeValue = cmd.type;
-    new import_obsidian2.Setting(modalEl).setName("Type").addDropdown((drop) => {
-      drop.addOption("insert", "Insert text");
-      drop.addOption("slot", "Slot (type between prefix/suffix)");
-      drop.setValue(cmd.type);
-      drop.onChange((value) => {
-        typeValue = value;
+    const editorModal = new class extends import_obsidian2.Modal {
+      onOpen() {
+        var _a;
+        const { contentEl } = this;
+        this.modalEl.addClass("voxtral-cmd-editor-modal");
+        const stopLeak = (e) => e.stopPropagation();
+        contentEl.addEventListener("input", stopLeak, true);
+        contentEl.addEventListener("keydown", stopLeak, true);
+        contentEl.addEventListener("keyup", stopLeak, true);
+        contentEl.addEventListener("keypress", stopLeak, true);
+        new import_obsidian2.Setting(contentEl).setName("Custom voice command").setHeading();
+        let triggerInput;
+        new import_obsidian2.Setting(contentEl).setName("Trigger phrases (comma-separated)").addText((text) => {
+          var _a2;
+          triggerInput = text.inputEl;
+          text.setValue(((_a2 = cmd.triggers[lang]) != null ? _a2 : []).join(", "));
+        });
+        let typeValue = cmd.type;
+        new import_obsidian2.Setting(contentEl).setName("Type").addDropdown((drop) => {
+          drop.addOption("insert", "Insert text");
+          drop.addOption("slot", "Slot (type between prefix/suffix)");
+          drop.setValue(cmd.type);
+          drop.onChange((value) => {
+            typeValue = value;
+            updateVisibility();
+          });
+        });
+        const insertContainer = contentEl.createDiv();
+        let insertInput;
+        new import_obsidian2.Setting(insertContainer).setName("Text to insert").setDesc("Use \\n for newline").addText((text) => {
+          var _a2;
+          insertInput = text.inputEl;
+          text.setValue(((_a2 = cmd.insertText) != null ? _a2 : "").replace(/\n/g, "\\n"));
+        });
+        const slotContainer = contentEl.createDiv();
+        let prefixInput;
+        let suffixInput;
+        let exitValue = (_a = cmd.slotExit) != null ? _a : "enter";
+        new import_obsidian2.Setting(slotContainer).setName("Prefix (e.g. [[ or **)").addText((text) => {
+          var _a2;
+          prefixInput = text.inputEl;
+          text.setValue((_a2 = cmd.slotPrefix) != null ? _a2 : "");
+        });
+        new import_obsidian2.Setting(slotContainer).setName("Suffix (e.g. ]] or **)").addText((text) => {
+          var _a2;
+          suffixInput = text.inputEl;
+          text.setValue((_a2 = cmd.slotSuffix) != null ? _a2 : "");
+        });
+        new import_obsidian2.Setting(slotContainer).setName("Close slot on").addDropdown((drop) => {
+          drop.addOption("enter", "Enter");
+          drop.addOption("space", "Space");
+          drop.addOption("enter-or-space", "Enter or space");
+          drop.setValue(exitValue);
+          drop.onChange((value) => {
+            exitValue = value;
+          });
+        });
+        const updateVisibility = () => {
+          insertContainer.toggle(typeValue === "insert");
+          slotContainer.toggle(typeValue === "slot");
+        };
         updateVisibility();
-      });
-    });
-    const insertContainer = modalEl.createDiv();
-    let insertInput;
-    new import_obsidian2.Setting(insertContainer).setName("Text to insert").setDesc("Use \\n for newline").addText((text) => {
-      var _a2;
-      insertInput = text.inputEl;
-      text.setValue(((_a2 = cmd.insertText) != null ? _a2 : "").replace(/\n/g, "\\n"));
-    });
-    const slotContainer = modalEl.createDiv();
-    let prefixInput;
-    let suffixInput;
-    let exitValue = (_a = cmd.slotExit) != null ? _a : "enter";
-    new import_obsidian2.Setting(slotContainer).setName("Prefix (e.g. [[ or **)").addText((text) => {
-      var _a2;
-      prefixInput = text.inputEl;
-      text.setValue((_a2 = cmd.slotPrefix) != null ? _a2 : "");
-    });
-    new import_obsidian2.Setting(slotContainer).setName("Suffix (e.g. ]] or **)").addText((text) => {
-      var _a2;
-      suffixInput = text.inputEl;
-      text.setValue((_a2 = cmd.slotSuffix) != null ? _a2 : "");
-    });
-    new import_obsidian2.Setting(slotContainer).setName("Close slot on").addDropdown((drop) => {
-      drop.addOption("enter", "Enter");
-      drop.addOption("space", "Space");
-      drop.addOption("enter-or-space", "Enter or space");
-      drop.setValue(exitValue);
-      drop.onChange((value) => {
-        exitValue = value;
-      });
-    });
-    const updateVisibility = () => {
-      insertContainer.toggle(typeValue === "insert");
-      slotContainer.toggle(typeValue === "slot");
-    };
-    updateVisibility();
-    const btnRow = modalEl.createDiv("voxtral-cmd-btn-row");
-    const cancelBtn = btnRow.createEl("button", { text: "Cancel" });
-    cancelBtn.addEventListener("click", () => modal.remove());
-    const saveBtn = btnRow.createEl("button", { text: "Save", cls: "mod-cta" });
-    saveBtn.addEventListener("click", () => {
-      const triggers = triggerInput.value.split(",").map((t) => t.trim()).filter((t) => t.length > 0);
-      if (triggers.length === 0) {
-        triggerInput.addClass("voxtral-cmd-error");
-        return;
+        if (import_obsidian2.Platform.isMobile) {
+          setTimeout(() => triggerInput == null ? void 0 : triggerInput.focus(), 100);
+        }
+        new import_obsidian2.Setting(contentEl).addButton(
+          (btn) => btn.setButtonText("Cancel").onClick(() => {
+            this.close();
+          })
+        ).addButton(
+          (btn) => btn.setButtonText("Save").setCta().onClick(() => {
+            const triggers = triggerInput.value.split(",").map((t) => t.trim()).filter((t) => t.length > 0);
+            if (triggers.length === 0) {
+              triggerInput.classList.add("voxtral-cmd-error");
+              return;
+            }
+            cmd.triggers[lang] = triggers;
+            cmd.type = typeValue;
+            if (cmd.type === "insert") {
+              cmd.insertText = insertInput.value.replace(/\\n/g, "\n");
+              cmd.slotPrefix = void 0;
+              cmd.slotSuffix = void 0;
+              cmd.slotExit = void 0;
+            } else {
+              cmd.slotPrefix = prefixInput.value;
+              cmd.slotSuffix = suffixInput.value;
+              cmd.slotExit = exitValue;
+              cmd.insertText = void 0;
+            }
+            settingTab.plugin.settings.customCommands[index] = cmd;
+            void settingTab.plugin.saveSettings();
+            this.close();
+            settingTab.display();
+          })
+        );
       }
-      cmd.triggers[lang] = triggers;
-      cmd.type = typeValue;
-      if (cmd.type === "insert") {
-        cmd.insertText = insertInput.value.replace(/\\n/g, "\n");
-        cmd.slotPrefix = void 0;
-        cmd.slotSuffix = void 0;
-        cmd.slotExit = void 0;
-      } else {
-        cmd.slotPrefix = prefixInput.value;
-        cmd.slotSuffix = suffixInput.value;
-        cmd.slotExit = exitValue;
-        cmd.insertText = void 0;
+      onClose() {
+        this.contentEl.empty();
       }
-      this.plugin.settings.customCommands[index] = cmd;
-      void this.plugin.saveSettings();
-      modal.remove();
-      this.display();
-    });
-    modalBg.addEventListener("click", () => modal.remove());
-    document.body.appendChild(modal);
+    }(this.app);
+    editorModal.open();
   }
   /**
    * Add a model dropdown that fetches options from the Mistral API.
@@ -2372,12 +2386,14 @@ ${nextNum}. `);
 ];
 var customCommandDefs = [];
 function loadCustomCommands(commands) {
+  customCommandLabels.clear();
   customCommandDefs = commands.map((cmd) => {
     var _a, _b, _c;
     if (cmd.type === "slot" && cmd.slotPrefix !== void 0) {
       const prefix = cmd.slotPrefix;
       const suffix = (_a = cmd.slotSuffix) != null ? _a : "";
       const exit = (_b = cmd.slotExit) != null ? _b : "enter";
+      customCommandLabels.set(cmd.id, `${prefix}\u2026${suffix}`);
       return {
         id: cmd.id,
         slot: { prefix, suffix, exitTrigger: exit },
@@ -2393,6 +2409,8 @@ function loadCustomCommands(commands) {
       };
     }
     const text = (_c = cmd.insertText) != null ? _c : "";
+    const displayText = text.replace(/\n/g, "\u21B5").slice(0, 30);
+    customCommandLabels.set(cmd.id, displayText || cmd.id);
     return {
       id: cmd.id,
       action: (editor) => insertAtCursor(editor, text)
@@ -2407,6 +2425,7 @@ function getCustomPatterns(cmdId, lang) {
   return (_d = (_c = (_a = customCommandTriggers.get(cmdId)) == null ? void 0 : _a.get(lang)) != null ? _c : (_b = customCommandTriggers.get(cmdId)) == null ? void 0 : _b.get("en")) != null ? _d : [];
 }
 var customCommandTriggers = /* @__PURE__ */ new Map();
+var customCommandLabels = /* @__PURE__ */ new Map();
 function loadCustomCommandTriggers(commands) {
   customCommandTriggers.clear();
   for (const cmd of commands) {
@@ -2578,11 +2597,13 @@ function getCommandList() {
     label: getLabel(c.id, activeLang),
     patterns: getPatternsForCommand(c.id, activeLang)
   }));
-  const custom = customCommandDefs.map((c) => ({
-    label: c.id,
-    // Custom commands use their ID as label
-    patterns: getPatternsForAnyCommand(c.id, activeLang)
-  }));
+  const custom = customCommandDefs.map((c) => {
+    var _a;
+    return {
+      label: (_a = customCommandLabels.get(c.id)) != null ? _a : c.id,
+      patterns: getPatternsForAnyCommand(c.id, activeLang)
+    };
+  });
   return [...builtIn, ...custom];
 }
 
@@ -2958,6 +2979,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     this.sendRibbonEl = null;
     this.mobileActionEl = null;
     this.pendingText = "";
+    this.realtimePrevRaw = "";
     this.realtimeTurnDelta = 0;
     // bytes received via deltas in current realtime turn
     this.realtimeTurnProcessed = 0;
@@ -2984,8 +3006,13 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     this.dualSlowCommitted = 0;
     // bytes trimmed from dualSlowText by processDualSlowCommands
     this.dualSlowTurnDelta = 0;
+    // bytes received via deltas in current slow turn
+    this.dualFastPrevRaw = "";
+    // raw cumulative text from fast API (for delta detection)
+    this.dualSlowPrevRaw = "";
+    // raw cumulative text from slow API (for delta detection)
+    this.dualCommandJustRan = false;
   }
-  // bytes received via deltas in current slow turn
   /** Whether realtime mode is available on this platform */
   get canRealtime() {
     return !import_obsidian5.Platform.isMobile;
@@ -3460,6 +3487,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
       return this.startDualDelayRecording(editor);
     }
     this.pendingText = "";
+    this.realtimePrevRaw = "";
     this.realtimeTurnDelta = 0;
     this.realtimeTurnProcessed = 0;
     this.dictatedRanges = [];
@@ -3513,6 +3541,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
       return;
     }
     vlog.debug("Voxtral: Session ended, reconnecting silently...");
+    this.realtimePrevRaw = "";
     this.realtimeTurnDelta = 0;
     this.realtimeTurnProcessed = 0;
     try {
@@ -3544,13 +3573,17 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     }
   }
   handleRealtimeDelta(editor, text) {
+    const isCumulative = this.realtimePrevRaw && text.startsWith(this.realtimePrevRaw);
+    const newText = isCumulative ? text.substring(this.realtimePrevRaw.length) : text;
+    this.realtimePrevRaw = isCumulative ? text : this.realtimePrevRaw + text;
+    if (!newText) return;
     if (isSlotActive()) {
-      this.slotBuffer += text;
-      this.realtimeTurnDelta += text.length;
+      this.slotBuffer += newText;
+      this.realtimeTurnDelta += newText.length;
       return;
     }
-    this.pendingText += text;
-    this.realtimeTurnDelta += text.length;
+    this.pendingText += newText;
+    this.realtimeTurnDelta += newText.length;
     const sentenceEnd = /[.!?]\s*$/;
     const longEnough = this.pendingText.length > 120;
     if (sentenceEnd.test(this.pendingText) || longEnough) {
@@ -3591,17 +3624,19 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     this.realtimeTurnDelta = 0;
     this.realtimeTurnProcessed = 0;
   }
-  /** Flush buffered transcription text after a slot closes */
+  /** Flush buffered transcription text after a slot closes.
+   *  Atomic: captures and clears slotBuffer before processing
+   *  to prevent race conditions with incoming deltas. */
   flushSlotBuffer(editor) {
-    if (this.slotBuffer.trim()) {
-      this.pendingText += this.slotBuffer;
-      this.slotBuffer = "";
+    const buffered = this.slotBuffer;
+    this.slotBuffer = "";
+    if (buffered.trim()) {
+      this.pendingText += buffered;
       if (this.pendingText.trim()) {
         this.trackProcessText(editor, this.pendingText.trim() + " ");
         this.pendingText = "";
       }
     }
-    this.slotBuffer = "";
   }
   async stopRealtimeRecording() {
     var _a, _b;
@@ -3632,6 +3667,9 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     this.dualDisplayLen = 0;
     this.dualSlowCommitted = 0;
     this.dualSlowTurnDelta = 0;
+    this.dualFastPrevRaw = "";
+    this.dualSlowPrevRaw = "";
+    this.dualCommandJustRan = false;
     await this.connectDualDelayWebSockets(editor);
     const deviceId = this.settings.microphoneDeviceId || void 0;
     await this.recorder.start(deviceId, (pcmData) => {
@@ -3651,7 +3689,14 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
         vlog.debug("Voxtral: Fast stream session created");
       },
       onDelta: (text) => {
-        this.dualFastText += text;
+        const isCumulative = this.dualFastPrevRaw && text.startsWith(this.dualFastPrevRaw);
+        if (isCumulative) {
+          const newPart = text.substring(this.dualFastPrevRaw.length);
+          if (newPart) this.dualFastText += newPart;
+        } else {
+          this.dualFastText += text;
+        }
+        this.dualFastPrevRaw = isCumulative ? text : this.dualFastPrevRaw + text;
         this.renderDualText(editor);
       },
       onDone: (_text) => {
@@ -3669,15 +3714,22 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
         vlog.debug("Voxtral: Slow stream session created");
       },
       onDelta: (text) => {
-        this.dualSlowText += text;
-        this.dualSlowTurnDelta += text.length;
+        const isCumulative = this.dualSlowPrevRaw && text.startsWith(this.dualSlowPrevRaw);
+        if (isCumulative) {
+          const newPart = text.substring(this.dualSlowPrevRaw.length);
+          if (newPart) {
+            this.dualSlowText += newPart;
+            this.dualSlowTurnDelta += newPart.length;
+          }
+        } else {
+          this.dualSlowText += text;
+          this.dualSlowTurnDelta += text.length;
+        }
+        this.dualSlowPrevRaw = isCumulative ? text : this.dualSlowPrevRaw + text;
         this.renderDualText(editor);
         this.processDualSlowCommands(editor);
       },
-      onDone: (text) => {
-        if (text && text.length > this.dualSlowTurnDelta) {
-          this.dualSlowText += text.substring(this.dualSlowTurnDelta);
-        }
+      onDone: (_text) => {
         this.renderDualText(editor);
         this.processDualSlowCommands(editor);
       },
@@ -3730,19 +3782,28 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
         this.dualSlowText = "";
         this.dualFastText = "";
         this.dualSlowTurnDelta = 0;
+        this.dualSlowPrevRaw = "";
+        this.dualFastPrevRaw = "";
         const slowDelay = this.settings.dualDelaySlowMs;
         this.dualSlowTranscriber = new RealtimeTranscriber(this.settings, {
           onSessionCreated: () => vlog.debug("Voxtral: Slow stream reconnected"),
           onDelta: (text) => {
-            this.dualSlowText += text;
-            this.dualSlowTurnDelta += text.length;
+            const isCumulative = this.dualSlowPrevRaw && text.startsWith(this.dualSlowPrevRaw);
+            if (isCumulative) {
+              const newPart = text.substring(this.dualSlowPrevRaw.length);
+              if (newPart) {
+                this.dualSlowText += newPart;
+                this.dualSlowTurnDelta += newPart.length;
+              }
+            } else {
+              this.dualSlowText += text;
+              this.dualSlowTurnDelta += text.length;
+            }
+            this.dualSlowPrevRaw = isCumulative ? text : this.dualSlowPrevRaw + text;
             this.renderDualText(editor);
             this.processDualSlowCommands(editor);
           },
-          onDone: (text) => {
-            if (text && text.length > this.dualSlowTurnDelta) {
-              this.dualSlowText += text.substring(this.dualSlowTurnDelta);
-            }
+          onDone: (_text) => {
             this.renderDualText(editor);
             this.processDualSlowCommands(editor);
           },
@@ -3793,6 +3854,22 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
    */
   processDualSlowCommands(editor) {
     if (!this.dualSlowText) return;
+    if (this.dualCommandJustRan && /^[\s.!?,;:]*$/.test(this.dualSlowText)) {
+      this.dualCommandJustRan = false;
+      if (this.dualDisplayLen > 0) {
+        const from2 = editor.offsetToPos(this.dualInsertOffset);
+        const to2 = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
+        editor.replaceRange("", from2, to2);
+        editor.setCursor(from2);
+        this.dualDisplayLen = 0;
+      }
+      this.dualSlowCommitted += this.dualSlowText.length;
+      this.dualSlowText = "";
+      this.dualFastText = "";
+      this.dualInsertOffset = editor.posToOffset(editor.getCursor());
+      return;
+    }
+    this.dualCommandJustRan = false;
     const segments = this.dualSlowText.match(/[^.!?]+[.!?]+\s*/g);
     const segmentText = segments ? segments.join("") : "";
     const remainder = this.dualSlowText.substring(segmentText.length);
@@ -3813,6 +3890,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
         if (isSlotActive()) {
           this.updateStatusBar("slot");
         }
+        this.dualCommandJustRan = true;
         this.dualSlowCommitted += this.dualSlowText.length;
         this.dualSlowText = "";
         this.dualFastText = "";
@@ -3839,6 +3917,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
           this.trackInsertAtCursor(editor, before);
         }
         match.command.action(editor);
+        this.dualCommandJustRan = true;
         if (match.command.id === "stopRecording") {
           setTimeout(() => {
             void this.stopRecording();

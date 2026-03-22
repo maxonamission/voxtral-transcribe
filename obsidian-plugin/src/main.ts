@@ -88,6 +88,7 @@ export default class VoxtralPlugin extends Plugin {
 	private sendRibbonEl: HTMLElement | null = null;
 	private mobileActionEl: HTMLElement | null = null;
 	private pendingText = "";
+	private realtimePrevRaw = ""; // raw cumulative text from API (for delta detection)
 	private realtimeTurnDelta = 0; // bytes received via deltas in current realtime turn
 	private realtimeTurnProcessed = 0; // bytes already flushed from pendingText in current turn
 	private chunkIndex = 0;
@@ -110,6 +111,9 @@ export default class VoxtralPlugin extends Plugin {
 	private dualDisplayLen = 0;   // length of text currently shown in editor
 	private dualSlowCommitted = 0; // bytes trimmed from dualSlowText by processDualSlowCommands
 	private dualSlowTurnDelta = 0; // bytes received via deltas in current slow turn
+	private dualFastPrevRaw = ""; // raw cumulative text from fast API (for delta detection)
+	private dualSlowPrevRaw = ""; // raw cumulative text from slow API (for delta detection)
+	private dualCommandJustRan = false; // true after a voice command was executed (for orphaned punctuation detection)
 
 	/** Whether realtime mode is available on this platform */
 	get canRealtime(): boolean {
@@ -723,6 +727,7 @@ export default class VoxtralPlugin extends Plugin {
 		}
 
 		this.pendingText = "";
+		this.realtimePrevRaw = "";
 		this.realtimeTurnDelta = 0;
 		this.realtimeTurnProcessed = 0;
 		this.dictatedRanges = [];
@@ -786,6 +791,7 @@ export default class VoxtralPlugin extends Plugin {
 		vlog.debug("Voxtral: Session ended, reconnecting silently...");
 
 		// Reset turn counters for the new connection
+		this.realtimePrevRaw = "";
 		this.realtimeTurnDelta = 0;
 		this.realtimeTurnProcessed = 0;
 
@@ -823,15 +829,22 @@ export default class VoxtralPlugin extends Plugin {
 	}
 
 	private handleRealtimeDelta(editor: Editor, text: string): void {
+		// Handle both cumulative and incremental deltas from the API
+		const isCumulative = this.realtimePrevRaw && text.startsWith(this.realtimePrevRaw);
+		const newText = isCumulative ? text.substring(this.realtimePrevRaw.length) : text;
+		this.realtimePrevRaw = isCumulative ? text : this.realtimePrevRaw + text;
+
+		if (!newText) return;
+
 		// While a slot is active, buffer incoming transcription
 		if (isSlotActive()) {
-			this.slotBuffer += text;
-			this.realtimeTurnDelta += text.length;
+			this.slotBuffer += newText;
+			this.realtimeTurnDelta += newText.length;
 			return;
 		}
 
-		this.pendingText += text;
-		this.realtimeTurnDelta += text.length;
+		this.pendingText += newText;
+		this.realtimeTurnDelta += newText.length;
 
 		// Flush on sentence-ending punctuation OR after accumulating enough text
 		const sentenceEnd = /[.!?]\s*$/;
@@ -887,18 +900,23 @@ export default class VoxtralPlugin extends Plugin {
 		this.realtimeTurnProcessed = 0;
 	}
 
-	/** Flush buffered transcription text after a slot closes */
+	/** Flush buffered transcription text after a slot closes.
+	 *  Atomic: captures and clears slotBuffer before processing
+	 *  to prevent race conditions with incoming deltas. */
 	private flushSlotBuffer(editor: Editor): void {
-		if (this.slotBuffer.trim()) {
-			this.pendingText += this.slotBuffer;
-			this.slotBuffer = "";
-			// Trigger normal processing
+		// Atomically capture and clear the buffer so any delta arriving
+		// between closeSlot() and this flush goes to pendingText instead
+		// of being double-processed.
+		const buffered = this.slotBuffer;
+		this.slotBuffer = "";
+
+		if (buffered.trim()) {
+			this.pendingText += buffered;
 			if (this.pendingText.trim()) {
 				this.trackProcessText(editor, this.pendingText.trim() + " ");
 				this.pendingText = "";
 			}
 		}
-		this.slotBuffer = "";
 	}
 
 	private async stopRealtimeRecording(): Promise<void> {
@@ -936,6 +954,9 @@ export default class VoxtralPlugin extends Plugin {
 		this.dualDisplayLen = 0;
 		this.dualSlowCommitted = 0;
 		this.dualSlowTurnDelta = 0;
+		this.dualFastPrevRaw = "";
+		this.dualSlowPrevRaw = "";
+		this.dualCommandJustRan = false;
 
 		await this.connectDualDelayWebSockets(editor);
 
@@ -960,7 +981,15 @@ export default class VoxtralPlugin extends Plugin {
 				vlog.debug("Voxtral: Fast stream session created");
 			},
 			onDelta: (text) => {
-				this.dualFastText += text;
+				// Handle both cumulative and incremental deltas from the API
+				const isCumulative = this.dualFastPrevRaw && text.startsWith(this.dualFastPrevRaw);
+				if (isCumulative) {
+					const newPart = text.substring(this.dualFastPrevRaw.length);
+					if (newPart) this.dualFastText += newPart;
+				} else {
+					this.dualFastText += text;
+				}
+				this.dualFastPrevRaw = isCumulative ? text : this.dualFastPrevRaw + text;
 				this.renderDualText(editor);
 			},
 			onDone: (_text) => {
@@ -981,17 +1010,25 @@ export default class VoxtralPlugin extends Plugin {
 				vlog.debug("Voxtral: Slow stream session created");
 			},
 			onDelta: (text) => {
-				this.dualSlowText += text;
-				this.dualSlowTurnDelta += text.length;
+				// Handle both cumulative and incremental deltas from the API
+				const isCumulative = this.dualSlowPrevRaw && text.startsWith(this.dualSlowPrevRaw);
+				if (isCumulative) {
+					const newPart = text.substring(this.dualSlowPrevRaw.length);
+					if (newPart) {
+						this.dualSlowText += newPart;
+						this.dualSlowTurnDelta += newPart.length;
+					}
+				} else {
+					this.dualSlowText += text;
+					this.dualSlowTurnDelta += text.length;
+				}
+				this.dualSlowPrevRaw = isCumulative ? text : this.dualSlowPrevRaw + text;
 				this.renderDualText(editor);
 				this.processDualSlowCommands(editor);
 			},
-			onDone: (text) => {
-				// Only append truly new text beyond what we've received
-				// via deltas in THIS turn (not counting old remainder).
-				if (text && text.length > this.dualSlowTurnDelta) {
-					this.dualSlowText += text.substring(this.dualSlowTurnDelta);
-				}
+			onDone: (_text) => {
+				// Stream done — process any remaining text, don't replace
+				// accumulators (which would re-inject already-committed text)
 				this.renderDualText(editor);
 				this.processDualSlowCommands(editor);
 			},
@@ -1055,19 +1092,28 @@ export default class VoxtralPlugin extends Plugin {
 				this.dualSlowText = "";
 				this.dualFastText = "";
 				this.dualSlowTurnDelta = 0;
+				this.dualSlowPrevRaw = "";
+				this.dualFastPrevRaw = "";
 				const slowDelay = this.settings.dualDelaySlowMs;
 				this.dualSlowTranscriber = new RealtimeTranscriber(this.settings, {
 					onSessionCreated: () => vlog.debug("Voxtral: Slow stream reconnected"),
 					onDelta: (text) => {
-						this.dualSlowText += text;
-						this.dualSlowTurnDelta += text.length;
+						const isCumulative = this.dualSlowPrevRaw && text.startsWith(this.dualSlowPrevRaw);
+						if (isCumulative) {
+							const newPart = text.substring(this.dualSlowPrevRaw.length);
+							if (newPart) {
+								this.dualSlowText += newPart;
+								this.dualSlowTurnDelta += newPart.length;
+							}
+						} else {
+							this.dualSlowText += text;
+							this.dualSlowTurnDelta += text.length;
+						}
+						this.dualSlowPrevRaw = isCumulative ? text : this.dualSlowPrevRaw + text;
 						this.renderDualText(editor);
 						this.processDualSlowCommands(editor);
 					},
-					onDone: (text) => {
-						if (text && text.length > this.dualSlowTurnDelta) {
-							this.dualSlowText += text.substring(this.dualSlowTurnDelta);
-						}
+					onDone: (_text) => {
 						this.renderDualText(editor);
 						this.processDualSlowCommands(editor);
 					},
@@ -1126,6 +1172,27 @@ export default class VoxtralPlugin extends Plugin {
 	private processDualSlowCommands(editor: Editor): void {
 		if (!this.dualSlowText) return;
 
+		// Discard orphaned punctuation/whitespace that trails a previously
+		// executed command.  This happens when the API sends a cumulative
+		// delta that appends just "." after the command text was already
+		// consumed and executed (e.g. "Nieuwe alinea" → "Nieuwe alinea.").
+		if (this.dualCommandJustRan && /^[\s.!?,;:]*$/.test(this.dualSlowText)) {
+			this.dualCommandJustRan = false;
+			if (this.dualDisplayLen > 0) {
+				const from = editor.offsetToPos(this.dualInsertOffset);
+				const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
+				editor.replaceRange("", from, to);
+				editor.setCursor(from);
+				this.dualDisplayLen = 0;
+			}
+			this.dualSlowCommitted += this.dualSlowText.length;
+			this.dualSlowText = "";
+			this.dualFastText = "";
+			this.dualInsertOffset = editor.posToOffset(editor.getCursor());
+			return;
+		}
+		this.dualCommandJustRan = false;
+
 		const segments = this.dualSlowText.match(/[^.!?]+[.!?]+\s*/g);
 
 		// Also check the remainder (text without sentence-ending punctuation)
@@ -1153,6 +1220,7 @@ export default class VoxtralPlugin extends Plugin {
 					this.updateStatusBar("slot");
 				}
 
+				this.dualCommandJustRan = true;
 				this.dualSlowCommitted += this.dualSlowText.length;
 				this.dualSlowText = "";
 				this.dualFastText = "";
@@ -1190,6 +1258,7 @@ export default class VoxtralPlugin extends Plugin {
 					this.trackInsertAtCursor(editor, before);
 				}
 				match.command.action(editor);
+				this.dualCommandJustRan = true;
 
 				if (match.command.id === "stopRecording") {
 					setTimeout(() => { void this.stopRecording(); }, 0);

@@ -20,7 +20,11 @@ let dualFastText = ""; // accumulated fast stream text (to be replaced by slow)
 let dualSlowText = ""; // accumulated slow stream text (final/accurate)
 let dualFastInsert = null; // span for fast (preliminary) text
 let dualSlowConfirmed = ""; // how much text has been confirmed by slow stream
-let dualSlowConsumed = 0; // chars already consumed/finalized by processDualSlowCommands
+let dualFastPrevRaw = ""; // raw cumulative text from fast API (for delta detection)
+let dualSlowPrevRaw = ""; // raw cumulative text from slow API (for delta detection)
+
+// ── Realtime state ──
+let realtimePrevRaw = ""; // raw cumulative text from API (for delta detection)
 
 // ── Correction settings ──
 let autoCorrect = JSON.parse(localStorage.getItem("voxtral-autocorrect") || "false");
@@ -1050,7 +1054,7 @@ transcript.addEventListener("mouseup", () => {
         dualFastText = "";
         dualSlowText = "";
         dualSlowConfirmed = "";
-        dualSlowConsumed = 0;
+        // Note: do NOT reset dualFastPrevRaw/dualSlowPrevRaw — the API stream continues
 
         if (!sel.isCollapsed) {
             // ── Selection: replace mode ──
@@ -1383,6 +1387,7 @@ async function startRealtime() {
     const delay = delaySelect.value;
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
     ws = new WebSocket(`${protocol}//${location.host}/ws/transcribe?delay=${delay}`);
+    realtimePrevRaw = "";
 
     ws.onopen = () => {
         statusText.textContent = "Opnemen (realtime)";
@@ -1391,7 +1396,11 @@ async function startRealtime() {
     ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
         if (msg.type === "delta") {
-            feedText(msg.text);
+            // Handle both cumulative and incremental deltas from the API
+            const isCumulative = realtimePrevRaw && msg.text.startsWith(realtimePrevRaw);
+            const newText = isCumulative ? msg.text.substring(realtimePrevRaw.length) : msg.text;
+            realtimePrevRaw = isCumulative ? msg.text : realtimePrevRaw + msg.text;
+            if (newText) feedText(newText);
         } else if (msg.type === "done") {
             if (!checkForCommand()) finalizeInsertPoint();
         } else if (msg.type === "error") {
@@ -1469,7 +1478,8 @@ async function startDualDelay() {
     dualFastText = "";
     dualSlowText = "";
     dualSlowConfirmed = "";
-    dualSlowConsumed = 0;
+    dualFastPrevRaw = "";
+    dualSlowPrevRaw = "";
     dualFastInsert = null;
 
     ws.onopen = () => {
@@ -1480,39 +1490,39 @@ async function startDualDelay() {
         const msg = JSON.parse(event.data);
         if (msg.stream === "fast") {
             if (msg.type === "delta") {
-                dualFastText += msg.text;
-                // Show fast text as preliminary (dimmed) — only the part not yet confirmed by slow
+                // Handle both cumulative and incremental deltas from the API
+                const isCumulative = dualFastPrevRaw && msg.text.startsWith(dualFastPrevRaw);
+                if (isCumulative) {
+                    const newPart = msg.text.substring(dualFastPrevRaw.length);
+                    if (newPart) dualFastText += newPart;
+                } else {
+                    dualFastText += msg.text;
+                }
+                dualFastPrevRaw = isCumulative ? msg.text : dualFastPrevRaw + msg.text;
                 renderDualText();
             } else if (msg.type === "done") {
-                // Fast stream sentence done — finalize but keep as preliminary
+                // Fast stream done — finalize but keep as preliminary
                 renderDualText();
             }
         } else if (msg.stream === "slow") {
             if (msg.type === "delta") {
-                dualSlowText += msg.text;
-                // Slow stream catches up — replace fast text with accurate version
+                // Handle both cumulative and incremental deltas from the API
+                const isCumulative = dualSlowPrevRaw && msg.text.startsWith(dualSlowPrevRaw);
+                if (isCumulative) {
+                    const newPart = msg.text.substring(dualSlowPrevRaw.length);
+                    if (newPart) dualSlowText += newPart;
+                } else {
+                    dualSlowText += msg.text;
+                }
+                dualSlowPrevRaw = isCumulative ? msg.text : dualSlowPrevRaw + msg.text;
                 renderDualText();
                 // Check for voice commands in slow stream (more accurate than fast)
                 processDualSlowCommands();
             } else if (msg.type === "done") {
-                // msg.text is the full finalized text for this segment.
-                // processDualSlowCommands() may have already consumed/trimmed
-                // earlier sentences from dualSlowText. Only replace if msg.text
-                // extends beyond what we've already consumed; use the unconsumed
-                // portion so already-finalized text isn't re-inserted.
-                if (msg.text) {
-                    if (dualSlowConsumed > 0 && msg.text.length > dualSlowConsumed) {
-                        dualSlowText = msg.text.substring(dualSlowConsumed);
-                    } else if (dualSlowConsumed === 0) {
-                        dualSlowText = msg.text;
-                    }
-                    // If msg.text.length <= dualSlowConsumed, everything was already
-                    // processed — keep current dualSlowText (remainder) as-is.
-                }
+                // Stream done — process any remaining text, don't replace
+                // accumulators with msg.text (which would re-inject already-committed text)
                 renderDualText();
-                // Check for voice commands before marking as confirmed
                 processDualSlowCommands();
-                // Mark all slow text as confirmed
                 dualSlowConfirmed = dualSlowText;
             }
         } else if (msg.type === "error") {
@@ -1702,7 +1712,6 @@ function processDualSlowCommands() {
     isMidSentenceInsert = false;
 
     // Trim accumulators: remove the processed portion, keep remainder
-    dualSlowConsumed += matchedLength;
     dualSlowText = remainder;
     // Also trim fast text — remove at least as much as we consumed from slow
     if (dualFastText.length >= matchedLength) {
@@ -1720,7 +1729,6 @@ function processDualSlowCommands() {
         dualSlowText = "";
         dualFastText = "";
         dualSlowConfirmed = "";
-        dualSlowConsumed = 0;
         if (activeInsert) { activeInsert.remove(); activeInsert = null; }
         setTimeout(() => { if (isRecording) btnRecord.click(); }, 0);
     }
@@ -1745,7 +1753,8 @@ function stopDualDelay() {
     dualFastText = "";
     dualSlowText = "";
     dualSlowConfirmed = "";
-    dualSlowConsumed = 0;
+    dualFastPrevRaw = "";
+    dualSlowPrevRaw = "";
 }
 
 // ── Offline / batch recording ──
