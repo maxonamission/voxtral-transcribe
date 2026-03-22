@@ -56,12 +56,16 @@ jobs:
         with:
           path: source
 
+      - name: Setup SSH for target repo
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.OBSIDIAN_VOXTRAL_DEPLOY_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git config --global core.sshCommand "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes"
+
       - name: Clone target repo
-        uses: actions/checkout@v4
-        with:
-          repository: maxonamission/obsidian-voxtral
-          token: ${{ secrets.OBSIDIAN_VOXTRAL_PAT }}
-          path: target
+        run: git clone git@github.com:maxonamission/obsidian-voxtral.git target
 
       - name: Copy plugin files to target
         run: |
