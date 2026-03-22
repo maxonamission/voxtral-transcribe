@@ -1769,6 +1769,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
   openCommandEditor(cmd, index) {
     const settingTab = this;
     const lang = this.plugin.settings.language;
+    let removeVVListener;
     const editorModal = new class extends import_obsidian2.Modal {
       onOpen() {
         var _a;
@@ -1782,7 +1783,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
           };
           adjustHeight();
           vv.addEventListener("resize", adjustHeight);
-          this.register(() => vv.removeEventListener("resize", adjustHeight));
+          removeVVListener = () => vv.removeEventListener("resize", adjustHeight);
         }
         const stopLeak = (e) => e.stopPropagation();
         contentEl.addEventListener("input", stopLeak, true);
@@ -1876,6 +1877,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         );
       }
       onClose() {
+        if (removeVVListener) removeVVListener();
         this.contentEl.empty();
       }
     }(this.app);
