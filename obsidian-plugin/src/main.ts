@@ -1190,6 +1190,14 @@ export default class VoxtralPlugin extends Plugin {
 		// Replace the current dual-delay range in the editor
 		const from = editor.offsetToPos(this.dualInsertOffset);
 		const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
+
+		// Strip leading whitespace when inserting at start of a line —
+		// the API often prepends a space for word separation, but at
+		// column 0 this would cause unwanted indentation.
+		if (from.ch === 0 && this.dualDisplayLen === 0) {
+			displayText = displayText.replace(/^\s+/, "");
+		}
+
 		editor.replaceRange(displayText, from, to);
 		this.dualDisplayLen = displayText.length;
 

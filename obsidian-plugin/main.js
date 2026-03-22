@@ -3881,6 +3881,9 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     }
     const from = editor.offsetToPos(this.dualInsertOffset);
     const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
+    if (from.ch === 0 && this.dualDisplayLen === 0) {
+      displayText = displayText.replace(/^\s+/, "");
+    }
     editor.replaceRange(displayText, from, to);
     this.dualDisplayLen = displayText.length;
     const endOffset = this.dualInsertOffset + this.dualDisplayLen;
