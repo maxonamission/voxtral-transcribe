@@ -1,0 +1,126 @@
+name: Sync Plugin to obsidian-voxtral
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to create (e.g. 0.4.0)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run (skip push to target repo)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: obsidian-plugin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: obsidian-plugin/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npx eslint src/
+
+      - name: TypeScript check
+        run: npx tsc -noEmit -skipLibCheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify version matches input
+        run: |
+          MANIFEST_VERSION=$(node -p "require('./manifest.json').version")
+          if [ "$MANIFEST_VERSION" != "${{ inputs.version }}" ]; then
+            echo "::error::manifest.json version ($MANIFEST_VERSION) does not match input version (${{ inputs.version }})"
+            exit 1
+          fi
+
+  sync:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: source
+
+      - name: Clone target repo
+        uses: actions/checkout@v4
+        with:
+          repository: maxonamission/obsidian-voxtral
+          token: ${{ secrets.OBSIDIAN_VOXTRAL_PAT }}
+          path: target
+
+      - name: Copy plugin files to target
+        run: |
+          # Copy build artifacts and config
+          cp source/obsidian-plugin/main.js target/
+          cp source/obsidian-plugin/manifest.json target/
+          cp source/obsidian-plugin/styles.css target/
+          cp source/obsidian-plugin/versions.json target/
+
+          # Copy source and config for development
+          cp source/obsidian-plugin/package.json target/
+          cp source/obsidian-plugin/package-lock.json target/
+          cp source/obsidian-plugin/tsconfig.json target/
+          cp source/obsidian-plugin/esbuild.config.mjs target/
+          cp source/obsidian-plugin/eslint.config.mjs target/
+          cp -r source/obsidian-plugin/src target/
+
+          # Copy docs
+          cp source/obsidian-plugin/README.md target/ 2>/dev/null || true
+
+          # Copy workflow for standalone releases
+          mkdir -p target/.github/workflows
+          cp source/obsidian-plugin/.github/workflows/release.yml target/.github/workflows/
+
+      - name: Check for changes
+        id: changes
+        working-directory: target
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes to sync"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected:"
+            git diff --cached --stat
+          fi
+
+      - name: Commit, tag, and push
+        if: steps.changes.outputs.has_changes == 'true' && inputs.dry_run == false
+        working-directory: target
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git commit -m "Sync plugin v${{ inputs.version }} from voxtral-transcribe"
+
+          git tag "${{ inputs.version }}"
+
+          git push origin main
+          git push origin "${{ inputs.version }}"
+
+          echo "::notice::Pushed v${{ inputs.version }} to obsidian-voxtral — release workflow will trigger automatically"
+
+      - name: Dry run summary
+        if: inputs.dry_run == true
+        working-directory: target
+        run: |
+          echo "## Dry run — these changes would be pushed:"
+          git diff --cached --stat
+          echo ""
+          echo "Tag that would be created: ${{ inputs.version }}"
