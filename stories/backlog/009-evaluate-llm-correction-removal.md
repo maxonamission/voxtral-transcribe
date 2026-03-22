@@ -1,4 +1,4 @@
-# Story 006: Evaluate and potentially remove LLM text correction
+# Story 009: Evaluate and potentially remove LLM text correction
 
 **Epic:** Pipeline Simplification
 **Status:** Backlog
