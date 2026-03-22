@@ -1878,7 +1878,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         );
       }
       onClose() {
-        if (removeVVListener) removeVVListener();
+        removeVVListener == null ? void 0 : removeVVListener();
         this.contentEl.empty();
       }
     }(this.app);
@@ -2993,6 +2993,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     this.mobileActionEl = null;
     this.pendingText = "";
     this.realtimePrevRaw = "";
+    // raw cumulative text from API (for delta detection)
     this.realtimeTurnDelta = 0;
     // bytes received via deltas in current realtime turn
     this.realtimeTurnProcessed = 0;
@@ -3026,6 +3027,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     // raw cumulative text from slow API (for delta detection)
     this.dualCommandJustRan = false;
   }
+  // true after a voice command was executed (for orphaned punctuation detection)
   /** Whether realtime mode is available on this platform */
   get canRealtime() {
     return !import_obsidian5.Platform.isMobile;
@@ -3846,9 +3848,6 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
    * Shows slow (confirmed) text + any fast text beyond slow.
    */
   renderDualText(editor) {
-    // Detect if user has manually repositioned cursor (e.g. pressed Enter,
-    // clicked elsewhere).  When this happens, commit the confirmed slow
-    // text at the old position and start fresh at the new cursor location.
     const cursorOffset = editor.posToOffset(editor.getCursor());
     const expectedEnd = this.dualInsertOffset + this.dualDisplayLen;
     if (cursorOffset !== expectedEnd) {
@@ -3858,9 +3857,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
         const to2 = editor.offsetToPos(expectedEnd);
         editor.replaceRange(slowText, from2, to2);
         const shift = slowText.length - this.dualDisplayLen;
-        const newCursor = cursorOffset >= expectedEnd
-          ? cursorOffset + shift
-          : cursorOffset;
+        const newCursor = cursorOffset >= expectedEnd ? cursorOffset + shift : cursorOffset;
         editor.setCursor(editor.offsetToPos(newCursor));
         this.dualSlowCommitted += slowText.length;
         this.dualSlowText = "";
