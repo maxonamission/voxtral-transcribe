@@ -1144,6 +1144,39 @@ export default class VoxtralPlugin extends Plugin {
 	 * Shows slow (confirmed) text + any fast text beyond slow.
 	 */
 	private renderDualText(editor: Editor): void {
+		// Detect if user has manually repositioned cursor (e.g. pressed Enter,
+		// clicked elsewhere).  When this happens, commit the confirmed slow
+		// text at the old position and start fresh at the new cursor location.
+		const cursorOffset = editor.posToOffset(editor.getCursor());
+		const expectedEnd = this.dualInsertOffset + this.dualDisplayLen;
+
+		if (cursorOffset !== expectedEnd) {
+			if (this.dualDisplayLen > 0) {
+				// Commit only the confirmed (slow) text at the old position
+				const slowText = this.dualSlowText;
+				const from = editor.offsetToPos(this.dualInsertOffset);
+				const to = editor.offsetToPos(expectedEnd);
+				editor.replaceRange(slowText, from, to);
+
+				// The replacement may have shifted offsets — adjust cursor
+				const shift = slowText.length - this.dualDisplayLen;
+				const newCursor = cursorOffset >= expectedEnd
+					? cursorOffset + shift
+					: cursorOffset;
+				editor.setCursor(editor.offsetToPos(newCursor));
+
+				// Reset accumulators — committed text is now permanent
+				this.dualSlowCommitted += slowText.length;
+				this.dualSlowText = "";
+				this.dualFastText = "";
+				this.dualDisplayLen = 0;
+				this.dualInsertOffset = newCursor;
+				return;
+			}
+			// No displayed text yet — just update insert offset
+			this.dualInsertOffset = cursorOffset;
+		}
+
 		const slowLen = this.dualSlowText.length;
 		const fastLen = this.dualFastText.length;
 
