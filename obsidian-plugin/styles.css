@@ -139,12 +139,18 @@
 
 /* ── Custom command editor modal (mobile scroll fix) ── */
 
+.voxtral-cmd-editor-overlay {
+	align-items: safe center;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
 .voxtral-cmd-editor-modal {
-	max-height: 80vh;
+	max-height: calc(100dvh - 2rem);
 	overflow-y: auto;
 	-webkit-overflow-scrolling: touch;
 }
 
 .is-mobile .voxtral-cmd-editor-modal {
-	max-height: 60vh;
+	max-height: calc(100dvh - 2rem);
 }

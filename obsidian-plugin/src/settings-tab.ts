@@ -488,6 +488,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 
 				// Make the modal scrollable on mobile where the keyboard
 				// covers the bottom half of the screen
+				this.containerEl.addClass("voxtral-cmd-editor-overlay");
 				this.modalEl.addClass("voxtral-cmd-editor-modal");
 
 				// Prevent input events from leaking to the settings page
