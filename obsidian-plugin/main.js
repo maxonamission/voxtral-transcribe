@@ -1775,6 +1775,15 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         const { contentEl } = this;
         this.containerEl.addClass("voxtral-cmd-editor-overlay");
         this.modalEl.addClass("voxtral-cmd-editor-modal");
+        if (import_obsidian2.Platform.isMobile && window.visualViewport) {
+          const vv = window.visualViewport;
+          const adjustHeight = () => {
+            this.modalEl.style.maxHeight = `${vv.height - 32}px`;
+          };
+          adjustHeight();
+          vv.addEventListener("resize", adjustHeight);
+          this.register(() => vv.removeEventListener("resize", adjustHeight));
+        }
         const stopLeak = (e) => e.stopPropagation();
         contentEl.addEventListener("input", stopLeak, true);
         contentEl.addEventListener("keydown", stopLeak, true);
