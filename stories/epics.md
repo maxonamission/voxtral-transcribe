@@ -33,6 +33,13 @@ Make the app easy to download and run for testers and users.
 |---|-------|--------|----------|
 | 004 | [Automated GitHub Releases with cross-platform builds](doing/004-github-releases-ci.md) | Doing | High |
 
+## Epic: Pipeline Simplification
+
+Evaluate whether processing steps can be simplified or removed without losing essential functionality.
+
+| # | Story | Status | Priority |
+|---|-------|--------|----------|
+| 009 | [Evaluate and potentially remove LLM text correction](backlog/009-evaluate-llm-correction-removal.md) | Backlog | Medium |
 ## Epic: Custom Commands & Extensibility
 
 Allow users to define their own voice commands, mishearing corrections, and dynamic actions — making the plugin adaptable to any workflow or language.
