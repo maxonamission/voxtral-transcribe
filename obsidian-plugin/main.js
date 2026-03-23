@@ -874,40 +874,11 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
-// src/lang.ts
-var SUPPORTED_LANGUAGES = [
-  "nl",
-  "en",
-  "fr",
-  "de",
-  "es",
-  "pt",
-  "it",
-  "ru",
-  "zh",
-  "hi",
-  "ar",
-  "ja",
-  "ko"
-];
-var LANGUAGE_NAMES = {
-  nl: "Nederlands",
-  en: "English",
-  fr: "Fran\xE7ais",
-  de: "Deutsch",
-  es: "Espa\xF1ol",
-  pt: "Portugu\xEAs",
-  it: "Italiano",
-  ru: "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
-  zh: "\u4E2D\u6587",
-  hi: "\u0939\u093F\u0928\u094D\u0926\u0940",
-  ar: "\u0627\u0644\u0639\u0631\u0628\u064A\u0629",
-  ja: "\u65E5\u672C\u8A9E",
-  ko: "\uD55C\uAD6D\uC5B4"
-};
-var PATTERNS = {
-  // ── Dutch ──────────────────────────────────────────────────────
-  nl: {
+// src/languages/nl.json
+var nl_default = {
+  code: "nl",
+  name: "Nederlands",
+  patterns: {
     newParagraph: ["nieuwe alinea", "nieuw alinea", "nieuwe paragraaf", "nieuw paragraaf", "nieuwe linie"],
     newLine: ["nieuwe regel", "nieuwe lijn", "volgende regel"],
     heading1: ["kop een", "kop 1"],
@@ -927,261 +898,7 @@ var PATTERNS = {
     inlineCode: ["code"],
     tag: ["tag", "label"]
   },
-  // ── English ────────────────────────────────────────────────────
-  en: {
-    newParagraph: ["new paragraph"],
-    newLine: ["new line", "next line"],
-    heading1: ["heading one", "heading 1"],
-    heading2: ["heading two", "heading 2"],
-    heading3: ["heading three", "heading 3"],
-    bulletPoint: ["new item", "next item", "bullet", "bullet point", "new bullet"],
-    todoItem: ["new todo", "new to do", "todo item", "to do item"],
-    numberedItem: ["numbered item", "new numbered item", "next number"],
-    deleteLastParagraph: ["delete last paragraph"],
-    deleteLastLine: ["delete last line", "delete last sentence"],
-    undo: ["undo"],
-    stopRecording: ["stop recording"],
-    colon: ["colon"],
-    wikilink: ["wiki link", "wikilink", "link"],
-    bold: ["bold"],
-    italic: ["italic"],
-    inlineCode: ["code", "inline code"],
-    tag: ["tag"]
-  },
-  // ── French ─────────────────────────────────────────────────────
-  fr: {
-    newParagraph: ["nouveau paragraphe", "nouvelle section", "nouveau alinea"],
-    newLine: ["nouvelle ligne", "a la ligne", "retour a la ligne"],
-    heading1: ["titre un", "titre 1"],
-    heading2: ["titre deux", "titre 2"],
-    heading3: ["titre trois", "titre 3"],
-    bulletPoint: ["nouveau point", "nouvelle puce", "point suivant", "nouvel element", "nouvel item"],
-    todoItem: ["nouvelle tache", "nouveau todo", "nouveau to do"],
-    numberedItem: ["point numero", "element numero", "nouveau numero"],
-    deleteLastParagraph: ["supprimer dernier paragraphe", "effacer dernier paragraphe"],
-    deleteLastLine: ["supprimer derniere ligne", "effacer derniere ligne", "supprimer derniere phrase"],
-    undo: ["annuler"],
-    stopRecording: ["arreter enregistrement", "arreter l enregistrement", "stop enregistrement"],
-    colon: ["deux points"],
-    wikilink: ["wiki lien", "lien wiki"],
-    bold: ["gras"],
-    italic: ["italique"],
-    inlineCode: ["code"],
-    tag: ["etiquette", "tag"]
-  },
-  // ── German ─────────────────────────────────────────────────────
-  de: {
-    newParagraph: ["neuer absatz", "neuer paragraph"],
-    newLine: ["neue zeile", "nachste zeile"],
-    heading1: ["uberschrift eins", "uberschrift 1"],
-    heading2: ["uberschrift zwei", "uberschrift 2"],
-    heading3: ["uberschrift drei", "uberschrift 3"],
-    bulletPoint: ["neuer punkt", "neuer aufzahlungspunkt", "nachster punkt", "neues element"],
-    todoItem: ["neue aufgabe", "neues todo", "neues to do"],
-    numberedItem: ["nummerierter punkt", "neuer nummerierter punkt", "nachste nummer"],
-    deleteLastParagraph: ["letzten absatz loschen", "absatz loschen"],
-    deleteLastLine: ["letzte zeile loschen", "letzten satz loschen"],
-    undo: ["ruckgangig", "ruckgangig machen"],
-    stopRecording: ["aufnahme beenden", "aufnahme stoppen"],
-    colon: ["doppelpunkt"],
-    wikilink: ["wikilink", "wiki link"],
-    bold: ["fett"],
-    italic: ["kursiv"],
-    inlineCode: ["code"],
-    tag: ["tag", "schlagwort"]
-  },
-  // ── Spanish ────────────────────────────────────────────────────
-  es: {
-    newParagraph: ["nuevo parrafo", "nueva seccion"],
-    newLine: ["nueva linea", "siguiente linea"],
-    heading1: ["titulo uno", "titulo 1"],
-    heading2: ["titulo dos", "titulo 2"],
-    heading3: ["titulo tres", "titulo 3"],
-    bulletPoint: ["nuevo punto", "nueva vineta", "siguiente punto", "nuevo elemento"],
-    todoItem: ["nueva tarea", "nuevo todo", "nuevo to do"],
-    numberedItem: ["punto numerado", "nuevo numero", "siguiente numero"],
-    deleteLastParagraph: ["borrar ultimo parrafo", "eliminar ultimo parrafo"],
-    deleteLastLine: ["borrar ultima linea", "eliminar ultima linea", "borrar ultima frase"],
-    undo: ["deshacer"],
-    stopRecording: ["parar grabacion", "detener grabacion"],
-    colon: ["dos puntos"],
-    wikilink: ["wikilink", "enlace wiki"],
-    bold: ["negrita"],
-    italic: ["cursiva"],
-    inlineCode: ["codigo"],
-    tag: ["etiqueta", "tag"]
-  },
-  // ── Portuguese ─────────────────────────────────────────────────
-  pt: {
-    newParagraph: ["novo paragrafo", "nova secao"],
-    newLine: ["nova linha", "proxima linha"],
-    heading1: ["titulo um", "titulo 1"],
-    heading2: ["titulo dois", "titulo 2"],
-    heading3: ["titulo tres", "titulo 3"],
-    bulletPoint: ["novo ponto", "novo item", "proximo ponto", "novo elemento"],
-    todoItem: ["nova tarefa", "novo todo", "novo to do"],
-    numberedItem: ["ponto numerado", "novo numero", "proximo numero"],
-    deleteLastParagraph: ["apagar ultimo paragrafo", "excluir ultimo paragrafo"],
-    deleteLastLine: ["apagar ultima linha", "excluir ultima linha", "apagar ultima frase"],
-    undo: ["desfazer"],
-    stopRecording: ["parar gravacao", "encerrar gravacao"],
-    colon: ["dois pontos"],
-    wikilink: ["wikilink", "link wiki"],
-    bold: ["negrito"],
-    italic: ["italico"],
-    inlineCode: ["codigo"],
-    tag: ["etiqueta", "tag"]
-  },
-  // ── Russian ───────────────────────────────────────────────────
-  ru: {
-    newParagraph: ["\u043D\u043E\u0432\u044B\u0439 \u0430\u0431\u0437\u0430\u0446", "\u043D\u043E\u0432\u044B\u0439 \u043F\u0430\u0440\u0430\u0433\u0440\u0430\u0444"],
-    newLine: ["\u043D\u043E\u0432\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430", "\u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430"],
-    heading1: ["\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A \u043E\u0434\u0438\u043D", "\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A 1"],
-    heading2: ["\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A \u0434\u0432\u0430", "\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A 2"],
-    heading3: ["\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A \u0442\u0440\u0438", "\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A 3"],
-    bulletPoint: ["\u043D\u043E\u0432\u044B\u0439 \u043F\u0443\u043D\u043A\u0442", "\u043D\u043E\u0432\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442", "\u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0439 \u043F\u0443\u043D\u043A\u0442"],
-    todoItem: ["\u043D\u043E\u0432\u0430\u044F \u0437\u0430\u0434\u0430\u0447\u0430", "\u043D\u043E\u0432\u043E\u0435 \u0437\u0430\u0434\u0430\u043D\u0438\u0435"],
-    numberedItem: ["\u043D\u0443\u043C\u0435\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u043F\u0443\u043D\u043A\u0442", "\u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0439 \u043D\u043E\u043C\u0435\u0440"],
-    deleteLastParagraph: ["\u0443\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0439 \u0430\u0431\u0437\u0430\u0446"],
-    deleteLastLine: ["\u0443\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u044E\u044E \u0441\u0442\u0440\u043E\u043A\u0443", "\u0443\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0435\u0435 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435"],
-    undo: ["\u043E\u0442\u043C\u0435\u043D\u0438\u0442\u044C", "\u043E\u0442\u043C\u0435\u043D\u0430"],
-    stopRecording: ["\u043E\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u0437\u0430\u043F\u0438\u0441\u044C", "\u0441\u0442\u043E\u043F \u0437\u0430\u043F\u0438\u0441\u044C"],
-    colon: ["\u0434\u0432\u043E\u0435\u0442\u043E\u0447\u0438\u0435"],
-    wikilink: ["\u0432\u0438\u043A\u0438 \u0441\u0441\u044B\u043B\u043A\u0430", "\u0432\u0438\u043A\u0438 \u043B\u0438\u043D\u043A"],
-    bold: ["\u0436\u0438\u0440\u043D\u044B\u0439"],
-    italic: ["\u043A\u0443\u0440\u0441\u0438\u0432"],
-    inlineCode: ["\u043A\u043E\u0434"],
-    tag: ["\u0442\u0435\u0433", "\u043C\u0435\u0442\u043A\u0430"]
-  },
-  // ── Chinese ────────────────────────────────────────────────────
-  zh: {
-    newParagraph: ["\u65B0\u6BB5\u843D", "\u65B0\u7684\u6BB5\u843D"],
-    newLine: ["\u6362\u884C", "\u65B0\u884C", "\u4E0B\u4E00\u884C"],
-    heading1: ["\u6807\u9898\u4E00", "\u6807\u98981", "\u4E00\u7EA7\u6807\u9898"],
-    heading2: ["\u6807\u9898\u4E8C", "\u6807\u98982", "\u4E8C\u7EA7\u6807\u9898"],
-    heading3: ["\u6807\u9898\u4E09", "\u6807\u98983", "\u4E09\u7EA7\u6807\u9898"],
-    bulletPoint: ["\u65B0\u9879\u76EE", "\u5217\u8868\u9879", "\u65B0\u7684\u9879\u76EE"],
-    todoItem: ["\u65B0\u4EFB\u52A1", "\u65B0\u5F85\u529E", "\u5F85\u529E\u4E8B\u9879"],
-    numberedItem: ["\u7F16\u53F7\u9879", "\u65B0\u7F16\u53F7", "\u4E0B\u4E00\u4E2A\u7F16\u53F7"],
-    deleteLastParagraph: ["\u5220\u9664\u4E0A\u4E00\u6BB5", "\u5220\u9664\u6700\u540E\u4E00\u6BB5"],
-    deleteLastLine: ["\u5220\u9664\u4E0A\u4E00\u884C", "\u5220\u9664\u4E0A\u4E00\u53E5"],
-    undo: ["\u64A4\u9500", "\u64A4\u56DE"],
-    stopRecording: ["\u505C\u6B62\u5F55\u97F3", "\u7ED3\u675F\u5F55\u97F3"],
-    colon: ["\u5192\u53F7"],
-    wikilink: ["\u7EF4\u57FA\u94FE\u63A5", "\u94FE\u63A5"],
-    bold: ["\u52A0\u7C97", "\u7C97\u4F53"],
-    italic: ["\u659C\u4F53"],
-    inlineCode: ["\u4EE3\u7801"],
-    tag: ["\u6807\u7B7E"]
-  },
-  // ── Hindi ──────────────────────────────────────────────────────
-  hi: {
-    newParagraph: ["\u0928\u092F\u093E \u092A\u0948\u0930\u093E\u0917\u094D\u0930\u093E\u092B", "\u0928\u092F\u093E \u0905\u0928\u0941\u091A\u094D\u091B\u0947\u0926"],
-    newLine: ["\u0928\u0908 \u0932\u093E\u0907\u0928", "\u0905\u0917\u0932\u0940 \u0932\u093E\u0907\u0928"],
-    heading1: ["\u0936\u0940\u0930\u094D\u0937\u0915 \u090F\u0915", "\u0936\u0940\u0930\u094D\u0937\u0915 1", "\u0939\u0947\u0921\u093F\u0902\u0917 1"],
-    heading2: ["\u0936\u0940\u0930\u094D\u0937\u0915 \u0926\u094B", "\u0936\u0940\u0930\u094D\u0937\u0915 2", "\u0939\u0947\u0921\u093F\u0902\u0917 2"],
-    heading3: ["\u0936\u0940\u0930\u094D\u0937\u0915 \u0924\u0940\u0928", "\u0936\u0940\u0930\u094D\u0937\u0915 3", "\u0939\u0947\u0921\u093F\u0902\u0917 3"],
-    bulletPoint: ["\u0928\u092F\u093E \u092C\u093F\u0902\u0926\u0941", "\u0928\u092F\u093E \u092A\u0949\u0907\u0902\u091F", "\u0905\u0917\u0932\u093E \u092A\u0949\u0907\u0902\u091F"],
-    todoItem: ["\u0928\u092F\u093E \u0915\u093E\u0930\u094D\u092F", "\u0928\u092F\u093E \u091F\u0942\u0921\u0942"],
-    numberedItem: ["\u0915\u094D\u0930\u092E\u093E\u0902\u0915\u093F\u0924 \u092C\u093F\u0902\u0926\u0941", "\u0905\u0917\u0932\u093E \u0928\u0902\u092C\u0930"],
-    deleteLastParagraph: ["\u092A\u093F\u091B\u0932\u093E \u092A\u0948\u0930\u093E\u0917\u094D\u0930\u093E\u092B \u0939\u091F\u093E\u0913"],
-    deleteLastLine: ["\u092A\u093F\u091B\u0932\u0940 \u0932\u093E\u0907\u0928 \u0939\u091F\u093E\u0913", "\u0905\u0902\u0924\u093F\u092E \u0932\u093E\u0907\u0928 \u0939\u091F\u093E\u0913"],
-    undo: ["\u092A\u0942\u0930\u094D\u0935\u0935\u0924", "\u0905\u0928\u0921\u0942"],
-    stopRecording: ["\u0930\u093F\u0915\u0949\u0930\u094D\u0921\u093F\u0902\u0917 \u092C\u0902\u0926 \u0915\u0930\u094B", "\u0930\u093F\u0915\u0949\u0930\u094D\u0921\u093F\u0902\u0917 \u0930\u094B\u0915\u094B"],
-    colon: ["\u0915\u094B\u0932\u0928"],
-    wikilink: ["\u0935\u093F\u0915\u093F \u0932\u093F\u0902\u0915", "\u0932\u093F\u0902\u0915"],
-    bold: ["\u092C\u094B\u0932\u094D\u0921", "\u092E\u094B\u091F\u093E"],
-    italic: ["\u0907\u091F\u0948\u0932\u093F\u0915", "\u0924\u093F\u0930\u091B\u093E"],
-    inlineCode: ["\u0915\u094B\u0921"],
-    tag: ["\u091F\u0948\u0917"]
-  },
-  // ── Arabic ─────────────────────────────────────────────────────
-  ar: {
-    newParagraph: ["\u0641\u0642\u0631\u0629 \u062C\u062F\u064A\u062F\u0629"],
-    newLine: ["\u0633\u0637\u0631 \u062C\u062F\u064A\u062F", "\u0627\u0644\u0633\u0637\u0631 \u0627\u0644\u062A\u0627\u0644\u064A"],
-    heading1: ["\u0639\u0646\u0648\u0627\u0646 \u0648\u0627\u062D\u062F", "\u0639\u0646\u0648\u0627\u0646 1"],
-    heading2: ["\u0639\u0646\u0648\u0627\u0646 \u0627\u062B\u0646\u064A\u0646", "\u0639\u0646\u0648\u0627\u0646 2"],
-    heading3: ["\u0639\u0646\u0648\u0627\u0646 \u062B\u0644\u0627\u062B\u0629", "\u0639\u0646\u0648\u0627\u0646 3"],
-    bulletPoint: ["\u0646\u0642\u0637\u0629 \u062C\u062F\u064A\u062F\u0629", "\u0639\u0646\u0635\u0631 \u062C\u062F\u064A\u062F"],
-    todoItem: ["\u0645\u0647\u0645\u0629 \u062C\u062F\u064A\u062F\u0629"],
-    numberedItem: ["\u0639\u0646\u0635\u0631 \u0645\u0631\u0642\u0645", "\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u062A\u0627\u0644\u064A"],
-    deleteLastParagraph: ["\u0627\u062D\u0630\u0641 \u0627\u0644\u0641\u0642\u0631\u0629 \u0627\u0644\u0623\u062E\u064A\u0631\u0629"],
-    deleteLastLine: ["\u0627\u062D\u0630\u0641 \u0627\u0644\u0633\u0637\u0631 \u0627\u0644\u0623\u062E\u064A\u0631", "\u0627\u062D\u0630\u0641 \u0627\u0644\u062C\u0645\u0644\u0629 \u0627\u0644\u0623\u062E\u064A\u0631\u0629"],
-    undo: ["\u062A\u0631\u0627\u062C\u0639"],
-    stopRecording: ["\u0623\u0648\u0642\u0641 \u0627\u0644\u062A\u0633\u062C\u064A\u0644", "\u0625\u064A\u0642\u0627\u0641 \u0627\u0644\u062A\u0633\u062C\u064A\u0644"],
-    colon: ["\u0646\u0642\u0637\u062A\u0627\u0646"],
-    wikilink: ["\u0631\u0627\u0628\u0637 \u0648\u064A\u0643\u064A", "\u0631\u0627\u0628\u0637"],
-    bold: ["\u063A\u0627\u0645\u0642", "\u0639\u0631\u064A\u0636"],
-    italic: ["\u0645\u0627\u0626\u0644"],
-    inlineCode: ["\u0643\u0648\u062F"],
-    tag: ["\u0648\u0633\u0645"]
-  },
-  // ── Japanese ───────────────────────────────────────────────────
-  ja: {
-    newParagraph: ["\u65B0\u3057\u3044\u6BB5\u843D", "\u65B0\u6BB5\u843D"],
-    newLine: ["\u6539\u884C", "\u65B0\u3057\u3044\u884C", "\u6B21\u306E\u884C"],
-    heading1: ["\u898B\u51FA\u30571", "\u898B\u51FA\u3057\u3044\u3061"],
-    heading2: ["\u898B\u51FA\u30572", "\u898B\u51FA\u3057\u306B"],
-    heading3: ["\u898B\u51FA\u30573", "\u898B\u51FA\u3057\u3055\u3093"],
-    bulletPoint: ["\u7B87\u6761\u66F8\u304D", "\u65B0\u3057\u3044\u9805\u76EE", "\u6B21\u306E\u9805\u76EE"],
-    todoItem: ["\u65B0\u3057\u3044\u30BF\u30B9\u30AF", "\u30BF\u30B9\u30AF\u8FFD\u52A0"],
-    numberedItem: ["\u756A\u53F7\u4ED8\u304D", "\u6B21\u306E\u756A\u53F7"],
-    deleteLastParagraph: ["\u6700\u5F8C\u306E\u6BB5\u843D\u3092\u524A\u9664"],
-    deleteLastLine: ["\u6700\u5F8C\u306E\u884C\u3092\u524A\u9664", "\u6700\u5F8C\u306E\u6587\u3092\u524A\u9664"],
-    undo: ["\u5143\u306B\u623B\u3059", "\u53D6\u308A\u6D88\u3057"],
-    stopRecording: ["\u9332\u97F3\u505C\u6B62", "\u9332\u97F3\u3092\u6B62\u3081\u3066"],
-    colon: ["\u30B3\u30ED\u30F3"],
-    wikilink: ["\u30A6\u30A3\u30AD\u30EA\u30F3\u30AF", "\u30EA\u30F3\u30AF"],
-    bold: ["\u592A\u5B57", "\u30DC\u30FC\u30EB\u30C9"],
-    italic: ["\u659C\u4F53", "\u30A4\u30BF\u30EA\u30C3\u30AF"],
-    inlineCode: ["\u30B3\u30FC\u30C9"],
-    tag: ["\u30BF\u30B0"]
-  },
-  // ── Korean ─────────────────────────────────────────────────────
-  ko: {
-    newParagraph: ["\uC0C8 \uB2E8\uB77D", "\uC0C8 \uBB38\uB2E8"],
-    newLine: ["\uC0C8 \uC904", "\uB2E4\uC74C \uC904", "\uC904 \uBC14\uAFC8"],
-    heading1: ["\uC81C\uBAA9 1", "\uC81C\uBAA9 \uD558\uB098"],
-    heading2: ["\uC81C\uBAA9 2", "\uC81C\uBAA9 \uB458"],
-    heading3: ["\uC81C\uBAA9 3", "\uC81C\uBAA9 \uC14B"],
-    bulletPoint: ["\uC0C8 \uD56D\uBAA9", "\uB2E4\uC74C \uD56D\uBAA9", "\uAE00\uBA38\uB9AC \uAE30\uD638"],
-    todoItem: ["\uC0C8 \uD560\uC77C", "\uD560\uC77C \uCD94\uAC00"],
-    numberedItem: ["\uBC88\uD638 \uD56D\uBAA9", "\uB2E4\uC74C \uBC88\uD638"],
-    deleteLastParagraph: ["\uB9C8\uC9C0\uB9C9 \uB2E8\uB77D \uC0AD\uC81C"],
-    deleteLastLine: ["\uB9C8\uC9C0\uB9C9 \uC904 \uC0AD\uC81C", "\uB9C8\uC9C0\uB9C9 \uBB38\uC7A5 \uC0AD\uC81C"],
-    undo: ["\uC2E4\uD589 \uCDE8\uC18C", "\uB418\uB3CC\uB9AC\uAE30"],
-    stopRecording: ["\uB179\uC74C \uC911\uC9C0", "\uB179\uC74C \uBA48\uCDB0"],
-    colon: ["\uCF5C\uB860"],
-    wikilink: ["\uC704\uD0A4\uB9C1\uD06C", "\uB9C1\uD06C"],
-    bold: ["\uAD75\uAC8C", "\uBCFC\uB4DC"],
-    italic: ["\uAE30\uC6B8\uC784", "\uC774\uD0E4\uB9AD"],
-    inlineCode: ["\uCF54\uB4DC"],
-    tag: ["\uD0DC\uADF8"]
-  },
-  // ── Italian ────────────────────────────────────────────────────
-  it: {
-    newParagraph: ["nuovo paragrafo", "nuova sezione", "nuovo capoverso"],
-    newLine: ["nuova riga", "a capo", "riga successiva"],
-    heading1: ["titolo uno", "titolo 1"],
-    heading2: ["titolo due", "titolo 2"],
-    heading3: ["titolo tre", "titolo 3"],
-    bulletPoint: ["nuovo punto", "nuovo elemento", "punto successivo", "nuovo elenco"],
-    todoItem: ["nuovo compito", "nuova attivita", "nuovo todo", "nuovo to do"],
-    numberedItem: ["punto numerato", "nuovo numero", "numero successivo"],
-    deleteLastParagraph: ["cancella ultimo paragrafo", "elimina ultimo paragrafo"],
-    deleteLastLine: ["cancella ultima riga", "elimina ultima riga", "cancella ultima frase"],
-    undo: ["annulla"],
-    stopRecording: ["ferma registrazione", "interrompi registrazione", "stop registrazione"],
-    colon: ["due punti"],
-    wikilink: ["wikilink", "link wiki"],
-    bold: ["grassetto"],
-    italic: ["corsivo"],
-    inlineCode: ["codice"],
-    tag: ["tag", "etichetta"]
-  }
-};
-var LABELS = {
-  nl: {
+  labels: {
     newParagraph: "Nieuwe alinea",
     newLine: "Nieuwe regel",
     heading1: "Kop 1",
@@ -1201,7 +918,60 @@ var LABELS = {
     inlineCode: "Code `\u2026`",
     tag: "Tag #\u2026"
   },
-  en: {
+  mishearings: [
+    { pattern: "\\bniveau\\b", flags: "g", replacement: "nieuwe" },
+    { pattern: "\\bniva\\b", flags: "g", replacement: "nieuwe" },
+    { pattern: "\\bnieuw alinea\\b", flags: "g", replacement: "nieuwe alinea" },
+    { pattern: "\\bnieuw regel\\b", flags: "g", replacement: "nieuwe regel" },
+    { pattern: "\\bnieuw punt\\b", flags: "g", replacement: "nieuw punt" },
+    { pattern: "\\blinea\\b", flags: "g", replacement: "alinea" },
+    { pattern: "\\blinie\\b", flags: "g", replacement: "alinea" },
+    { pattern: "\\bbeeindigde\\b", flags: "g", replacement: "beeindig de" }
+  ],
+  phonetics: [
+    { pattern: "ij", flags: "g", replacement: "ei" },
+    { pattern: "au", flags: "g", replacement: "ou" },
+    { pattern: "dt\\b", flags: "g", replacement: "t" },
+    { pattern: "\\bsch", flags: "g", replacement: "sg" },
+    { pattern: "ck", flags: "g", replacement: "k" },
+    { pattern: "ph", flags: "g", replacement: "f" },
+    { pattern: "th", flags: "g", replacement: "t" },
+    { pattern: "ie", flags: "g", replacement: "i" },
+    { pattern: "oe", flags: "g", replacement: "u" },
+    { pattern: "ee", flags: "g", replacement: "e" },
+    { pattern: "oo", flags: "g", replacement: "o" },
+    { pattern: "uu", flags: "g", replacement: "u" },
+    { pattern: "aa", flags: "g", replacement: "a" }
+  ],
+  articles: ["een", "de", "het", "die", "dat", "deze"],
+  fillers: ["alsjeblieft", "graag", "even", "maar", "eens", "dan", "nu", "hoor"]
+};
+
+// src/languages/en.json
+var en_default = {
+  code: "en",
+  name: "English",
+  patterns: {
+    newParagraph: ["new paragraph"],
+    newLine: ["new line", "next line"],
+    heading1: ["heading one", "heading 1"],
+    heading2: ["heading two", "heading 2"],
+    heading3: ["heading three", "heading 3"],
+    bulletPoint: ["new item", "next item", "bullet", "bullet point", "new bullet"],
+    todoItem: ["new todo", "new to do", "todo item", "to do item"],
+    numberedItem: ["numbered item", "new numbered item", "next number"],
+    deleteLastParagraph: ["delete last paragraph"],
+    deleteLastLine: ["delete last line", "delete last sentence"],
+    undo: ["undo"],
+    stopRecording: ["stop recording"],
+    colon: ["colon"],
+    wikilink: ["wiki link", "wikilink", "link"],
+    bold: ["bold"],
+    italic: ["italic"],
+    inlineCode: ["code", "inline code"],
+    tag: ["tag"]
+  },
+  labels: {
     newParagraph: "New paragraph",
     newLine: "New line",
     heading1: "Heading 1",
@@ -1221,7 +991,50 @@ var LABELS = {
     inlineCode: "Code `\u2026`",
     tag: "Tag #\u2026"
   },
-  fr: {
+  mishearings: [],
+  phonetics: [
+    { pattern: "ph", flags: "g", replacement: "f" },
+    { pattern: "th", flags: "g", replacement: "t" },
+    { pattern: "ck", flags: "g", replacement: "k" },
+    { pattern: "ght", flags: "g", replacement: "t" },
+    { pattern: "wh", flags: "g", replacement: "w" },
+    { pattern: "kn", flags: "g", replacement: "n" },
+    { pattern: "wr", flags: "g", replacement: "r" },
+    { pattern: "tion", flags: "g", replacement: "shun" },
+    { pattern: "sion", flags: "g", replacement: "shun" },
+    { pattern: "([aeiou])ll", flags: "g", replacement: "$1l" },
+    { pattern: "([aeiou])dd", flags: "g", replacement: "$1d" },
+    { pattern: "([aeiou])tt", flags: "g", replacement: "$1t" }
+  ],
+  articles: ["a", "an", "the"],
+  fillers: ["please", "now", "then", "thanks"]
+};
+
+// src/languages/fr.json
+var fr_default = {
+  code: "fr",
+  name: "Fran\xE7ais",
+  patterns: {
+    newParagraph: ["nouveau paragraphe", "nouvelle section", "nouveau alinea"],
+    newLine: ["nouvelle ligne", "a la ligne", "retour a la ligne"],
+    heading1: ["titre un", "titre 1"],
+    heading2: ["titre deux", "titre 2"],
+    heading3: ["titre trois", "titre 3"],
+    bulletPoint: ["nouveau point", "nouvelle puce", "point suivant", "nouvel element", "nouvel item"],
+    todoItem: ["nouvelle tache", "nouveau todo", "nouveau to do"],
+    numberedItem: ["point numero", "element numero", "nouveau numero"],
+    deleteLastParagraph: ["supprimer dernier paragraphe", "effacer dernier paragraphe"],
+    deleteLastLine: ["supprimer derniere ligne", "effacer derniere ligne", "supprimer derniere phrase"],
+    undo: ["annuler"],
+    stopRecording: ["arreter enregistrement", "arreter l enregistrement", "stop enregistrement"],
+    colon: ["deux points"],
+    wikilink: ["wiki lien", "lien wiki"],
+    bold: ["gras"],
+    italic: ["italique"],
+    inlineCode: ["code"],
+    tag: ["etiquette", "tag"]
+  },
+  labels: {
     newParagraph: "Nouveau paragraphe",
     newLine: "Nouvelle ligne",
     heading1: "Titre 1",
@@ -1241,7 +1054,52 @@ var LABELS = {
     inlineCode: "Code `\u2026`",
     tag: "\xC9tiquette #\u2026"
   },
-  de: {
+  mishearings: [
+    { pattern: "\\bnouveau ligne\\b", flags: "g", replacement: "nouvelle ligne" },
+    { pattern: "\\bnouvelle paragraphe\\b", flags: "g", replacement: "nouveau paragraphe" }
+  ],
+  phonetics: [
+    { pattern: "eau", flags: "g", replacement: "o" },
+    { pattern: "aux", flags: "g", replacement: "o" },
+    { pattern: "ai", flags: "g", replacement: "e" },
+    { pattern: "ei", flags: "g", replacement: "e" },
+    { pattern: "ph", flags: "g", replacement: "f" },
+    { pattern: "qu", flags: "g", replacement: "k" },
+    { pattern: "gn", flags: "g", replacement: "ny" },
+    { pattern: "oi", flags: "g", replacement: "wa" },
+    { pattern: "ou", flags: "g", replacement: "u" },
+    { pattern: "an", flags: "g", replacement: "on" },
+    { pattern: "en", flags: "g", replacement: "on" }
+  ],
+  articles: ["un", "une", "le", "la", "les", "l", "du", "des"],
+  fillers: ["s il vous plait", "s il te plait", "merci"]
+};
+
+// src/languages/de.json
+var de_default = {
+  code: "de",
+  name: "Deutsch",
+  patterns: {
+    newParagraph: ["neuer absatz", "neuer paragraph"],
+    newLine: ["neue zeile", "nachste zeile"],
+    heading1: ["uberschrift eins", "uberschrift 1"],
+    heading2: ["uberschrift zwei", "uberschrift 2"],
+    heading3: ["uberschrift drei", "uberschrift 3"],
+    bulletPoint: ["neuer punkt", "neuer aufzahlungspunkt", "nachster punkt", "neues element"],
+    todoItem: ["neue aufgabe", "neues todo", "neues to do"],
+    numberedItem: ["nummerierter punkt", "neuer nummerierter punkt", "nachste nummer"],
+    deleteLastParagraph: ["letzten absatz loschen", "absatz loschen"],
+    deleteLastLine: ["letzte zeile loschen", "letzten satz loschen"],
+    undo: ["ruckgangig", "ruckgangig machen"],
+    stopRecording: ["aufnahme beenden", "aufnahme stoppen"],
+    colon: ["doppelpunkt"],
+    wikilink: ["wikilink", "wiki link"],
+    bold: ["fett"],
+    italic: ["kursiv"],
+    inlineCode: ["code"],
+    tag: ["tag", "schlagwort"]
+  },
+  labels: {
     newParagraph: "Neuer Absatz",
     newLine: "Neue Zeile",
     heading1: "\xDCberschrift 1",
@@ -1261,7 +1119,53 @@ var LABELS = {
     inlineCode: "Code `\u2026`",
     tag: "Tag #\u2026"
   },
-  es: {
+  mishearings: [
+    { pattern: "\\bneue absatz\\b", flags: "g", replacement: "neuer absatz" },
+    { pattern: "\\bneues zeile\\b", flags: "g", replacement: "neue zeile" }
+  ],
+  phonetics: [
+    { pattern: "sch", flags: "g", replacement: "sh" },
+    { pattern: "ei", flags: "g", replacement: "ai" },
+    { pattern: "ie", flags: "g", replacement: "i" },
+    { pattern: "ck", flags: "g", replacement: "k" },
+    { pattern: "ph", flags: "g", replacement: "f" },
+    { pattern: "th", flags: "g", replacement: "t" },
+    { pattern: "v", flags: "g", replacement: "f" },
+    { pattern: "tz", flags: "g", replacement: "ts" },
+    { pattern: "dt\\b", flags: "g", replacement: "t" },
+    { pattern: "aa", flags: "g", replacement: "a" },
+    { pattern: "ee", flags: "g", replacement: "e" },
+    { pattern: "oo", flags: "g", replacement: "o" }
+  ],
+  articles: ["ein", "eine", "einen", "einem", "einer", "der", "die", "das", "den", "dem", "des"],
+  fillers: ["bitte", "mal", "jetzt", "dann"]
+};
+
+// src/languages/es.json
+var es_default = {
+  code: "es",
+  name: "Espa\xF1ol",
+  patterns: {
+    newParagraph: ["nuevo parrafo", "nueva seccion"],
+    newLine: ["nueva linea", "siguiente linea"],
+    heading1: ["titulo uno", "titulo 1"],
+    heading2: ["titulo dos", "titulo 2"],
+    heading3: ["titulo tres", "titulo 3"],
+    bulletPoint: ["nuevo punto", "nueva vineta", "siguiente punto", "nuevo elemento"],
+    todoItem: ["nueva tarea", "nuevo todo", "nuevo to do"],
+    numberedItem: ["punto numerado", "nuevo numero", "siguiente numero"],
+    deleteLastParagraph: ["borrar ultimo parrafo", "eliminar ultimo parrafo"],
+    deleteLastLine: ["borrar ultima linea", "eliminar ultima linea", "borrar ultima frase"],
+    undo: ["deshacer"],
+    stopRecording: ["parar grabacion", "detener grabacion"],
+    colon: ["dos puntos"],
+    wikilink: ["wikilink", "enlace wiki"],
+    bold: ["negrita"],
+    italic: ["cursiva"],
+    inlineCode: ["codigo"],
+    tag: ["etiqueta", "tag"]
+  },
+  labels: {
     newParagraph: "Nuevo p\xE1rrafo",
     newLine: "Nueva l\xEDnea",
     heading1: "T\xEDtulo 1",
@@ -1281,7 +1185,45 @@ var LABELS = {
     inlineCode: "C\xF3digo `\u2026`",
     tag: "Etiqueta #\u2026"
   },
-  pt: {
+  mishearings: [],
+  phonetics: [
+    { pattern: "ll", flags: "g", replacement: "y" },
+    { pattern: "v", flags: "g", replacement: "b" },
+    { pattern: "ce", flags: "g", replacement: "se" },
+    { pattern: "ci", flags: "g", replacement: "si" },
+    { pattern: "qu", flags: "g", replacement: "k" },
+    { pattern: "gu(?=[ei])", flags: "g", replacement: "g" },
+    { pattern: "h", flags: "g", replacement: "" }
+  ],
+  articles: ["un", "una", "el", "la", "los", "las", "unos", "unas"],
+  fillers: ["por favor", "ahora", "gracias"]
+};
+
+// src/languages/pt.json
+var pt_default = {
+  code: "pt",
+  name: "Portugu\xEAs",
+  patterns: {
+    newParagraph: ["novo paragrafo", "nova secao"],
+    newLine: ["nova linha", "proxima linha"],
+    heading1: ["titulo um", "titulo 1"],
+    heading2: ["titulo dois", "titulo 2"],
+    heading3: ["titulo tres", "titulo 3"],
+    bulletPoint: ["novo ponto", "novo item", "proximo ponto", "novo elemento"],
+    todoItem: ["nova tarefa", "novo todo", "novo to do"],
+    numberedItem: ["ponto numerado", "novo numero", "proximo numero"],
+    deleteLastParagraph: ["apagar ultimo paragrafo", "excluir ultimo paragrafo"],
+    deleteLastLine: ["apagar ultima linha", "excluir ultima linha", "apagar ultima frase"],
+    undo: ["desfazer"],
+    stopRecording: ["parar gravacao", "encerrar gravacao"],
+    colon: ["dois pontos"],
+    wikilink: ["wikilink", "link wiki"],
+    bold: ["negrito"],
+    italic: ["italico"],
+    inlineCode: ["codigo"],
+    tag: ["etiqueta", "tag"]
+  },
+  labels: {
     newParagraph: "Novo par\xE1grafo",
     newLine: "Nova linha",
     heading1: "T\xEDtulo 1",
@@ -1301,7 +1243,102 @@ var LABELS = {
     inlineCode: "C\xF3digo `\u2026`",
     tag: "Etiqueta #\u2026"
   },
-  ru: {
+  mishearings: [],
+  phonetics: [
+    { pattern: "lh", flags: "g", replacement: "ly" },
+    { pattern: "nh", flags: "g", replacement: "ny" },
+    { pattern: "ch", flags: "g", replacement: "sh" },
+    { pattern: "qu", flags: "g", replacement: "k" },
+    { pattern: "\xE7\xE3o", flags: "g", replacement: "saun" },
+    { pattern: "ss", flags: "g", replacement: "s" }
+  ],
+  articles: ["um", "uma", "o", "a", "os", "as", "uns", "umas"],
+  fillers: ["por favor", "agora", "obrigado"]
+};
+
+// src/languages/it.json
+var it_default = {
+  code: "it",
+  name: "Italiano",
+  patterns: {
+    newParagraph: ["nuovo paragrafo", "nuova sezione", "nuovo capoverso"],
+    newLine: ["nuova riga", "a capo", "riga successiva"],
+    heading1: ["titolo uno", "titolo 1"],
+    heading2: ["titolo due", "titolo 2"],
+    heading3: ["titolo tre", "titolo 3"],
+    bulletPoint: ["nuovo punto", "nuovo elemento", "punto successivo", "nuovo elenco"],
+    todoItem: ["nuovo compito", "nuova attivita", "nuovo todo", "nuovo to do"],
+    numberedItem: ["punto numerato", "nuovo numero", "numero successivo"],
+    deleteLastParagraph: ["cancella ultimo paragrafo", "elimina ultimo paragrafo"],
+    deleteLastLine: ["cancella ultima riga", "elimina ultima riga", "cancella ultima frase"],
+    undo: ["annulla"],
+    stopRecording: ["ferma registrazione", "interrompi registrazione", "stop registrazione"],
+    colon: ["due punti"],
+    wikilink: ["wikilink", "link wiki"],
+    bold: ["grassetto"],
+    italic: ["corsivo"],
+    inlineCode: ["codice"],
+    tag: ["tag", "etichetta"]
+  },
+  labels: {
+    newParagraph: "Nuovo paragrafo",
+    newLine: "Nuova riga",
+    heading1: "Titolo 1",
+    heading2: "Titolo 2",
+    heading3: "Titolo 3",
+    bulletPoint: "Punto elenco",
+    todoItem: "Attivit\xE0",
+    numberedItem: "Punto numerato",
+    deleteLastParagraph: "Cancella ultimo paragrafo",
+    deleteLastLine: "Cancella ultima riga",
+    undo: "Annulla",
+    stopRecording: "Ferma registrazione",
+    colon: "Due punti",
+    wikilink: "Wikilink [[\u2026]]",
+    bold: "Grassetto **\u2026**",
+    italic: "Corsivo *\u2026*",
+    inlineCode: "Codice `\u2026`",
+    tag: "Tag #\u2026"
+  },
+  mishearings: [],
+  phonetics: [
+    { pattern: "gn", flags: "g", replacement: "ny" },
+    { pattern: "gl(?=[i])", flags: "g", replacement: "ly" },
+    { pattern: "ch", flags: "g", replacement: "k" },
+    { pattern: "gh", flags: "g", replacement: "g" },
+    { pattern: "sc(?=[ei])", flags: "g", replacement: "sh" },
+    { pattern: "zz", flags: "g", replacement: "ts" },
+    { pattern: "cc(?=[ei])", flags: "g", replacement: "ch" }
+  ],
+  articles: ["un", "uno", "una", "il", "lo", "la", "i", "gli", "le"],
+  fillers: ["per favore", "ora", "adesso", "grazie"]
+};
+
+// src/languages/ru.json
+var ru_default = {
+  code: "ru",
+  name: "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
+  patterns: {
+    newParagraph: ["\u043D\u043E\u0432\u044B\u0439 \u0430\u0431\u0437\u0430\u0446", "\u043D\u043E\u0432\u044B\u0439 \u043F\u0430\u0440\u0430\u0433\u0440\u0430\u0444"],
+    newLine: ["\u043D\u043E\u0432\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430", "\u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430"],
+    heading1: ["\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A \u043E\u0434\u0438\u043D", "\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A 1"],
+    heading2: ["\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A \u0434\u0432\u0430", "\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A 2"],
+    heading3: ["\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A \u0442\u0440\u0438", "\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A 3"],
+    bulletPoint: ["\u043D\u043E\u0432\u044B\u0439 \u043F\u0443\u043D\u043A\u0442", "\u043D\u043E\u0432\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442", "\u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0439 \u043F\u0443\u043D\u043A\u0442"],
+    todoItem: ["\u043D\u043E\u0432\u0430\u044F \u0437\u0430\u0434\u0430\u0447\u0430", "\u043D\u043E\u0432\u043E\u0435 \u0437\u0430\u0434\u0430\u043D\u0438\u0435"],
+    numberedItem: ["\u043D\u0443\u043C\u0435\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u043F\u0443\u043D\u043A\u0442", "\u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0439 \u043D\u043E\u043C\u0435\u0440"],
+    deleteLastParagraph: ["\u0443\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0439 \u0430\u0431\u0437\u0430\u0446"],
+    deleteLastLine: ["\u0443\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u044E\u044E \u0441\u0442\u0440\u043E\u043A\u0443", "\u0443\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0435\u0435 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435"],
+    undo: ["\u043E\u0442\u043C\u0435\u043D\u0438\u0442\u044C", "\u043E\u0442\u043C\u0435\u043D\u0430"],
+    stopRecording: ["\u043E\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u0437\u0430\u043F\u0438\u0441\u044C", "\u0441\u0442\u043E\u043F \u0437\u0430\u043F\u0438\u0441\u044C"],
+    colon: ["\u0434\u0432\u043E\u0435\u0442\u043E\u0447\u0438\u0435"],
+    wikilink: ["\u0432\u0438\u043A\u0438 \u0441\u0441\u044B\u043B\u043A\u0430", "\u0432\u0438\u043A\u0438 \u043B\u0438\u043D\u043A"],
+    bold: ["\u0436\u0438\u0440\u043D\u044B\u0439"],
+    italic: ["\u043A\u0443\u0440\u0441\u0438\u0432"],
+    inlineCode: ["\u043A\u043E\u0434"],
+    tag: ["\u0442\u0435\u0433", "\u043C\u0435\u0442\u043A\u0430"]
+  },
+  labels: {
     newParagraph: "\u041D\u043E\u0432\u044B\u0439 \u0430\u0431\u0437\u0430\u0446",
     newLine: "\u041D\u043E\u0432\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430",
     heading1: "\u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A 1",
@@ -1321,7 +1358,37 @@ var LABELS = {
     inlineCode: "\u041A\u043E\u0434 `\u2026`",
     tag: "\u0422\u0435\u0433 #\u2026"
   },
-  zh: {
+  mishearings: [],
+  phonetics: [],
+  articles: [],
+  fillers: []
+};
+
+// src/languages/zh.json
+var zh_default = {
+  code: "zh",
+  name: "\u4E2D\u6587",
+  patterns: {
+    newParagraph: ["\u65B0\u6BB5\u843D", "\u65B0\u7684\u6BB5\u843D"],
+    newLine: ["\u6362\u884C", "\u65B0\u884C", "\u4E0B\u4E00\u884C"],
+    heading1: ["\u6807\u9898\u4E00", "\u6807\u98981", "\u4E00\u7EA7\u6807\u9898"],
+    heading2: ["\u6807\u9898\u4E8C", "\u6807\u98982", "\u4E8C\u7EA7\u6807\u9898"],
+    heading3: ["\u6807\u9898\u4E09", "\u6807\u98983", "\u4E09\u7EA7\u6807\u9898"],
+    bulletPoint: ["\u65B0\u9879\u76EE", "\u5217\u8868\u9879", "\u65B0\u7684\u9879\u76EE"],
+    todoItem: ["\u65B0\u4EFB\u52A1", "\u65B0\u5F85\u529E", "\u5F85\u529E\u4E8B\u9879"],
+    numberedItem: ["\u7F16\u53F7\u9879", "\u65B0\u7F16\u53F7", "\u4E0B\u4E00\u4E2A\u7F16\u53F7"],
+    deleteLastParagraph: ["\u5220\u9664\u4E0A\u4E00\u6BB5", "\u5220\u9664\u6700\u540E\u4E00\u6BB5"],
+    deleteLastLine: ["\u5220\u9664\u4E0A\u4E00\u884C", "\u5220\u9664\u4E0A\u4E00\u53E5"],
+    undo: ["\u64A4\u9500", "\u64A4\u56DE"],
+    stopRecording: ["\u505C\u6B62\u5F55\u97F3", "\u7ED3\u675F\u5F55\u97F3"],
+    colon: ["\u5192\u53F7"],
+    wikilink: ["\u7EF4\u57FA\u94FE\u63A5", "\u94FE\u63A5"],
+    bold: ["\u52A0\u7C97", "\u7C97\u4F53"],
+    italic: ["\u659C\u4F53"],
+    inlineCode: ["\u4EE3\u7801"],
+    tag: ["\u6807\u7B7E"]
+  },
+  labels: {
     newParagraph: "\u65B0\u6BB5\u843D",
     newLine: "\u6362\u884C",
     heading1: "\u6807\u9898 1",
@@ -1341,7 +1408,37 @@ var LABELS = {
     inlineCode: "\u4EE3\u7801 `\u2026`",
     tag: "\u6807\u7B7E #\u2026"
   },
-  hi: {
+  mishearings: [],
+  phonetics: [],
+  articles: [],
+  fillers: []
+};
+
+// src/languages/hi.json
+var hi_default = {
+  code: "hi",
+  name: "\u0939\u093F\u0928\u094D\u0926\u0940",
+  patterns: {
+    newParagraph: ["\u0928\u092F\u093E \u092A\u0948\u0930\u093E\u0917\u094D\u0930\u093E\u092B", "\u0928\u092F\u093E \u0905\u0928\u0941\u091A\u094D\u091B\u0947\u0926"],
+    newLine: ["\u0928\u0908 \u0932\u093E\u0907\u0928", "\u0905\u0917\u0932\u0940 \u0932\u093E\u0907\u0928"],
+    heading1: ["\u0936\u0940\u0930\u094D\u0937\u0915 \u090F\u0915", "\u0936\u0940\u0930\u094D\u0937\u0915 1", "\u0939\u0947\u0921\u093F\u0902\u0917 1"],
+    heading2: ["\u0936\u0940\u0930\u094D\u0937\u0915 \u0926\u094B", "\u0936\u0940\u0930\u094D\u0937\u0915 2", "\u0939\u0947\u0921\u093F\u0902\u0917 2"],
+    heading3: ["\u0936\u0940\u0930\u094D\u0937\u0915 \u0924\u0940\u0928", "\u0936\u0940\u0930\u094D\u0937\u0915 3", "\u0939\u0947\u0921\u093F\u0902\u0917 3"],
+    bulletPoint: ["\u0928\u092F\u093E \u092C\u093F\u0902\u0926\u0941", "\u0928\u092F\u093E \u092A\u0949\u0907\u0902\u091F", "\u0905\u0917\u0932\u093E \u092A\u0949\u0907\u0902\u091F"],
+    todoItem: ["\u0928\u092F\u093E \u0915\u093E\u0930\u094D\u092F", "\u0928\u092F\u093E \u091F\u0942\u0921\u0942"],
+    numberedItem: ["\u0915\u094D\u0930\u092E\u093E\u0902\u0915\u093F\u0924 \u092C\u093F\u0902\u0926\u0941", "\u0905\u0917\u0932\u093E \u0928\u0902\u092C\u0930"],
+    deleteLastParagraph: ["\u092A\u093F\u091B\u0932\u093E \u092A\u0948\u0930\u093E\u0917\u094D\u0930\u093E\u092B \u0939\u091F\u093E\u0913"],
+    deleteLastLine: ["\u092A\u093F\u091B\u0932\u0940 \u0932\u093E\u0907\u0928 \u0939\u091F\u093E\u0913", "\u0905\u0902\u0924\u093F\u092E \u0932\u093E\u0907\u0928 \u0939\u091F\u093E\u0913"],
+    undo: ["\u092A\u0942\u0930\u094D\u0935\u0935\u0924", "\u0905\u0928\u0921\u0942"],
+    stopRecording: ["\u0930\u093F\u0915\u0949\u0930\u094D\u0921\u093F\u0902\u0917 \u092C\u0902\u0926 \u0915\u0930\u094B", "\u0930\u093F\u0915\u0949\u0930\u094D\u0921\u093F\u0902\u0917 \u0930\u094B\u0915\u094B"],
+    colon: ["\u0915\u094B\u0932\u0928"],
+    wikilink: ["\u0935\u093F\u0915\u093F \u0932\u093F\u0902\u0915", "\u0932\u093F\u0902\u0915"],
+    bold: ["\u092C\u094B\u0932\u094D\u0921", "\u092E\u094B\u091F\u093E"],
+    italic: ["\u0907\u091F\u0948\u0932\u093F\u0915", "\u0924\u093F\u0930\u091B\u093E"],
+    inlineCode: ["\u0915\u094B\u0921"],
+    tag: ["\u091F\u0948\u0917"]
+  },
+  labels: {
     newParagraph: "\u0928\u092F\u093E \u092A\u0948\u0930\u093E\u0917\u094D\u0930\u093E\u092B",
     newLine: "\u0928\u0908 \u0932\u093E\u0907\u0928",
     heading1: "\u0936\u0940\u0930\u094D\u0937\u0915 1",
@@ -1361,7 +1458,37 @@ var LABELS = {
     inlineCode: "\u0915\u094B\u0921 `\u2026`",
     tag: "\u091F\u0948\u0917 #\u2026"
   },
-  ar: {
+  mishearings: [],
+  phonetics: [],
+  articles: [],
+  fillers: []
+};
+
+// src/languages/ar.json
+var ar_default = {
+  code: "ar",
+  name: "\u0627\u0644\u0639\u0631\u0628\u064A\u0629",
+  patterns: {
+    newParagraph: ["\u0641\u0642\u0631\u0629 \u062C\u062F\u064A\u062F\u0629"],
+    newLine: ["\u0633\u0637\u0631 \u062C\u062F\u064A\u062F", "\u0627\u0644\u0633\u0637\u0631 \u0627\u0644\u062A\u0627\u0644\u064A"],
+    heading1: ["\u0639\u0646\u0648\u0627\u0646 \u0648\u0627\u062D\u062F", "\u0639\u0646\u0648\u0627\u0646 1"],
+    heading2: ["\u0639\u0646\u0648\u0627\u0646 \u0627\u062B\u0646\u064A\u0646", "\u0639\u0646\u0648\u0627\u0646 2"],
+    heading3: ["\u0639\u0646\u0648\u0627\u0646 \u062B\u0644\u0627\u062B\u0629", "\u0639\u0646\u0648\u0627\u0646 3"],
+    bulletPoint: ["\u0646\u0642\u0637\u0629 \u062C\u062F\u064A\u062F\u0629", "\u0639\u0646\u0635\u0631 \u062C\u062F\u064A\u062F"],
+    todoItem: ["\u0645\u0647\u0645\u0629 \u062C\u062F\u064A\u062F\u0629"],
+    numberedItem: ["\u0639\u0646\u0635\u0631 \u0645\u0631\u0642\u0645", "\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u062A\u0627\u0644\u064A"],
+    deleteLastParagraph: ["\u0627\u062D\u0630\u0641 \u0627\u0644\u0641\u0642\u0631\u0629 \u0627\u0644\u0623\u062E\u064A\u0631\u0629"],
+    deleteLastLine: ["\u0627\u062D\u0630\u0641 \u0627\u0644\u0633\u0637\u0631 \u0627\u0644\u0623\u062E\u064A\u0631", "\u0627\u062D\u0630\u0641 \u0627\u0644\u062C\u0645\u0644\u0629 \u0627\u0644\u0623\u062E\u064A\u0631\u0629"],
+    undo: ["\u062A\u0631\u0627\u062C\u0639"],
+    stopRecording: ["\u0623\u0648\u0642\u0641 \u0627\u0644\u062A\u0633\u062C\u064A\u0644", "\u0625\u064A\u0642\u0627\u0641 \u0627\u0644\u062A\u0633\u062C\u064A\u0644"],
+    colon: ["\u0646\u0642\u0637\u062A\u0627\u0646"],
+    wikilink: ["\u0631\u0627\u0628\u0637 \u0648\u064A\u0643\u064A", "\u0631\u0627\u0628\u0637"],
+    bold: ["\u063A\u0627\u0645\u0642", "\u0639\u0631\u064A\u0636"],
+    italic: ["\u0645\u0627\u0626\u0644"],
+    inlineCode: ["\u0643\u0648\u062F"],
+    tag: ["\u0648\u0633\u0645"]
+  },
+  labels: {
     newParagraph: "\u0641\u0642\u0631\u0629 \u062C\u062F\u064A\u062F\u0629",
     newLine: "\u0633\u0637\u0631 \u062C\u062F\u064A\u062F",
     heading1: "\u0639\u0646\u0648\u0627\u0646 1",
@@ -1381,7 +1508,37 @@ var LABELS = {
     inlineCode: "`\u2026` \u0643\u0648\u062F",
     tag: "#\u2026 \u0648\u0633\u0645"
   },
-  ja: {
+  mishearings: [],
+  phonetics: [],
+  articles: ["\u0627\u0644"],
+  fillers: []
+};
+
+// src/languages/ja.json
+var ja_default = {
+  code: "ja",
+  name: "\u65E5\u672C\u8A9E",
+  patterns: {
+    newParagraph: ["\u65B0\u3057\u3044\u6BB5\u843D", "\u65B0\u6BB5\u843D"],
+    newLine: ["\u6539\u884C", "\u65B0\u3057\u3044\u884C", "\u6B21\u306E\u884C"],
+    heading1: ["\u898B\u51FA\u30571", "\u898B\u51FA\u3057\u3044\u3061"],
+    heading2: ["\u898B\u51FA\u30572", "\u898B\u51FA\u3057\u306B"],
+    heading3: ["\u898B\u51FA\u30573", "\u898B\u51FA\u3057\u3055\u3093"],
+    bulletPoint: ["\u7B87\u6761\u66F8\u304D", "\u65B0\u3057\u3044\u9805\u76EE", "\u6B21\u306E\u9805\u76EE"],
+    todoItem: ["\u65B0\u3057\u3044\u30BF\u30B9\u30AF", "\u30BF\u30B9\u30AF\u8FFD\u52A0"],
+    numberedItem: ["\u756A\u53F7\u4ED8\u304D", "\u6B21\u306E\u756A\u53F7"],
+    deleteLastParagraph: ["\u6700\u5F8C\u306E\u6BB5\u843D\u3092\u524A\u9664"],
+    deleteLastLine: ["\u6700\u5F8C\u306E\u884C\u3092\u524A\u9664", "\u6700\u5F8C\u306E\u6587\u3092\u524A\u9664"],
+    undo: ["\u5143\u306B\u623B\u3059", "\u53D6\u308A\u6D88\u3057"],
+    stopRecording: ["\u9332\u97F3\u505C\u6B62", "\u9332\u97F3\u3092\u6B62\u3081\u3066"],
+    colon: ["\u30B3\u30ED\u30F3"],
+    wikilink: ["\u30A6\u30A3\u30AD\u30EA\u30F3\u30AF", "\u30EA\u30F3\u30AF"],
+    bold: ["\u592A\u5B57", "\u30DC\u30FC\u30EB\u30C9"],
+    italic: ["\u659C\u4F53", "\u30A4\u30BF\u30EA\u30C3\u30AF"],
+    inlineCode: ["\u30B3\u30FC\u30C9"],
+    tag: ["\u30BF\u30B0"]
+  },
+  labels: {
     newParagraph: "\u65B0\u3057\u3044\u6BB5\u843D",
     newLine: "\u6539\u884C",
     heading1: "\u898B\u51FA\u3057 1",
@@ -1401,7 +1558,37 @@ var LABELS = {
     inlineCode: "\u30B3\u30FC\u30C9 `\u2026`",
     tag: "\u30BF\u30B0 #\u2026"
   },
-  ko: {
+  mishearings: [],
+  phonetics: [],
+  articles: [],
+  fillers: []
+};
+
+// src/languages/ko.json
+var ko_default = {
+  code: "ko",
+  name: "\uD55C\uAD6D\uC5B4",
+  patterns: {
+    newParagraph: ["\uC0C8 \uB2E8\uB77D", "\uC0C8 \uBB38\uB2E8"],
+    newLine: ["\uC0C8 \uC904", "\uB2E4\uC74C \uC904", "\uC904 \uBC14\uAFC8"],
+    heading1: ["\uC81C\uBAA9 1", "\uC81C\uBAA9 \uD558\uB098"],
+    heading2: ["\uC81C\uBAA9 2", "\uC81C\uBAA9 \uB458"],
+    heading3: ["\uC81C\uBAA9 3", "\uC81C\uBAA9 \uC14B"],
+    bulletPoint: ["\uC0C8 \uD56D\uBAA9", "\uB2E4\uC74C \uD56D\uBAA9", "\uAE00\uBA38\uB9AC \uAE30\uD638"],
+    todoItem: ["\uC0C8 \uD560\uC77C", "\uD560\uC77C \uCD94\uAC00"],
+    numberedItem: ["\uBC88\uD638 \uD56D\uBAA9", "\uB2E4\uC74C \uBC88\uD638"],
+    deleteLastParagraph: ["\uB9C8\uC9C0\uB9C9 \uB2E8\uB77D \uC0AD\uC81C"],
+    deleteLastLine: ["\uB9C8\uC9C0\uB9C9 \uC904 \uC0AD\uC81C", "\uB9C8\uC9C0\uB9C9 \uBB38\uC7A5 \uC0AD\uC81C"],
+    undo: ["\uC2E4\uD589 \uCDE8\uC18C", "\uB418\uB3CC\uB9AC\uAE30"],
+    stopRecording: ["\uB179\uC74C \uC911\uC9C0", "\uB179\uC74C \uBA48\uCDB0"],
+    colon: ["\uCF5C\uB860"],
+    wikilink: ["\uC704\uD0A4\uB9C1\uD06C", "\uB9C1\uD06C"],
+    bold: ["\uAD75\uAC8C", "\uBCFC\uB4DC"],
+    italic: ["\uAE30\uC6B8\uC784", "\uC774\uD0E4\uB9AD"],
+    inlineCode: ["\uCF54\uB4DC"],
+    tag: ["\uD0DC\uADF8"]
+  },
+  labels: {
     newParagraph: "\uC0C8 \uB2E8\uB77D",
     newLine: "\uC0C8 \uC904",
     heading1: "\uC81C\uBAA9 1",
@@ -1421,47 +1608,61 @@ var LABELS = {
     inlineCode: "\uCF54\uB4DC `\u2026`",
     tag: "\uD0DC\uADF8 #\u2026"
   },
-  it: {
-    newParagraph: "Nuovo paragrafo",
-    newLine: "Nuova riga",
-    heading1: "Titolo 1",
-    heading2: "Titolo 2",
-    heading3: "Titolo 3",
-    bulletPoint: "Punto elenco",
-    todoItem: "Attivit\xE0",
-    numberedItem: "Punto numerato",
-    deleteLastParagraph: "Cancella ultimo paragrafo",
-    deleteLastLine: "Cancella ultima riga",
-    undo: "Annulla",
-    stopRecording: "Ferma registrazione",
-    colon: "Due punti",
-    wikilink: "Wikilink [[\u2026]]",
-    bold: "Grassetto **\u2026**",
-    italic: "Corsivo *\u2026*",
-    inlineCode: "Codice `\u2026`",
-    tag: "Tag #\u2026"
-  }
+  mishearings: [],
+  phonetics: [],
+  articles: [],
+  fillers: []
 };
-var MISHEARINGS = {
-  nl: [
-    [/\bniveau\b/g, "nieuwe"],
-    [/\bniva\b/g, "nieuwe"],
-    [/\bnieuw alinea\b/g, "nieuwe alinea"],
-    [/\bnieuw regel\b/g, "nieuwe regel"],
-    [/\bnieuw punt\b/g, "nieuw punt"],
-    [/\blinea\b/g, "alinea"],
-    [/\blinie\b/g, "alinea"],
-    [/\bbeeindigde\b/g, "beeindig de"]
-  ],
-  fr: [
-    [/\bnouveau ligne\b/g, "nouvelle ligne"],
-    [/\bnouvelle paragraphe\b/g, "nouveau paragraphe"]
-  ],
-  de: [
-    [/\bneue absatz\b/g, "neuer absatz"],
-    [/\bneues zeile\b/g, "neue zeile"]
-  ]
+
+// src/lang.ts
+var ALL_LANGS = {
+  nl: nl_default,
+  en: en_default,
+  fr: fr_default,
+  de: de_default,
+  es: es_default,
+  pt: pt_default,
+  it: it_default,
+  ru: ru_default,
+  zh: zh_default,
+  hi: hi_default,
+  ar: ar_default,
+  ja: ja_default,
+  ko: ko_default
 };
+var SUPPORTED_LANGUAGES = [
+  "nl",
+  "en",
+  "fr",
+  "de",
+  "es",
+  "pt",
+  "it",
+  "ru",
+  "zh",
+  "hi",
+  "ar",
+  "ja",
+  "ko"
+];
+var LANGUAGE_NAMES = Object.fromEntries(
+  SUPPORTED_LANGUAGES.map((code) => [code, ALL_LANGS[code].name])
+);
+var PATTERNS = Object.fromEntries(
+  SUPPORTED_LANGUAGES.map((code) => [code, ALL_LANGS[code].patterns])
+);
+var LABELS = Object.fromEntries(
+  SUPPORTED_LANGUAGES.map((code) => [code, ALL_LANGS[code].labels])
+);
+function compileMishearings(data) {
+  return data.map(({ pattern, flags, replacement }) => [
+    new RegExp(pattern, flags),
+    replacement
+  ]);
+}
+var MISHEARINGS = Object.fromEntries(
+  SUPPORTED_LANGUAGES.filter((code) => ALL_LANGS[code].mishearings.length > 0).map((code) => [code, compileMishearings(ALL_LANGS[code].mishearings)])
+);
 function getPatternsForCommand(commandId, lang) {
   var _a, _b, _c, _d;
   const langPatterns = (_b = (_a = PATTERNS[lang]) == null ? void 0 : _a[commandId]) != null ? _b : [];
@@ -1496,7 +1697,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     ;
-    new import_obsidian2.Setting(containerEl).setName("Mistral API key").setDesc("Your API key from platform.mistral.ai").addText(
+    new import_obsidian2.Setting(containerEl).setName("Mistral API key").setDesc("Your API key from platform.mistral.ai. Stored in Obsidian\u2019s plugin data folder (data.json), unencrypted. Do not share your data.json file.").addText(
       (text) => text.setPlaceholder("Enter your API key").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
         this.plugin.settings.apiKey = value.trim();
         await this.plugin.saveSettings();
@@ -1954,184 +2155,36 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
 var import_obsidian3 = require("obsidian");
 
 // src/phonetics.ts
-var PHONETIC_RULES = {
-  nl: [
-    [/ij/g, "ei"],
-    // ij ↔ ei (most common Dutch confusion)
-    [/au/g, "ou"],
-    // au ↔ ou
-    [/dt\b/g, "t"],
-    // -dt → -t (verb endings)
-    [/\bsch/g, "sg"],
-    // sch- → sg (ASR often drops the h)
-    [/ck/g, "k"],
-    // ck → k
-    [/ph/g, "f"],
-    // ph → f
-    [/th/g, "t"],
-    // th → t
-    [/ie/g, "i"],
-    // ie → i (long vs short)
-    [/oe/g, "u"],
-    // oe → u
-    [/ee/g, "e"],
-    // ee → e
-    [/oo/g, "o"],
-    // oo → o
-    [/uu/g, "u"],
-    // uu → u
-    [/aa/g, "a"]
-    // aa → a
-  ],
-  en: [
-    [/ph/g, "f"],
-    // phone → fone
-    [/th/g, "t"],
-    // the → te (ASR simplification)
-    [/ck/g, "k"],
-    // check → chek
-    [/ght/g, "t"],
-    // right → rit
-    [/wh/g, "w"],
-    // what → wat
-    [/kn/g, "n"],
-    // know → now
-    [/wr/g, "r"],
-    // write → rite
-    [/tion/g, "shun"],
-    // action → akshun
-    [/sion/g, "shun"],
-    // mission → mishun
-    [/([aeiou])ll/g, "$1l"],
-    // bullet → bulet
-    [/([aeiou])dd/g, "$1d"],
-    // heading → heding
-    [/([aeiou])tt/g, "$1t"]
-    // getting → geting
-  ],
-  fr: [
-    [/eau/g, "o"],
-    // nouveau → nouvo
-    [/aux/g, "o"],
-    // journaux → journo
-    [/ai/g, "e"],
-    // faire → fere
-    [/ei/g, "e"],
-    // seize → seze
-    [/ph/g, "f"],
-    // paragraphe → paragrafe
-    [/qu/g, "k"],
-    // quelque → kelke
-    [/gn/g, "ny"],
-    // ligne → linye
-    [/oi/g, "wa"],
-    // enregistrement → simplified
-    [/ou/g, "u"],
-    // nouveau → nu
-    [/an/g, "on"],
-    // dans → dons (nasal equivalence)
-    [/en/g, "on"]
-    // enregistrement → onregistrement
-  ],
-  de: [
-    [/sch/g, "sh"],
-    // Überschrift → ubershrift
-    [/ei/g, "ai"],
-    // Zeile → zaile (equivalent)
-    [/ie/g, "i"],
-    // Zeile → zile
-    [/ck/g, "k"],
-    // Rückgängig → rukgangig
-    [/ph/g, "f"],
-    // Paragraph → paragraf
-    [/th/g, "t"],
-    // Thema → tema
-    [/v/g, "f"],
-    // vor → for (German v = f)
-    [/tz/g, "ts"],
-    // Satz → sats
-    [/dt\b/g, "t"],
-    // Stadt → stat
-    [/aa/g, "a"],
-    // Saal → sal
-    [/ee/g, "e"],
-    // Kaffee → kafe
-    [/oo/g, "o"]
-    // Boot → bot
-  ],
-  es: [
-    [/ll/g, "y"],
-    // calle → caye
-    [/v/g, "b"],
-    // volver → bolber
-    [/ce/g, "se"],
-    // sección → sesion
-    [/ci/g, "si"],
-    // acción → aksion
-    [/qu/g, "k"],
-    // borrar → borar
-    [/gu(?=[ei])/g, "g"],
-    // guía → gia
-    [/h/g, ""]
-    // hacer → acer (silent h)
-  ],
-  pt: [
-    [/lh/g, "ly"],
-    // trabalho → trabalyo
-    [/nh/g, "ny"],
-    // linha → linya
-    [/ch/g, "sh"],
-    // fechar → feshar
-    [/qu/g, "k"],
-    // querer → kerer
-    [/ção/g, "saun"],
-    // seção → sesaun
-    [/ss/g, "s"]
-    // passo → paso
-  ],
-  it: [
-    [/gn/g, "ny"],
-    // registrazione → rejistratione
-    [/gl(?=[i])/g, "ly"],
-    // taglia → talya
-    [/ch/g, "k"],
-    // che → ke
-    [/gh/g, "g"],
-    // spaghetti → spagetti
-    [/sc(?=[ei])/g, "sh"],
-    // uscire → ushire
-    [/zz/g, "ts"],
-    // piazza → piatsa
-    [/cc(?=[ei])/g, "ch"]
-    // accento → achento
-  ]
+var ALL_LANGS2 = {
+  nl: nl_default,
+  en: en_default,
+  fr: fr_default,
+  de: de_default,
+  es: es_default,
+  pt: pt_default,
+  it: it_default,
+  ru: ru_default,
+  zh: zh_default,
+  hi: hi_default,
+  ar: ar_default,
+  ja: ja_default,
+  ko: ko_default
 };
-var ARTICLES = {
-  nl: ["een", "de", "het", "die", "dat", "deze"],
-  en: ["a", "an", "the"],
-  fr: ["un", "une", "le", "la", "les", "l", "du", "des"],
-  de: ["ein", "eine", "einen", "einem", "einer", "der", "die", "das", "den", "dem", "des"],
-  es: ["un", "una", "el", "la", "los", "las", "unos", "unas"],
-  pt: ["um", "uma", "o", "a", "os", "as", "uns", "umas"],
-  it: ["un", "uno", "una", "il", "lo", "la", "i", "gli", "le"],
-  ru: [],
-  // No articles in Russian
-  zh: [],
-  hi: [],
-  ar: ["\u0627\u0644"],
-  // al- prefix
-  ja: [],
-  ko: []
-};
-var TRAILING_FILLERS = {
-  nl: ["alsjeblieft", "graag", "even", "maar", "eens", "dan", "nu", "hoor"],
-  en: ["please", "now", "then", "thanks"],
-  fr: ["s il vous plait", "s il te plait", "merci"],
-  de: ["bitte", "mal", "jetzt", "dann"],
-  es: ["por favor", "ahora", "gracias"],
-  pt: ["por favor", "agora", "obrigado"],
-  it: ["per favore", "ora", "adesso", "grazie"]
-};
+function compileRules(data) {
+  return data.map(({ pattern, flags, replacement }) => [
+    new RegExp(pattern, flags),
+    replacement
+  ]);
+}
+var PHONETIC_RULES = Object.fromEntries(
+  SUPPORTED_LANGUAGES.filter((code) => ALL_LANGS2[code].phonetics.length > 0).map((code) => [code, compileRules(ALL_LANGS2[code].phonetics)])
+);
+var ARTICLES = Object.fromEntries(
+  SUPPORTED_LANGUAGES.map((code) => [code, ALL_LANGS2[code].articles])
+);
+var TRAILING_FILLERS = Object.fromEntries(
+  SUPPORTED_LANGUAGES.filter((code) => ALL_LANGS2[code].fillers.length > 0).map((code) => [code, ALL_LANGS2[code].fillers])
+);
 function phoneticNormalize(text, lang) {
   const rules = PHONETIC_RULES[lang];
   if (!rules) return text;
@@ -2656,6 +2709,12 @@ var UI_STRINGS = {
       'Zeg "voor de correctie: ..." om instructies aan de corrector te geven.',
       "Gespelde woorden (V-O-X-T-R-A-L) worden automatisch samengevoegd.",
       'Zelfcorrecties ("nee niet X maar Y") worden herkend.'
+    ],
+    privacy: "Privacy",
+    privacyItems: [
+      "Audio wordt via HTTPS/WSS naar de Mistral API gestuurd en niet lokaal opgeslagen.",
+      "Instellingen (incl. API-sleutel) staan in data.json in de Obsidian plugin-map.",
+      "Logexport bevat geen getranscribeerde tekst of API-sleutels."
     ]
   },
   en: {
@@ -2668,6 +2727,12 @@ var UI_STRINGS = {
       'Say "for the correction: ..." to give inline instructions to the corrector.',
       "Spelled-out words (V-O-X-T-R-A-L) are merged automatically.",
       'Self-corrections ("no not X but Y") are recognized.'
+    ],
+    privacy: "Privacy",
+    privacyItems: [
+      "Audio is sent to the Mistral API over HTTPS/WSS and is not stored locally.",
+      "Settings (including your API key) are stored in data.json in the plugin folder.",
+      "Log export does not contain transcribed text or API keys."
     ]
   },
   fr: {
@@ -2680,6 +2745,12 @@ var UI_STRINGS = {
       'Dites "pour la correction : ..." pour donner des instructions au correcteur.',
       "Les mots \xE9pel\xE9s (V-O-X-T-R-A-L) sont fusionn\xE9s automatiquement.",
       'Les auto-corrections ("non pas X mais Y") sont reconnues.'
+    ],
+    privacy: "Confidentialit\xE9",
+    privacyItems: [
+      "L'audio est envoy\xE9 \xE0 l'API Mistral via HTTPS/WSS et n'est pas stock\xE9 localement.",
+      "Les param\xE8tres (y compris la cl\xE9 API) sont stock\xE9s dans data.json.",
+      "L'export des logs ne contient ni texte transcrit ni cl\xE9s API."
     ]
   },
   de: {
@@ -2692,6 +2763,12 @@ var UI_STRINGS = {
       'Sagen Sie "f\xFCr die Korrektur: ..." um dem Korrektor Anweisungen zu geben.',
       "Buchstabierte W\xF6rter (V-O-X-T-R-A-L) werden automatisch zusammengef\xFChrt.",
       'Selbstkorrekturen ("nein nicht X sondern Y") werden erkannt.'
+    ],
+    privacy: "Datenschutz",
+    privacyItems: [
+      "Audio wird \xFCber HTTPS/WSS an die Mistral-API gesendet und nicht lokal gespeichert.",
+      "Einstellungen (inkl. API-Schl\xFCssel) werden in data.json gespeichert.",
+      "Der Log-Export enth\xE4lt weder transkribierten Text noch API-Schl\xFCssel."
     ]
   },
   es: {
@@ -2704,6 +2781,12 @@ var UI_STRINGS = {
       'Diga "para la correcci\xF3n: ..." para dar instrucciones al corrector.',
       "Las palabras deletreadas (V-O-X-T-R-A-L) se fusionan autom\xE1ticamente.",
       'Las autocorrecciones ("no, no X sino Y") se reconocen.'
+    ],
+    privacy: "Privacidad",
+    privacyItems: [
+      "El audio se env\xEDa a la API de Mistral por HTTPS/WSS y no se almacena localmente.",
+      "La configuraci\xF3n (incluida la clave API) se almacena en data.json.",
+      "La exportaci\xF3n de registros no contiene texto transcrito ni claves API."
     ]
   },
   pt: {
@@ -2716,6 +2799,12 @@ var UI_STRINGS = {
       'Diga "para a corre\xE7\xE3o: ..." para dar instru\xE7\xF5es ao corretor.',
       "Palavras soletradas (V-O-X-T-R-A-L) s\xE3o mescladas automaticamente.",
       'Autocorre\xE7\xF5es ("n\xE3o, n\xE3o X mas Y") s\xE3o reconhecidas.'
+    ],
+    privacy: "Privacidade",
+    privacyItems: [
+      "O \xE1udio \xE9 enviado \xE0 API Mistral via HTTPS/WSS e n\xE3o \xE9 armazenado localmente.",
+      "As configura\xE7\xF5es (incluindo a chave API) s\xE3o armazenadas em data.json.",
+      "A exporta\xE7\xE3o de logs n\xE3o cont\xE9m texto transcrito nem chaves API."
     ]
   },
   it: {
@@ -2728,6 +2817,12 @@ var UI_STRINGS = {
       'D\xEC "per la correzione: ..." per dare istruzioni al correttore.',
       "Le parole compitate (V-O-X-T-R-A-L) vengono unite automaticamente.",
       'Le autocorrezioni ("no non X ma Y") vengono riconosciute.'
+    ],
+    privacy: "Privacy",
+    privacyItems: [
+      "L'audio viene inviato all'API Mistral tramite HTTPS/WSS e non viene salvato localmente.",
+      "Le impostazioni (inclusa la chiave API) sono memorizzate in data.json.",
+      "L'esportazione dei log non contiene testo trascritto n\xE9 chiavi API."
     ]
   }
 };
@@ -2788,6 +2883,11 @@ var VoxtralHelpView = class extends import_obsidian3.ItemView {
     const tips = container.createEl("ul", { cls: "voxtral-help-tips" });
     for (const tip of strings.tipItems) {
       tips.createEl("li", { text: tip });
+    }
+    container.createEl("h4", { text: strings.privacy });
+    const privacyList = container.createEl("ul", { cls: "voxtral-help-privacy" });
+    for (const item of strings.privacyItems) {
+      privacyList.createEl("li", { text: item });
     }
   }
   // eslint-disable-next-line @typescript-eslint/require-await -- base class requires async signature
@@ -3002,8 +3102,17 @@ var vlog = {
     console.error(...args);
   }
 };
+function redactForExport(line) {
+  let redacted = line.replace(/\b[A-Za-z0-9]{32,}\b/g, "[REDACTED]");
+  redacted = redacted.replace(/"[^"]{20,}"/g, '"[text redacted]"');
+  redacted = redacted.replace(
+    /(full text:|Hallucination detected —|Discarding hallucinated) .+/gi,
+    "$1 [redacted]"
+  );
+  return redacted;
+}
 function getLogText() {
-  return logBuffer.join("\n");
+  return logBuffer.map(redactForExport).join("\n");
 }
 function getLogCount() {
   return logBuffer.length;

@@ -34,9 +34,27 @@ export const vlog = {
 	},
 };
 
-/** Get all buffered log entries as a single string. */
+/**
+ * Redact potentially sensitive content from a log line before export.
+ * Strips transcription text fragments and API keys that may have
+ * ended up in error messages or debug output.
+ */
+function redactForExport(line: string): string {
+	// Redact anything that looks like an API key (32+ hex/alphanumeric chars)
+	let redacted = line.replace(/\b[A-Za-z0-9]{32,}\b/g, "[REDACTED]");
+	// Redact quoted transcription text (common in debug output)
+	redacted = redacted.replace(/"[^"]{20,}"/g, '"[text redacted]"');
+	// Redact text after known transcription-related prefixes
+	redacted = redacted.replace(
+		/(full text:|Hallucination detected —|Discarding hallucinated) .+/gi,
+		"$1 [redacted]",
+	);
+	return redacted;
+}
+
+/** Get all buffered log entries as a single string, with sensitive content redacted. */
 export function getLogText(): string {
-	return logBuffer.join("\n");
+	return logBuffer.map(redactForExport).join("\n");
 }
 
 /** Get the number of buffered log entries. */
