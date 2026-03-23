@@ -136,8 +136,8 @@ vi.mock("../mistral-api", async (importOriginal) => {
 	return {
 		...original,
 		RealtimeTranscriber: MockRealtimeTranscriber,
-		correctText: vi.fn(async (text: string) => text),
-		transcribeBatch: vi.fn(async () => ""),
+		correctText: vi.fn((text: string) => Promise.resolve(text)),
+		transcribeBatch: vi.fn(() => Promise.resolve("")),
 	};
 });
 
@@ -528,7 +528,7 @@ describe("Story 3: DictationTracker ↔ Editor state", () => {
 	});
 
 	describe("3c: Template insertion bypasses tracker", () => {
-		it("template text is not tracked for auto-correct", async () => {
+		it("template text is not tracked for auto-correct", () => {
 			// Set up a pre-match hook that always matches (simulating template)
 			setPreMatchHook((hookEditor, _normalized, _raw) => {
 				const cursor = hookEditor.getCursor();
