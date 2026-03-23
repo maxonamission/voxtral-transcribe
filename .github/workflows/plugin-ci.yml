@@ -32,6 +32,9 @@ jobs:
       - name: TypeScript check
         run: npx tsc -noEmit -skipLibCheck
 
+      - name: Test
+        run: npm test
+
       - name: Build
         run: npm run build
 
