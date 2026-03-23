@@ -18,8 +18,8 @@ Improve the Obsidian plugin's codebase structure, testability and long-term main
 | 015 | [Extract language definitions to data format](done/015-lang-data-extraction.md) | Done | Low |
 | 016 | [Privacy documentation and log redaction](done/016-privacy-logging-docs.md) | Done | Medium |
 | 019 | [Add npm test to CI and sync workflows](done/019-add-npm-test-to-ci.md) | Done | High |
-| 021 | [DualDelaySession tests — core logic and edge cases](backlog/021-dual-delay-session-tests.md) | Backlog | High |
-| 022 | [RealtimeSession tests — delta handling and slot buffering](backlog/022-realtime-session-tests.md) | Backlog | Medium |
+| 021 | [DualDelaySession tests — core logic and edge cases](done/021-dual-delay-session-tests.md) | Done | High |
+| 022 | [RealtimeSession tests — delta handling and slot buffering](done/022-realtime-session-tests.md) | Done | Medium |
 
 ### Dependencies within this epic
 
