@@ -104,7 +104,7 @@ export default class VoxtralPlugin extends Plugin {
 		);
 
 		// Ribbon icon: toggle recording
-		this.addRibbonIcon("mic", "Start/stop recording", () => {
+		this.addRibbonIcon("mic", "Voxtral: Start/stop recording", () => {
 			void this.toggleRecording();
 		});
 
@@ -397,7 +397,7 @@ export default class VoxtralPlugin extends Plugin {
 	// ── Typing mute (prevent keyboard noise from being transcribed) ──
 
 	private handleTypingMute(e: KeyboardEvent): void {
-		// ── Slot handling: Enter/Escape close/cancel the active slot ──
+		// ── Slot handling: Escape cancels; voice-exit slots let all keys through ──
 		if (isSlotActive()) {
 			const slot = getActiveSlot();
 			if (e.key === "Escape") {
@@ -406,6 +406,11 @@ export default class VoxtralPlugin extends Plugin {
 				this.updateStatusBar("recording");
 				return;
 			}
+			// Voice-exit slots: all keys (including Enter) pass through normally
+			if (slot?.def.exitTrigger === "voice") {
+				return;
+			}
+			// Legacy keyboard-exit slots (custom commands may still use these)
 			const isEnterExit = slot?.def.exitTrigger === "enter" || slot?.def.exitTrigger === "enter-or-space";
 			const isSpaceExit = slot?.def.exitTrigger === "space" || slot?.def.exitTrigger === "enter-or-space";
 			if ((e.key === "Enter" && isEnterExit) || (e.key === " " && isSpaceExit)) {
@@ -413,8 +418,6 @@ export default class VoxtralPlugin extends Plugin {
 				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 				if (view) {
 					closeSlot(view.editor);
-					// Update session state so subsequent text continues
-					// at the correct position after the closing marker
 					if (this.realtimeSession) {
 						this.realtimeSession.flushAfterSlot(view.editor);
 					}

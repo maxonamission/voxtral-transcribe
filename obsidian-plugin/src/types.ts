@@ -18,7 +18,7 @@ export interface CustomCommand {
 	/** Slot suffix (for type "slot") */
 	slotSuffix?: string;
 	/** Slot exit trigger (for type "slot") */
-	slotExit?: "enter" | "space" | "enter-or-space";
+	slotExit?: "voice" | "enter" | "space" | "enter-or-space";
 }
 
 export interface VoxtralSettings {

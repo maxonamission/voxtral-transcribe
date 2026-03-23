@@ -577,12 +577,13 @@ export class VoxtralSettingTab extends PluginSettingTab {
 				new Setting(slotContainer)
 					.setName("Close slot on")
 					.addDropdown((drop) => {
+						drop.addOption("voice", "Voice command only");
 						drop.addOption("enter", "Enter");
 						drop.addOption("space", "Space");
 						drop.addOption("enter-or-space", "Enter or space");
 						drop.setValue(exitValue);
 						drop.onChange((value) => {
-							exitValue = value as "enter" | "space" | "enter-or-space";
+							exitValue = value as "voice" | "enter" | "space" | "enter-or-space";
 						});
 					});
 

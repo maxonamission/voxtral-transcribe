@@ -179,20 +179,6 @@ export const QUICK_TEMPLATES: QuickTemplate[] = [
 		content: "\n\n| Kolom 1 | Kolom 2 | Kolom 3 |\n| --- | --- | --- |\n| | | |\n",
 	},
 	{
-		id: "codeBlock",
-		triggers: {
-			nl: ["codeblok", "code blok"],
-			en: ["code block"],
-			fr: ["bloc de code"],
-			de: ["codeblock", "code block"],
-			es: ["bloque de codigo"],
-			pt: ["bloco de codigo"],
-			it: ["blocco di codice"],
-		},
-		content: "\n\n```",
-		slot: { prefix: "\n\n```", suffix: "\n```\n", exitTrigger: "enter" },
-	},
-	{
 		id: "callout",
 		triggers: {
 			nl: ["callout", "opmerking", "notitie blok"],
