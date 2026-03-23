@@ -129,7 +129,7 @@ const transcriberInstances: Array<{
 vi.mock("../mistral-api", () => {
 	class MockRealtimeTranscriber {
 		callbacks: unknown;
-		connect = vi.fn(async () => {
+		connect = vi.fn(() => {
 			(this.callbacks as { onSessionCreated: () => void }).onSessionCreated();
 		});
 		sendAudio = vi.fn();
@@ -373,9 +373,7 @@ describe("DualDelaySession", () => {
 			tc.fast.onDelta("Hello world");
 			tc.slow.onDelta("Hello");
 
-			// Simulate user moving cursor (e.g., pressing Enter adds newline)
-			const currentText = editor.getValue();
-			// Manually position cursor elsewhere
+			// Simulate user moving cursor (e.g., clicked elsewhere)
 			editor.setCursor({ line: 0, ch: 0 });
 
 			// Trigger another delta to cause renderText to detect cursor move

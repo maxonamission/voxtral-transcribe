@@ -111,7 +111,7 @@ const transcriberInstances: Array<{
 vi.mock("../mistral-api", () => {
 	class MockRealtimeTranscriber {
 		callbacks: unknown;
-		connect = vi.fn(async () => {
+		connect = vi.fn(() => {
 			(this.callbacks as { onSessionCreated: () => void }).onSessionCreated();
 		});
 		sendAudio = vi.fn();
