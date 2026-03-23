@@ -78,7 +78,7 @@ Make the app easy to download and run for testers and users.
 |---|-------|--------|----------|
 | 004 | [Automated GitHub Releases with cross-platform builds](doing/004-github-releases-ci.md) | Doing | High |
 | 018 | [Sync plugin description across all config files](done/018-sync-descriptions.md) | Done | High |
-| 020 | [Version bump automation](backlog/020-version-bump-automation.md) | Backlog | Medium |
+| 020 | [Version bump automation](done/020-version-bump-automation.md) | Done | Medium |
 
 ## Epic: Pipeline Simplification
 
