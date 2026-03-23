@@ -91,6 +91,7 @@ jobs:
             --hidden-import uvicorn.lifespan.on `
             --hidden-import uvicorn.lifespan.off `
             --collect-all mistralai `
+            --collect-all mistralai.client `
             --collect-all pystray `
             --collect-all PIL `
             server.py
@@ -163,6 +164,7 @@ jobs:
             --hidden-import uvicorn.lifespan.on \
             --hidden-import uvicorn.lifespan.off \
             --collect-all mistralai \
+            --collect-all mistralai.client \
             server.py
 
       - name: Copy .env.example
@@ -220,6 +222,7 @@ jobs:
             --hidden-import uvicorn.lifespan.on \
             --hidden-import uvicorn.lifespan.off \
             --collect-all mistralai \
+            --collect-all mistralai.client \
             server.py
 
       - name: Copy .env.example
@@ -279,6 +282,7 @@ jobs:
               --hidden-import uvicorn.lifespan.on \
               --hidden-import uvicorn.lifespan.off \
               --collect-all mistralai \
+              --collect-all mistralai.client \
               server.py
             cp .env.example dist/voxtral-transcribe/ 2>/dev/null || true
             cp README-rpi.txt dist/voxtral-transcribe/README.txt 2>/dev/null || true
