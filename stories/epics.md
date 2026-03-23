@@ -94,7 +94,7 @@ Fix bugs discovered during testing.
 
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
-| 017 | [Fix bold/italic slot mechanism with real-time transcription](backlog/017-fix-bold-italic-slot-transcription.md) | Backlog | High |
+| 017 | [Fix bold/italic slot mechanism with real-time transcription](done/017-fix-bold-italic-slot-transcription.md) | Done | High |
 
 ## Epic: Custom Commands & Extensibility
 
