@@ -110,7 +110,7 @@ describe("Mishearing data integrity", () => {
 	});
 
 	it("all mishearing rules have valid regex patterns", () => {
-		for (const [lang, rules] of Object.entries(MISHEARINGS)) {
+		for (const rules of Object.values(MISHEARINGS)) {
 			if (!rules) continue;
 			for (const [pattern, replacement] of rules) {
 				expect(pattern).toBeInstanceOf(RegExp);

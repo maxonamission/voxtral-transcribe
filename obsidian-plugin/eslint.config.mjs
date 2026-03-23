@@ -3,9 +3,6 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
 	{
-		ignores: ["src/__tests__/**"],
-	},
-	{
 		files: ["src/**/*.ts"],
 		extends: [
 			...tseslint.configs.recommendedTypeChecked,
@@ -15,7 +12,12 @@ export default tseslint.config(
 		},
 		languageOptions: {
 			parserOptions: {
-				projectService: true,
+				projectService: {
+					allowDefaultProject: [
+						"src/__tests__/*.test.ts",
+						"src/__tests__/__mocks__/*.ts",
+					],
+				},
 				tsconfigRootDir: import.meta.dirname,
 			},
 		},

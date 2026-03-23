@@ -20,8 +20,8 @@ export class Editor {
 }
 
 // requestUrl mock — mistral-api.ts uses this for API calls
-export async function requestUrl(_options: unknown) {
-	return { json: {}, text: "", status: 200 };
+export function requestUrl(_options: unknown) {
+	return Promise.resolve({ json: {}, text: "", status: 200 });
 }
 
 // Notice mock
