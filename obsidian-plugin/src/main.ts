@@ -8,7 +8,7 @@ import {
 	Platform,
 	Plugin,
 } from "obsidian";
-import { VoxtralSettings } from "./types";
+import { VoxtralSettings, getDefaultBuiltInCommands } from "./types";
 import { migrateSettings } from "./settings-migration";
 import { VoxtralSettingTab } from "./settings-tab";
 import {
@@ -30,16 +30,13 @@ import {
 	getActiveSlot,
 	closeSlot,
 	cancelSlot,
-	openSlot,
 	loadCustomCommands,
 	loadCustomCommandTriggers,
 } from "./voice-commands";
 import {
 	scanTemplates,
 	matchTemplate,
-	matchQuickTemplate,
 	insertTemplate,
-	type QuickTemplate,
 } from "./templates";
 import { vlog, getLogText, getLogCount } from "./plugin-logger";
 import { DictationTracker } from "./dictation-tracker";
@@ -185,6 +182,14 @@ export default class VoxtralPlugin extends Plugin {
 
 	async loadSettings(): Promise<void> {
 		this.settings = migrateSettings(await this.loadData());
+		// Seed built-in custom commands if none present
+		const hasBuiltIn = this.settings.customCommands.some((c) => c.builtIn);
+		if (!hasBuiltIn) {
+			this.settings.customCommands = [
+				...getDefaultBuiltInCommands(),
+				...this.settings.customCommands,
+			];
+		}
 		setLanguage(this.settings.language);
 		loadCustomCommands(this.settings.customCommands);
 		loadCustomCommandTriggers(this.settings.customCommands);
@@ -206,39 +211,12 @@ export default class VoxtralPlugin extends Plugin {
 	private setupTemplates(): void {
 		scanTemplates(this.app, this.settings.templatesFolder);
 
+		// Pre-match hook handles user templates from the templates folder.
+		// Built-in quick-templates (table, callout, etc.) are now regular
+		// custom commands and go through the normal matchCommand() pipeline.
 		setPreMatchHook((editor, normalizedText, rawText) => {
 			const lang = this.settings.language;
 
-			// Try quick-templates first (table, code block, callout)
-			const quickMatch = matchQuickTemplate(normalizedText, lang);
-			if (quickMatch) {
-				if (quickMatch.textBefore) {
-					// Insert preceding text (reuse raw text for proper casing)
-					const cmdWords = normalizedText.length - quickMatch.textBefore.length;
-					const before = rawText.substring(0, rawText.length - cmdWords).trimEnd();
-					if (before) {
-						const cursor = editor.getCursor();
-						if (cursor.ch > 0 && !/^[\s\n]/.test(before)) {
-							const charBefore = editor.getRange(
-								{ line: cursor.line, ch: cursor.ch - 1 },
-								cursor,
-							);
-							const prefix = charBefore && /\S/.test(charBefore) ? " " : "";
-							editor.replaceRange(prefix + before, cursor);
-							const newCh = cursor.ch + prefix.length + before.length;
-							editor.setCursor({ line: cursor.line, ch: newCh });
-						} else {
-							editor.replaceRange(before, cursor);
-							const newCh = cursor.ch + before.length;
-							editor.setCursor({ line: cursor.line, ch: newCh });
-						}
-					}
-				}
-				this.insertQuickTemplate(editor, quickMatch.template);
-				return true;
-			}
-
-			// Try user templates ("template {name}" / "sjabloon {name}")
 			const tmplMatch = matchTemplate(normalizedText, lang);
 			if (tmplMatch) {
 				if (tmplMatch.textBefore) {
@@ -251,38 +229,12 @@ export default class VoxtralPlugin extends Plugin {
 						editor.setCursor({ line: cursor.line, ch: newCh });
 					}
 				}
-				// insertTemplate is async — fire and forget
 				void insertTemplate(this.app, editor, tmplMatch.template);
 				return true;
 			}
 
 			return false;
 		});
-	}
-
-	/** Insert a quick-template at the cursor, optionally opening a slot */
-	private insertQuickTemplate(editor: Editor, tmpl: QuickTemplate): void {
-		if (tmpl.slot) {
-			// Open a slot (e.g. code block: type language, then Enter closes)
-			const cursor = editor.getCursor();
-			editor.replaceRange(tmpl.slot.prefix, cursor);
-			const lines = tmpl.slot.prefix.split("\n");
-			const lastLine = lines[lines.length - 1];
-			const newLine = cursor.line + lines.length - 1;
-			const newCh = lines.length === 1 ? cursor.ch + lastLine.length : lastLine.length;
-			editor.setCursor({ line: newLine, ch: newCh });
-			openSlot(tmpl.id, tmpl.slot);
-			this.updateStatusBar("slot");
-		} else {
-			// Simple content insertion
-			const cursor = editor.getCursor();
-			editor.replaceRange(tmpl.content, cursor);
-			const lines = tmpl.content.split("\n");
-			const lastLine = lines[lines.length - 1];
-			const newLine = cursor.line + lines.length - 1;
-			const newCh = lines.length === 1 ? cursor.ch + lastLine.length : lastLine.length;
-			editor.setCursor({ line: newLine, ch: newCh });
-		}
 	}
 
 	/** Re-render the help panel with the current language. */
