@@ -22,7 +22,7 @@ __export(main_exports, {
   default: () => VoxtralPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian5 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_SETTINGS = {
@@ -2954,7 +2954,7 @@ function matchQuickTemplate(normalizedText, lang) {
   return null;
 }
 
-// src/main.ts
+// src/plugin-logger.ts
 var LOG_BUFFER_SIZE = 500;
 var logBuffer = [];
 function pushLog(level, args) {
@@ -2979,10 +2979,809 @@ var vlog = {
     console.error(...args);
   }
 };
-var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
+function getLogText() {
+  return logBuffer.join("\n");
+}
+function getLogCount() {
+  return logBuffer.length;
+}
+
+// src/dictation-tracker.ts
+var DictationTracker = class _DictationTracker {
+  constructor() {
+    this.dictatedRanges = [];
+  }
+  /** Clear all tracked ranges (call when recording starts/stops). */
+  reset() {
+    this.dictatedRanges = [];
+  }
+  /**
+   * Wrap processText to track what was inserted in the editor.
+   * Records the cursor offset before and after to determine the
+   * range of inserted text, and adjusts existing ranges when an
+   * insertion shifts them.
+   *
+   * @param onSlotActive — optional callback when a slot becomes active
+   */
+  trackProcessText(editor, text, onSlotActive) {
+    const offsetBefore = editor.posToOffset(editor.getCursor());
+    processText(editor, text);
+    if (isSlotActive() && onSlotActive) {
+      onSlotActive();
+    }
+    const offsetAfter = editor.posToOffset(editor.getCursor());
+    const delta = offsetAfter - offsetBefore;
+    if (delta > 0) {
+      for (const range of this.dictatedRanges) {
+        if (range.from >= offsetBefore) {
+          range.from += delta;
+          range.to += delta;
+        } else if (range.to > offsetBefore) {
+          range.to += delta;
+        }
+      }
+      this.dictatedRanges.push({ from: offsetBefore, to: offsetAfter });
+    } else if (delta < 0) {
+      const deletedLen = -delta;
+      const deletedFrom = offsetAfter;
+      const deletedTo = offsetBefore;
+      for (const range of this.dictatedRanges) {
+        if (range.from >= deletedTo) {
+          range.from -= deletedLen;
+          range.to -= deletedLen;
+        } else if (range.from >= deletedFrom) {
+          range.from = deletedFrom;
+          range.to = range.to <= deletedTo ? deletedFrom : range.to - deletedLen;
+        } else if (range.to > deletedFrom) {
+          range.to = range.to <= deletedTo ? deletedFrom : range.to - deletedLen;
+        }
+      }
+      this.dictatedRanges = this.dictatedRanges.filter(
+        (r) => r.to > r.from
+      );
+    }
+  }
+  /**
+   * Insert text at cursor and track the range for auto-correct.
+   * Handles auto-spacing between existing text and new text.
+   */
+  trackInsertAtCursor(editor, text) {
+    const cursor = editor.getCursor();
+    if (cursor.ch > 0 && text.length > 0 && !/^[\s\n]/.test(text)) {
+      const charBefore = editor.getRange(
+        { line: cursor.line, ch: cursor.ch - 1 },
+        cursor
+      );
+      if (charBefore && /\S/.test(charBefore)) {
+        text = " " + text;
+      }
+    }
+    const offsetBefore = editor.posToOffset(cursor);
+    editor.replaceRange(text, cursor);
+    const lines = text.split("\n");
+    const lastLine = lines[lines.length - 1];
+    const newLine = cursor.line + lines.length - 1;
+    const newCh = lines.length === 1 ? cursor.ch + lastLine.length : lastLine.length;
+    editor.setCursor({ line: newLine, ch: newCh });
+    const offsetAfter = editor.posToOffset(editor.getCursor());
+    const delta = offsetAfter - offsetBefore;
+    if (delta > 0) {
+      for (const range of this.dictatedRanges) {
+        if (range.from >= offsetBefore) {
+          range.from += delta;
+          range.to += delta;
+        } else if (range.to > offsetBefore) {
+          range.to += delta;
+        }
+      }
+      this.dictatedRanges.push({ from: offsetBefore, to: offsetAfter });
+    }
+  }
+  /** Record a range directly (for dual-delay finalization). */
+  addRange(from, to) {
+    this.dictatedRanges.push({ from, to });
+  }
+  /**
+   * After stopping realtime recording, correct only the text
+   * that was actually dictated.  Each tracked range is corrected
+   * independently, processed from end to start so that earlier
+   * offsets remain valid after replacements.
+   */
+  async autoCorrectAfterStop(editor, settings) {
+    if (this.dictatedRanges.length === 0) return;
+    const merged = _DictationTracker.mergeRanges(this.dictatedRanges);
+    merged.sort((a, b) => b.from - a.from);
+    const fullText = editor.getValue();
+    const corrections = [];
+    for (const range of merged) {
+      if (range.from >= fullText.length || range.to > fullText.length) {
+        continue;
+      }
+      const text = fullText.substring(range.from, range.to);
+      if (!text.trim()) continue;
+      corrections.push({
+        from: editor.offsetToPos(range.from),
+        to: editor.offsetToPos(range.to),
+        text
+      });
+    }
+    for (const c of corrections) {
+      try {
+        const corrected = await correctText(c.text, settings);
+        if (corrected && corrected !== c.text) {
+          editor.replaceRange(corrected, c.from, c.to);
+        }
+      } catch (e) {
+        vlog.error("Voxtral: Auto-correct failed", e);
+      }
+    }
+  }
+  /**
+   * Merge overlapping or adjacent dictated ranges into a minimal set.
+   */
+  static mergeRanges(ranges) {
+    if (ranges.length === 0) return [];
+    const sorted = [...ranges].sort((a, b) => a.from - b.from);
+    const merged = [sorted[0]];
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = merged[merged.length - 1];
+      const cur = sorted[i];
+      if (cur.from <= prev.to) {
+        prev.to = Math.max(prev.to, cur.to);
+      } else {
+        merged.push({ ...cur });
+      }
+    }
+    return merged;
+  }
+};
+
+// src/realtime-session.ts
+var import_obsidian5 = require("obsidian");
+var RealtimeSession = class {
+  constructor(settings, tracker, callbacks) {
+    this.settings = settings;
+    this.tracker = tracker;
+    this.callbacks = callbacks;
+    this.transcriber = null;
+    this.pendingText = "";
+    this.prevRaw = "";
+    this.turnDelta = 0;
+    this.turnProcessed = 0;
+    this.slotBuffer = "";
+    this.consecutiveFailures = 0;
+    this.maxConsecutiveFailures = 5;
+  }
+  /** Connect the WebSocket and start receiving transcription. */
+  async start(editor) {
+    this.pendingText = "";
+    this.prevRaw = "";
+    this.turnDelta = 0;
+    this.turnProcessed = 0;
+    this.slotBuffer = "";
+    this.consecutiveFailures = 0;
+    await this.connectWebSocket(editor);
+  }
+  /** Send PCM audio data to the transcriber. */
+  sendAudio(pcmData) {
+    var _a;
+    (_a = this.transcriber) == null ? void 0 : _a.sendAudio(pcmData);
+  }
+  /** Signal end of audio and finalize any pending text. */
+  async stop(editor) {
+    var _a, _b;
+    (_a = this.transcriber) == null ? void 0 : _a.endAudio();
+    await new Promise((resolve) => setTimeout(resolve, 1e3));
+    if (this.pendingText.trim()) {
+      this.tracker.trackProcessText(
+        editor,
+        this.pendingText.trim(),
+        () => this.callbacks.updateStatusBar("slot")
+      );
+      this.pendingText = "";
+    }
+    (_b = this.transcriber) == null ? void 0 : _b.close();
+    this.transcriber = null;
+  }
+  /** Flush buffered transcription text after a slot closes. */
+  flushSlotBuffer(editor) {
+    const buffered = this.slotBuffer;
+    this.slotBuffer = "";
+    if (buffered.trim()) {
+      this.pendingText += buffered;
+      if (this.pendingText.trim()) {
+        this.tracker.trackProcessText(
+          editor,
+          this.pendingText.trim() + " ",
+          () => this.callbacks.updateStatusBar("slot")
+        );
+        this.pendingText = "";
+      }
+    }
+  }
+  // ── WebSocket lifecycle ──
+  async connectWebSocket(editor) {
+    this.transcriber = new RealtimeTranscriber(this.settings, {
+      onSessionCreated: () => {
+        vlog.debug("Voxtral: Realtime session created");
+      },
+      onDelta: (text) => {
+        this.handleDelta(editor, text);
+      },
+      onDone: (text) => {
+        this.handleDone(editor, text);
+      },
+      onError: (message) => {
+        vlog.error("Voxtral: Realtime error:", message);
+        new import_obsidian5.Notice(`Streaming error: ${message}`);
+      },
+      onDisconnect: () => {
+        void this.handleDisconnect();
+      }
+    });
+    await this.transcriber.connect();
+  }
+  /**
+   * Handle WebSocket closure during recording.
+   *
+   * The Mistral realtime API closes the connection after each
+   * transcription.done event (end of utterance / silence detected).
+   * This is NORMAL — not an error. We silently reconnect so the
+   * user can keep talking without interruption.
+   *
+   * Only shows a warning if reconnection fails repeatedly.
+   */
+  async handleDisconnect() {
+    if (!this.callbacks.isRecording()) return;
+    const editor = this.callbacks.getEditor();
+    if (!editor) {
+      this.callbacks.stopRecording();
+      return;
+    }
+    vlog.debug("Voxtral: Session ended, reconnecting silently...");
+    this.prevRaw = "";
+    this.turnDelta = 0;
+    this.turnProcessed = 0;
+    try {
+      await this.connectWebSocket(editor);
+      this.consecutiveFailures = 0;
+      vlog.debug("Voxtral: Session reconnected");
+    } catch (e) {
+      this.consecutiveFailures++;
+      console.error(
+        `Voxtral: Reconnect failed (${this.consecutiveFailures}/${this.maxConsecutiveFailures})`,
+        e
+      );
+      if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
+        new import_obsidian5.Notice(
+          "Cannot connect to the API. Recording stopped.",
+          6e3
+        );
+        this.callbacks.stopRecording();
+        return;
+      }
+      const delay = Math.min(
+        500 * this.consecutiveFailures,
+        3e3
+      );
+      await new Promise(
+        (resolve) => setTimeout(resolve, delay)
+      );
+      if (this.callbacks.isRecording()) {
+        void this.handleDisconnect();
+      }
+    }
+  }
+  // ── Delta / Done text processing ──
+  handleDelta(editor, text) {
+    const isCumulative = this.prevRaw && text.startsWith(this.prevRaw);
+    const newText = isCumulative ? text.substring(this.prevRaw.length) : text;
+    this.prevRaw = isCumulative ? text : this.prevRaw + text;
+    if (!newText) return;
+    if (isSlotActive()) {
+      this.slotBuffer += newText;
+      this.turnDelta += newText.length;
+      return;
+    }
+    this.pendingText += newText;
+    this.turnDelta += newText.length;
+    const sentenceEnd = /[.!?]\s*$/;
+    const longEnough = this.pendingText.length > 120;
+    if (sentenceEnd.test(this.pendingText) || longEnough) {
+      const sentence = this.pendingText.trim();
+      this.turnProcessed += this.pendingText.length;
+      this.pendingText = "";
+      const normalized = normalizeCommand(sentence);
+      const stopPatterns = [
+        "beeindig opname",
+        "beeindig de opname",
+        "beeindigt opname",
+        "beeindigt de opname",
+        "beeindigde opname",
+        "beeindigde de opname",
+        "stop opname",
+        "stopopname",
+        "stop de opname",
+        "stop recording"
+      ];
+      if (stopPatterns.some((p) => normalized.includes(p))) {
+        this.callbacks.stopRecording();
+        return;
+      }
+      this.tracker.trackProcessText(
+        editor,
+        sentence + " ",
+        () => this.callbacks.updateStatusBar("slot")
+      );
+    }
+  }
+  handleDone(editor, doneText) {
+    if (isSlotActive()) {
+      return;
+    }
+    if (doneText && doneText.length > this.turnDelta) {
+      this.pendingText += doneText.substring(this.turnDelta);
+    }
+    if (this.pendingText.trim()) {
+      this.tracker.trackProcessText(
+        editor,
+        this.pendingText.trim() + " ",
+        () => this.callbacks.updateStatusBar("slot")
+      );
+      this.pendingText = "";
+    }
+    this.turnDelta = 0;
+    this.turnProcessed = 0;
+  }
+};
+
+// src/dual-delay-session.ts
+var import_obsidian6 = require("obsidian");
+var DualDelaySession = class {
+  constructor(settings, tracker, callbacks) {
+    this.settings = settings;
+    this.tracker = tracker;
+    this.callbacks = callbacks;
+    this.fastTranscriber = null;
+    this.slowTranscriber = null;
+    // Text accumulators
+    this.fastText = "";
+    this.slowText = "";
+    this.fastPrevRaw = "";
+    this.slowPrevRaw = "";
+    this.slowTurnDelta = 0;
+    // Editor state
+    this.insertOffset = 0;
+    this.displayLen = 0;
+    this.slowCommitted = 0;
+    this.commandJustRan = false;
+    // Reconnection
+    this.consecutiveFailures = 0;
+    this.maxConsecutiveFailures = 5;
+  }
+  /** Connect both WebSocket streams and initialize state. */
+  async start(editor) {
+    this.fastText = "";
+    this.slowText = "";
+    this.insertOffset = editor.posToOffset(editor.getCursor());
+    this.displayLen = 0;
+    this.slowCommitted = 0;
+    this.slowTurnDelta = 0;
+    this.fastPrevRaw = "";
+    this.slowPrevRaw = "";
+    this.commandJustRan = false;
+    this.consecutiveFailures = 0;
+    await this.connectWebSockets(editor);
+  }
+  /** Send PCM audio data to both transcribers. */
+  sendAudio(pcmData) {
+    var _a, _b;
+    (_a = this.fastTranscriber) == null ? void 0 : _a.sendAudio(pcmData);
+    (_b = this.slowTranscriber) == null ? void 0 : _b.sendAudio(pcmData);
+  }
+  /** Finalize the session: flush remaining text and close streams. */
+  async stop() {
+    var _a, _b, _c, _d;
+    (_a = this.fastTranscriber) == null ? void 0 : _a.endAudio();
+    (_b = this.slowTranscriber) == null ? void 0 : _b.endAudio();
+    await new Promise((resolve) => setTimeout(resolve, 1e3));
+    const editor = this.callbacks.getEditor();
+    if (editor) {
+      this.processSlowCommands(editor);
+      const finalText = this.slowText || this.fastText;
+      if (finalText) {
+        const from = editor.offsetToPos(this.insertOffset);
+        const to = editor.offsetToPos(
+          this.insertOffset + this.displayLen
+        );
+        editor.replaceRange(finalText, from, to);
+        const endOffset = this.insertOffset + finalText.length;
+        editor.setCursor(editor.offsetToPos(endOffset));
+        this.tracker.addRange(
+          this.insertOffset,
+          this.insertOffset + finalText.length
+        );
+      }
+    }
+    (_c = this.fastTranscriber) == null ? void 0 : _c.close();
+    (_d = this.slowTranscriber) == null ? void 0 : _d.close();
+    this.fastTranscriber = null;
+    this.slowTranscriber = null;
+    this.fastText = "";
+    this.slowText = "";
+    this.displayLen = 0;
+    this.slowCommitted = 0;
+    this.slowTurnDelta = 0;
+  }
+  // ── WebSocket lifecycle ──
+  async connectWebSockets(editor) {
+    const fastDelay = this.settings.dualDelayFastMs;
+    const slowDelay = this.settings.dualDelaySlowMs;
+    this.fastTranscriber = new RealtimeTranscriber(
+      this.settings,
+      {
+        onSessionCreated: () => {
+          vlog.debug(
+            "Voxtral: Fast stream session created"
+          );
+        },
+        onDelta: (text) => {
+          this.handleFastDelta(text);
+          this.renderText(editor);
+        },
+        onDone: () => {
+          this.renderText(editor);
+        },
+        onError: (message) => {
+          vlog.error(
+            "Voxtral: Fast stream error:",
+            message
+          );
+        },
+        onDisconnect: () => {
+          void this.handleStreamDisconnect("fast");
+        }
+      },
+      fastDelay
+    );
+    this.slowTranscriber = new RealtimeTranscriber(
+      this.settings,
+      {
+        onSessionCreated: () => {
+          vlog.debug(
+            "Voxtral: Slow stream session created"
+          );
+        },
+        onDelta: (text) => {
+          this.handleSlowDelta(text);
+          this.renderText(editor);
+          this.processSlowCommands(editor);
+        },
+        onDone: () => {
+          this.renderText(editor);
+          this.processSlowCommands(editor);
+        },
+        onError: (message) => {
+          vlog.error(
+            "Voxtral: Slow stream error:",
+            message
+          );
+        },
+        onDisconnect: () => {
+          void this.handleStreamDisconnect("slow");
+        }
+      },
+      slowDelay
+    );
+    await Promise.all([
+      this.fastTranscriber.connect(),
+      this.slowTranscriber.connect()
+    ]);
+  }
+  async handleStreamDisconnect(stream) {
+    if (!this.callbacks.isRecording()) return;
+    const editor = this.callbacks.getEditor();
+    if (!editor) {
+      this.callbacks.stopRecording();
+      return;
+    }
+    vlog.debug(
+      `Voxtral: ${stream} stream ended, reconnecting...`
+    );
+    try {
+      if (stream === "fast") {
+        await this.reconnectFastStream(editor);
+      } else {
+        await this.reconnectSlowStream(editor);
+      }
+      this.consecutiveFailures = 0;
+    } catch (e) {
+      this.consecutiveFailures++;
+      vlog.error(
+        `Voxtral: ${stream} stream reconnect failed (${this.consecutiveFailures})`,
+        e
+      );
+      if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
+        new import_obsidian6.Notice(
+          "Cannot reconnect. Recording stopped.",
+          6e3
+        );
+        this.callbacks.stopRecording();
+        return;
+      }
+      const delay = Math.min(
+        500 * this.consecutiveFailures,
+        3e3
+      );
+      await new Promise(
+        (resolve) => setTimeout(resolve, delay)
+      );
+      if (this.callbacks.isRecording()) {
+        void this.handleStreamDisconnect(stream);
+      }
+    }
+  }
+  async reconnectFastStream(editor) {
+    const fastDelay = this.settings.dualDelayFastMs;
+    this.fastTranscriber = new RealtimeTranscriber(
+      this.settings,
+      {
+        onSessionCreated: () => vlog.debug(
+          "Voxtral: Fast stream reconnected"
+        ),
+        onDelta: (text) => {
+          this.fastText += text;
+          this.renderText(editor);
+        },
+        onDone: () => this.renderText(editor),
+        onError: (message) => vlog.error(
+          "Voxtral: Fast stream error:",
+          message
+        ),
+        onDisconnect: () => void this.handleStreamDisconnect("fast")
+      },
+      fastDelay
+    );
+    await this.fastTranscriber.connect();
+  }
+  async reconnectSlowStream(editor) {
+    if (this.slowText.trim()) {
+      const from = editor.offsetToPos(this.insertOffset);
+      const to = editor.offsetToPos(
+        this.insertOffset + this.displayLen
+      );
+      editor.replaceRange("", from, to);
+      editor.setCursor(from);
+      this.displayLen = 0;
+      this.tracker.trackInsertAtCursor(editor, this.slowText);
+      this.insertOffset = editor.posToOffset(
+        editor.getCursor()
+      );
+    }
+    this.slowCommitted = 0;
+    this.slowText = "";
+    this.fastText = "";
+    this.slowTurnDelta = 0;
+    this.slowPrevRaw = "";
+    this.fastPrevRaw = "";
+    const slowDelay = this.settings.dualDelaySlowMs;
+    this.slowTranscriber = new RealtimeTranscriber(
+      this.settings,
+      {
+        onSessionCreated: () => vlog.debug(
+          "Voxtral: Slow stream reconnected"
+        ),
+        onDelta: (text) => {
+          this.handleSlowDelta(text);
+          this.renderText(editor);
+          this.processSlowCommands(editor);
+        },
+        onDone: () => {
+          this.renderText(editor);
+          this.processSlowCommands(editor);
+        },
+        onError: (message) => vlog.error(
+          "Voxtral: Slow stream error:",
+          message
+        ),
+        onDisconnect: () => void this.handleStreamDisconnect("slow")
+      },
+      slowDelay
+    );
+    await this.slowTranscriber.connect();
+  }
+  // ── Delta handlers ──
+  handleFastDelta(text) {
+    const isCumulative = this.fastPrevRaw && text.startsWith(this.fastPrevRaw);
+    if (isCumulative) {
+      const newPart = text.substring(this.fastPrevRaw.length);
+      if (newPart) this.fastText += newPart;
+    } else {
+      this.fastText += text;
+    }
+    this.fastPrevRaw = isCumulative ? text : this.fastPrevRaw + text;
+  }
+  handleSlowDelta(text) {
+    const isCumulative = this.slowPrevRaw && text.startsWith(this.slowPrevRaw);
+    if (isCumulative) {
+      const newPart = text.substring(this.slowPrevRaw.length);
+      if (newPart) {
+        this.slowText += newPart;
+        this.slowTurnDelta += newPart.length;
+      }
+    } else {
+      this.slowText += text;
+      this.slowTurnDelta += text.length;
+    }
+    this.slowPrevRaw = isCumulative ? text : this.slowPrevRaw + text;
+  }
+  // ── Editor rendering ──
+  /**
+   * Update the editor with the current dual-delay text.
+   * Shows slow (confirmed) text + any fast text beyond slow.
+   */
+  renderText(editor) {
+    const cursorOffset = editor.posToOffset(editor.getCursor());
+    const expectedEnd = this.insertOffset + this.displayLen;
+    if (cursorOffset !== expectedEnd) {
+      if (this.displayLen > 0) {
+        const slowText = this.slowText;
+        const from2 = editor.offsetToPos(this.insertOffset);
+        const to2 = editor.offsetToPos(expectedEnd);
+        editor.replaceRange(slowText, from2, to2);
+        const shift = slowText.length - this.displayLen;
+        const newCursor = cursorOffset >= expectedEnd ? cursorOffset + shift : cursorOffset;
+        editor.setCursor(editor.offsetToPos(newCursor));
+        this.slowCommitted += slowText.length;
+        this.slowText = "";
+        this.fastText = "";
+        this.displayLen = 0;
+        this.insertOffset = newCursor;
+        return;
+      }
+      this.insertOffset = cursorOffset;
+    }
+    const slowLen = this.slowText.length;
+    const fastLen = this.fastText.length;
+    let displayText;
+    if (fastLen > slowLen) {
+      displayText = this.slowText + this.fastText.substring(slowLen);
+    } else {
+      displayText = this.slowText;
+    }
+    const from = editor.offsetToPos(this.insertOffset);
+    const to = editor.offsetToPos(
+      this.insertOffset + this.displayLen
+    );
+    if (from.ch === 0 && this.displayLen === 0) {
+      displayText = displayText.replace(/^\s+/, "");
+    }
+    editor.replaceRange(displayText, from, to);
+    this.displayLen = displayText.length;
+    const endOffset = this.insertOffset + this.displayLen;
+    editor.setCursor(editor.offsetToPos(endOffset));
+  }
+  // ── Voice command processing ──
+  /**
+   * Process voice commands from the slow stream (more accurate).
+   * Checks completed sentences in slowText for voice commands.
+   */
+  processSlowCommands(editor) {
+    if (!this.slowText) return;
+    if (this.commandJustRan && /^[\s.!?,;:]*$/.test(this.slowText)) {
+      this.commandJustRan = false;
+      if (this.displayLen > 0) {
+        const from2 = editor.offsetToPos(this.insertOffset);
+        const to2 = editor.offsetToPos(
+          this.insertOffset + this.displayLen
+        );
+        editor.replaceRange("", from2, to2);
+        editor.setCursor(from2);
+        this.displayLen = 0;
+      }
+      this.slowCommitted += this.slowText.length;
+      this.slowText = "";
+      this.fastText = "";
+      this.insertOffset = editor.posToOffset(
+        editor.getCursor()
+      );
+      return;
+    }
+    this.commandJustRan = false;
+    const segments = this.slowText.match(
+      /[^.!?]+[.!?]+\s*/g
+    );
+    const segmentText = segments ? segments.join("") : "";
+    const remainder = this.slowText.substring(segmentText.length);
+    if (!segments && remainder.trim()) {
+      const cmdMatch = matchCommand(remainder.trim());
+      if (cmdMatch && !cmdMatch.textBefore) {
+        const from2 = editor.offsetToPos(this.insertOffset);
+        const to2 = editor.offsetToPos(
+          this.insertOffset + this.displayLen
+        );
+        editor.replaceRange("", from2, to2);
+        editor.setCursor(from2);
+        this.displayLen = 0;
+        cmdMatch.command.action(editor);
+        if (cmdMatch.command.id === "stopRecording") {
+          setTimeout(
+            () => this.callbacks.stopRecording(),
+            0
+          );
+        }
+        if (isSlotActive()) {
+          this.callbacks.updateStatusBar("slot");
+        }
+        this.commandJustRan = true;
+        this.slowCommitted += this.slowText.length;
+        this.slowText = "";
+        this.fastText = "";
+        this.insertOffset = editor.posToOffset(
+          editor.getCursor()
+        );
+        return;
+      }
+      return;
+    }
+    if (!segments) return;
+    const matchedLength = segmentText.length;
+    const from = editor.offsetToPos(this.insertOffset);
+    const to = editor.offsetToPos(
+      this.insertOffset + this.displayLen
+    );
+    editor.replaceRange("", from, to);
+    editor.setCursor(from);
+    this.displayLen = 0;
+    for (const segment of segments) {
+      const match = matchCommand(segment);
+      if (match) {
+        if (match.textBefore) {
+          let before = match.textBefore;
+          if (match.command.punctuation) {
+            before = before.replace(
+              /[,;.!?]+\s*$/,
+              ""
+            );
+          }
+          this.tracker.trackInsertAtCursor(
+            editor,
+            before
+          );
+        }
+        match.command.action(editor);
+        this.commandJustRan = true;
+        if (match.command.id === "stopRecording") {
+          setTimeout(
+            () => this.callbacks.stopRecording(),
+            0
+          );
+        }
+        if (isSlotActive()) {
+          this.callbacks.updateStatusBar("slot");
+        }
+      } else {
+        this.tracker.trackInsertAtCursor(editor, segment);
+      }
+    }
+    this.slowCommitted += matchedLength;
+    this.slowText = remainder;
+    this.fastText = "";
+    this.insertOffset = editor.posToOffset(editor.getCursor());
+    this.displayLen = 0;
+    if (this.slowText || this.fastText) {
+      this.renderText(editor);
+    }
+  }
+};
+
+// src/main.ts
+var VoxtralPlugin = class extends import_obsidian7.Plugin {
   constructor() {
     super(...arguments);
-    this.realtimeTranscriber = null;
+    this.realtimeSession = null;
+    this.dualDelaySession = null;
+    this.tracker = new DictationTracker();
     this.isRecording = false;
     this.isPaused = false;
     this.isTypingMuted = false;
@@ -2991,46 +3790,15 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     this.statusBarEl = null;
     this.sendRibbonEl = null;
     this.mobileActionEl = null;
-    this.pendingText = "";
-    this.realtimePrevRaw = "";
-    // raw cumulative text from API (for delta detection)
-    this.realtimeTurnDelta = 0;
-    // bytes received via deltas in current realtime turn
-    this.realtimeTurnProcessed = 0;
-    // bytes already flushed from pendingText in current turn
     this.chunkIndex = 0;
     this.consecutiveFailures = 0;
     this.maxConsecutiveFailures = 5;
     this.currentEditor = null;
     this.keydownHandler = null;
-    /** Text buffered while a slot is active (transcription paused) */
-    this.slotBuffer = "";
-    /** Ranges of text inserted during realtime dictation.
-     *  Offsets are always in the current document coordinate system —
-     *  existing ranges are adjusted when a new insertion happens. */
-    this.dictatedRanges = [];
-    // ── Dual-delay state ──
-    this.dualSlowTranscriber = null;
-    this.dualFastText = "";
-    this.dualSlowText = "";
-    this.dualInsertOffset = 0;
-    // editor offset where dual-delay text starts
-    this.dualDisplayLen = 0;
-    // length of text currently shown in editor
-    this.dualSlowCommitted = 0;
-    // bytes trimmed from dualSlowText by processDualSlowCommands
-    this.dualSlowTurnDelta = 0;
-    // bytes received via deltas in current slow turn
-    this.dualFastPrevRaw = "";
-    // raw cumulative text from fast API (for delta detection)
-    this.dualSlowPrevRaw = "";
-    // raw cumulative text from slow API (for delta detection)
-    this.dualCommandJustRan = false;
   }
-  // true after a voice command was executed (for orphaned punctuation detection)
   /** Whether realtime mode is available on this platform */
   get canRealtime() {
-    return !import_obsidian5.Platform.isMobile;
+    return !import_obsidian7.Platform.isMobile;
   }
   /** Effective mode: fall back to batch on mobile */
   get effectiveMode() {
@@ -3038,6 +3806,20 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
       return "realtime";
     }
     return "batch";
+  }
+  /** Callbacks shared by realtime and dual-delay sessions. */
+  get sessionCallbacks() {
+    return {
+      updateStatusBar: (state) => this.updateStatusBar(state),
+      stopRecording: () => {
+        void this.stopRecording();
+      },
+      isRecording: () => this.isRecording,
+      getEditor: () => {
+        var _a;
+        return this.currentEditor || ((_a = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView)) == null ? void 0 : _a.editor) || null;
+      }
+    };
   }
   async onload() {
     await this.loadSettings();
@@ -3049,7 +3831,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     this.addRibbonIcon("mic", "Start/stop recording", () => {
       void this.toggleRecording();
     });
-    if (!import_obsidian5.Platform.isMobile) {
+    if (!import_obsidian7.Platform.isMobile) {
       this.statusBarEl = this.addStatusBarItem();
       this.updateStatusBar("idle");
     }
@@ -3136,6 +3918,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     this.setupTemplates();
     this.refreshHelpView();
   }
+  // ── Templates ──
   /** Scan templates folder and register the pre-match hook */
   setupTemplates() {
     scanTemplates(this.app, this.settings.templatesFolder);
@@ -3227,8 +4010,8 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
       }
     );
     this.sendRibbonEl.addClass("voxtral-send-button");
-    if (import_obsidian5.Platform.isMobile) {
-      const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
+    if (import_obsidian7.Platform.isMobile) {
+      const view = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
       if (view) {
         this.mobileActionEl = view.addAction(
           "send",
@@ -3289,7 +4072,7 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     this.isPaused = false;
     this.recorder.resume();
     this.updateStatusBar("recording");
-    new import_obsidian5.Notice("Recording resumed");
+    new import_obsidian7.Notice("Recording resumed");
     vlog.debug("Voxtral: Recording resumed (app foregrounded)");
   }
   clearFocusPauseTimer() {
@@ -3306,18 +4089,22 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
         e.preventDefault();
         cancelSlot();
         this.updateStatusBar("recording");
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
-        if (view) this.flushSlotBuffer(view.editor);
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
+        if (view && this.realtimeSession) {
+          this.realtimeSession.flushSlotBuffer(view.editor);
+        }
         return;
       }
       const isEnterExit = (slot == null ? void 0 : slot.def.exitTrigger) === "enter" || (slot == null ? void 0 : slot.def.exitTrigger) === "enter-or-space";
       const isSpaceExit = (slot == null ? void 0 : slot.def.exitTrigger) === "space" || (slot == null ? void 0 : slot.def.exitTrigger) === "enter-or-space";
       if (e.key === "Enter" && isEnterExit || e.key === " " && isSpaceExit) {
         e.preventDefault();
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
         if (view) {
           closeSlot(view.editor);
-          this.flushSlotBuffer(view.editor);
+          if (this.realtimeSession) {
+            this.realtimeSession.flushSlotBuffer(view.editor);
+          }
         }
         this.updateStatusBar("recording");
         return;
@@ -3371,12 +4158,12 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
   }
   async startRecording() {
     if (!this.settings.apiKey) {
-      new import_obsidian5.Notice("Please set your API key in the plugin settings.");
+      new import_obsidian7.Notice("Please set your API key in the plugin settings.");
       return;
     }
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
     if (!view) {
-      new import_obsidian5.Notice("Open a note first to start dictating.");
+      new import_obsidian7.Notice("Open a note first to start dictating.");
       return;
     }
     const editor = view.editor;
@@ -3392,13 +4179,13 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
       this.chunkIndex = 0;
       this.consecutiveFailures = 0;
       this.updateStatusBar("recording");
-      if (!import_obsidian5.Platform.isMobile) {
+      if (!import_obsidian7.Platform.isMobile) {
         void this.openHelpPanel();
       }
       const micName = this.recorder.activeMicLabel;
       if (this.effectiveMode === "batch") {
         const enterHint = this.settings.enterToSend ? " Press Enter (when not typing) or tap send to transcribe chunks." : " Tap send to transcribe chunks while you keep talking.";
-        if (import_obsidian5.Platform.isMobile && !this.settings.dismissMobileBatchNotice) {
+        if (import_obsidian7.Platform.isMobile && !this.settings.dismissMobileBatchNotice) {
           const frag = document.createDocumentFragment();
           frag.createSpan({
             text: `Recording started (${micName}). Tap the send button (\u2191) to transcribe chunks while you keep talking.`
@@ -3414,20 +4201,20 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
             this.settings.dismissMobileBatchNotice = true;
             void this.saveSettings();
           });
-          new import_obsidian5.Notice(frag, 8e3);
+          new import_obsidian7.Notice(frag, 8e3);
         } else {
-          new import_obsidian5.Notice(
+          new import_obsidian7.Notice(
             `Voxtral: Recording started (${micName})
 ` + enterHint.trim(),
             6e3
           );
         }
       } else {
-        new import_obsidian5.Notice(`Recording started (${micName})`);
+        new import_obsidian7.Notice(`Recording started (${micName})`);
       }
     } catch (e) {
       vlog.error("Voxtral: Failed to start recording", e);
-      new import_obsidian5.Notice(`Could not start recording: ${e}`);
+      new import_obsidian7.Notice(`Could not start recording: ${e}`);
       this.updateStatusBar("idle");
     }
   }
@@ -3450,19 +4237,19 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
       }
     } catch (e) {
       vlog.error("Voxtral: Failed to stop recording", e);
-      new import_obsidian5.Notice(`Error stopping recording: ${e}`);
+      new import_obsidian7.Notice(`Error stopping recording: ${e}`);
     }
     this.currentEditor = null;
-    this.dictatedRanges = [];
+    this.tracker.reset();
     this.updateStatusBar("idle");
-    new import_obsidian5.Notice("Recording stopped");
+    new import_obsidian7.Notice("Recording stopped");
   }
   // ── Tap-to-send: flush current audio chunk without stopping ──
   async sendChunk() {
     if (!this.isRecording || this.effectiveMode !== "batch") {
       return;
     }
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
     if (!view) return;
     const editor = view.editor;
     this.chunkIndex++;
@@ -3493,559 +4280,54 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     } catch (e) {
       vlog.error("Voxtral: Chunk transcription failed", e);
       this.updateStatusBar("recording");
-      new import_obsidian5.Notice(`Chunk failed: ${e}`);
+      new import_obsidian7.Notice(`Chunk failed: ${e}`);
     }
   }
-  // ── Realtime recording ──
+  // ── Realtime recording (delegates to session classes) ──
   async startRealtimeRecording(editor) {
+    this.tracker.reset();
     if (this.settings.dualDelay) {
-      return this.startDualDelayRecording(editor);
+      this.dualDelaySession = new DualDelaySession(
+        this.settings,
+        this.tracker,
+        this.sessionCallbacks
+      );
+      await this.dualDelaySession.start(editor);
+    } else {
+      this.realtimeSession = new RealtimeSession(
+        this.settings,
+        this.tracker,
+        this.sessionCallbacks
+      );
+      await this.realtimeSession.start(editor);
     }
-    this.pendingText = "";
-    this.realtimePrevRaw = "";
-    this.realtimeTurnDelta = 0;
-    this.realtimeTurnProcessed = 0;
-    this.dictatedRanges = [];
-    await this.connectRealtimeWebSocket(editor);
     const deviceId = this.settings.microphoneDeviceId || void 0;
     await this.recorder.start(deviceId, (pcmData) => {
-      var _a;
-      (_a = this.realtimeTranscriber) == null ? void 0 : _a.sendAudio(pcmData);
+      if (this.dualDelaySession) {
+        this.dualDelaySession.sendAudio(pcmData);
+      } else if (this.realtimeSession) {
+        this.realtimeSession.sendAudio(pcmData);
+      }
     }, this.settings.noiseSuppression);
     if (this.recorder.fallbackUsed) {
-      new import_obsidian5.Notice("Selected mic unavailable \u2014 using default");
-    }
-  }
-  async connectRealtimeWebSocket(editor) {
-    this.realtimeTranscriber = new RealtimeTranscriber(this.settings, {
-      onSessionCreated: () => {
-        vlog.debug("Voxtral: Realtime session created");
-      },
-      onDelta: (text) => {
-        this.handleRealtimeDelta(editor, text);
-      },
-      onDone: (text) => {
-        this.handleRealtimeDone(editor, text);
-      },
-      onError: (message) => {
-        vlog.error("Voxtral: Realtime error:", message);
-        new import_obsidian5.Notice(`Streaming error: ${message}`);
-      },
-      onDisconnect: () => {
-        void this.handleRealtimeDisconnect();
-      }
-    });
-    await this.realtimeTranscriber.connect();
-  }
-  /**
-   * Handle WebSocket closure during recording.
-   *
-   * The Mistral realtime API closes the connection after each
-   * transcription.done event (end of utterance / silence detected).
-   * This is NORMAL — not an error. We silently reconnect so the
-   * user can keep talking without interruption.
-   *
-   * Only shows a warning if reconnection fails repeatedly.
-   */
-  async handleRealtimeDisconnect() {
-    var _a;
-    if (!this.isRecording) return;
-    const editor = this.currentEditor || ((_a = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView)) == null ? void 0 : _a.editor);
-    if (!editor) {
-      void this.stopRecording();
-      return;
-    }
-    vlog.debug("Voxtral: Session ended, reconnecting silently...");
-    this.realtimePrevRaw = "";
-    this.realtimeTurnDelta = 0;
-    this.realtimeTurnProcessed = 0;
-    try {
-      await this.connectRealtimeWebSocket(editor);
-      this.consecutiveFailures = 0;
-      vlog.debug("Voxtral: Session reconnected");
-    } catch (e) {
-      this.consecutiveFailures++;
-      console.error(
-        `Voxtral: Reconnect failed (${this.consecutiveFailures}/${this.maxConsecutiveFailures})`,
-        e
-      );
-      if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
-        new import_obsidian5.Notice(
-          "Cannot connect to the API. Recording stopped.",
-          6e3
-        );
-        void this.stopRecording();
-        return;
-      }
-      const delay = Math.min(
-        500 * this.consecutiveFailures,
-        3e3
-      );
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      if (this.isRecording) {
-        void this.handleRealtimeDisconnect();
-      }
-    }
-  }
-  handleRealtimeDelta(editor, text) {
-    const isCumulative = this.realtimePrevRaw && text.startsWith(this.realtimePrevRaw);
-    const newText = isCumulative ? text.substring(this.realtimePrevRaw.length) : text;
-    this.realtimePrevRaw = isCumulative ? text : this.realtimePrevRaw + text;
-    if (!newText) return;
-    if (isSlotActive()) {
-      this.slotBuffer += newText;
-      this.realtimeTurnDelta += newText.length;
-      return;
-    }
-    this.pendingText += newText;
-    this.realtimeTurnDelta += newText.length;
-    const sentenceEnd = /[.!?]\s*$/;
-    const longEnough = this.pendingText.length > 120;
-    if (sentenceEnd.test(this.pendingText) || longEnough) {
-      const sentence = this.pendingText.trim();
-      this.realtimeTurnProcessed += this.pendingText.length;
-      this.pendingText = "";
-      const normalized = normalizeCommand(sentence);
-      const stopPatterns = [
-        "beeindig opname",
-        "beeindig de opname",
-        "beeindigt opname",
-        "beeindigt de opname",
-        "beeindigde opname",
-        "beeindigde de opname",
-        "stop opname",
-        "stopopname",
-        "stop de opname",
-        "stop recording"
-      ];
-      if (stopPatterns.some((p) => normalized.includes(p))) {
-        void this.stopRecording();
-        return;
-      }
-      this.trackProcessText(editor, sentence + " ");
-    }
-  }
-  handleRealtimeDone(editor, doneText) {
-    if (isSlotActive()) {
-      return;
-    }
-    if (doneText && doneText.length > this.realtimeTurnDelta) {
-      this.pendingText += doneText.substring(this.realtimeTurnDelta);
-    }
-    if (this.pendingText.trim()) {
-      this.trackProcessText(editor, this.pendingText.trim() + " ");
-      this.pendingText = "";
-    }
-    this.realtimeTurnDelta = 0;
-    this.realtimeTurnProcessed = 0;
-  }
-  /** Flush buffered transcription text after a slot closes.
-   *  Atomic: captures and clears slotBuffer before processing
-   *  to prevent race conditions with incoming deltas. */
-  flushSlotBuffer(editor) {
-    const buffered = this.slotBuffer;
-    this.slotBuffer = "";
-    if (buffered.trim()) {
-      this.pendingText += buffered;
-      if (this.pendingText.trim()) {
-        this.trackProcessText(editor, this.pendingText.trim() + " ");
-        this.pendingText = "";
-      }
+      new import_obsidian7.Notice("Selected mic unavailable \u2014 using default");
     }
   }
   async stopRealtimeRecording() {
-    var _a, _b;
-    if (this.dualSlowTranscriber) {
-      return this.stopDualDelayRecording();
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
+    if (this.dualDelaySession) {
+      await this.dualDelaySession.stop();
+      this.dualDelaySession = null;
+    } else if (this.realtimeSession) {
+      const editor = view == null ? void 0 : view.editor;
+      if (editor) {
+        await this.realtimeSession.stop(editor);
+      }
+      this.realtimeSession = null;
     }
-    (_a = this.realtimeTranscriber) == null ? void 0 : _a.endAudio();
-    await new Promise((resolve) => setTimeout(resolve, 1e3));
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
-    if (view && this.pendingText.trim()) {
-      this.trackProcessText(view.editor, this.pendingText.trim());
-      this.pendingText = "";
-    }
-    (_b = this.realtimeTranscriber) == null ? void 0 : _b.close();
-    this.realtimeTranscriber = null;
     await this.recorder.stop();
     if (this.settings.autoCorrect && view) {
-      await this.autoCorrectAfterStop(view.editor);
-    }
-  }
-  // ── Dual-delay realtime recording ──
-  async startDualDelayRecording(editor) {
-    this.pendingText = "";
-    this.dictatedRanges = [];
-    this.dualFastText = "";
-    this.dualSlowText = "";
-    this.dualInsertOffset = editor.posToOffset(editor.getCursor());
-    this.dualDisplayLen = 0;
-    this.dualSlowCommitted = 0;
-    this.dualSlowTurnDelta = 0;
-    this.dualFastPrevRaw = "";
-    this.dualSlowPrevRaw = "";
-    this.dualCommandJustRan = false;
-    await this.connectDualDelayWebSockets(editor);
-    const deviceId = this.settings.microphoneDeviceId || void 0;
-    await this.recorder.start(deviceId, (pcmData) => {
-      var _a, _b;
-      (_a = this.realtimeTranscriber) == null ? void 0 : _a.sendAudio(pcmData);
-      (_b = this.dualSlowTranscriber) == null ? void 0 : _b.sendAudio(pcmData);
-    }, this.settings.noiseSuppression);
-    if (this.recorder.fallbackUsed) {
-      new import_obsidian5.Notice("Selected mic unavailable \u2014 using default");
-    }
-  }
-  async connectDualDelayWebSockets(editor) {
-    const fastDelay = this.settings.dualDelayFastMs;
-    const slowDelay = this.settings.dualDelaySlowMs;
-    this.realtimeTranscriber = new RealtimeTranscriber(this.settings, {
-      onSessionCreated: () => {
-        vlog.debug("Voxtral: Fast stream session created");
-      },
-      onDelta: (text) => {
-        const isCumulative = this.dualFastPrevRaw && text.startsWith(this.dualFastPrevRaw);
-        if (isCumulative) {
-          const newPart = text.substring(this.dualFastPrevRaw.length);
-          if (newPart) this.dualFastText += newPart;
-        } else {
-          this.dualFastText += text;
-        }
-        this.dualFastPrevRaw = isCumulative ? text : this.dualFastPrevRaw + text;
-        this.renderDualText(editor);
-      },
-      onDone: (_text) => {
-        this.renderDualText(editor);
-      },
-      onError: (message) => {
-        vlog.error("Voxtral: Fast stream error:", message);
-      },
-      onDisconnect: () => {
-        void this.handleDualStreamDisconnect("fast");
-      }
-    }, fastDelay);
-    this.dualSlowTranscriber = new RealtimeTranscriber(this.settings, {
-      onSessionCreated: () => {
-        vlog.debug("Voxtral: Slow stream session created");
-      },
-      onDelta: (text) => {
-        const isCumulative = this.dualSlowPrevRaw && text.startsWith(this.dualSlowPrevRaw);
-        if (isCumulative) {
-          const newPart = text.substring(this.dualSlowPrevRaw.length);
-          if (newPart) {
-            this.dualSlowText += newPart;
-            this.dualSlowTurnDelta += newPart.length;
-          }
-        } else {
-          this.dualSlowText += text;
-          this.dualSlowTurnDelta += text.length;
-        }
-        this.dualSlowPrevRaw = isCumulative ? text : this.dualSlowPrevRaw + text;
-        this.renderDualText(editor);
-        this.processDualSlowCommands(editor);
-      },
-      onDone: (_text) => {
-        this.renderDualText(editor);
-        this.processDualSlowCommands(editor);
-      },
-      onError: (message) => {
-        vlog.error("Voxtral: Slow stream error:", message);
-      },
-      onDisconnect: () => {
-        void this.handleDualStreamDisconnect("slow");
-      }
-    }, slowDelay);
-    await Promise.all([
-      this.realtimeTranscriber.connect(),
-      this.dualSlowTranscriber.connect()
-    ]);
-  }
-  async handleDualStreamDisconnect(stream) {
-    var _a;
-    if (!this.isRecording) return;
-    const editor = this.currentEditor || ((_a = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView)) == null ? void 0 : _a.editor);
-    if (!editor) {
-      void this.stopRecording();
-      return;
-    }
-    vlog.debug(`Voxtral: ${stream} stream ended, reconnecting...`);
-    try {
-      if (stream === "fast" && this.realtimeTranscriber) {
-        const fastDelay = this.settings.dualDelayFastMs;
-        this.realtimeTranscriber = new RealtimeTranscriber(this.settings, {
-          onSessionCreated: () => vlog.debug("Voxtral: Fast stream reconnected"),
-          onDelta: (text) => {
-            this.dualFastText += text;
-            this.renderDualText(editor);
-          },
-          onDone: () => this.renderDualText(editor),
-          onError: (message) => vlog.error("Voxtral: Fast stream error:", message),
-          onDisconnect: () => void this.handleDualStreamDisconnect("fast")
-        }, fastDelay);
-        await this.realtimeTranscriber.connect();
-      } else if (stream === "slow" && this.dualSlowTranscriber) {
-        if (this.dualSlowText.trim()) {
-          const from = editor.offsetToPos(this.dualInsertOffset);
-          const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
-          editor.replaceRange("", from, to);
-          editor.setCursor(from);
-          this.dualDisplayLen = 0;
-          this.trackInsertAtCursor(editor, this.dualSlowText);
-          this.dualInsertOffset = editor.posToOffset(editor.getCursor());
-        }
-        this.dualSlowCommitted = 0;
-        this.dualSlowText = "";
-        this.dualFastText = "";
-        this.dualSlowTurnDelta = 0;
-        this.dualSlowPrevRaw = "";
-        this.dualFastPrevRaw = "";
-        const slowDelay = this.settings.dualDelaySlowMs;
-        this.dualSlowTranscriber = new RealtimeTranscriber(this.settings, {
-          onSessionCreated: () => vlog.debug("Voxtral: Slow stream reconnected"),
-          onDelta: (text) => {
-            const isCumulative = this.dualSlowPrevRaw && text.startsWith(this.dualSlowPrevRaw);
-            if (isCumulative) {
-              const newPart = text.substring(this.dualSlowPrevRaw.length);
-              if (newPart) {
-                this.dualSlowText += newPart;
-                this.dualSlowTurnDelta += newPart.length;
-              }
-            } else {
-              this.dualSlowText += text;
-              this.dualSlowTurnDelta += text.length;
-            }
-            this.dualSlowPrevRaw = isCumulative ? text : this.dualSlowPrevRaw + text;
-            this.renderDualText(editor);
-            this.processDualSlowCommands(editor);
-          },
-          onDone: (_text) => {
-            this.renderDualText(editor);
-            this.processDualSlowCommands(editor);
-          },
-          onError: (message) => vlog.error("Voxtral: Slow stream error:", message),
-          onDisconnect: () => void this.handleDualStreamDisconnect("slow")
-        }, slowDelay);
-        await this.dualSlowTranscriber.connect();
-      }
-      this.consecutiveFailures = 0;
-    } catch (e) {
-      this.consecutiveFailures++;
-      vlog.error(`Voxtral: ${stream} stream reconnect failed (${this.consecutiveFailures})`, e);
-      if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
-        new import_obsidian5.Notice("Cannot reconnect. Recording stopped.", 6e3);
-        void this.stopRecording();
-        return;
-      }
-      const delay = Math.min(500 * this.consecutiveFailures, 3e3);
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      if (this.isRecording) {
-        void this.handleDualStreamDisconnect(stream);
-      }
-    }
-  }
-  /**
-   * Update the editor with the current dual-delay text.
-   * Shows slow (confirmed) text + any fast text beyond slow.
-   */
-  renderDualText(editor) {
-    const cursorOffset = editor.posToOffset(editor.getCursor());
-    const expectedEnd = this.dualInsertOffset + this.dualDisplayLen;
-    if (cursorOffset !== expectedEnd) {
-      if (this.dualDisplayLen > 0) {
-        const slowText = this.dualSlowText;
-        const from2 = editor.offsetToPos(this.dualInsertOffset);
-        const to2 = editor.offsetToPos(expectedEnd);
-        editor.replaceRange(slowText, from2, to2);
-        const shift = slowText.length - this.dualDisplayLen;
-        const newCursor = cursorOffset >= expectedEnd ? cursorOffset + shift : cursorOffset;
-        editor.setCursor(editor.offsetToPos(newCursor));
-        this.dualSlowCommitted += slowText.length;
-        this.dualSlowText = "";
-        this.dualFastText = "";
-        this.dualDisplayLen = 0;
-        this.dualInsertOffset = newCursor;
-        return;
-      }
-      this.dualInsertOffset = cursorOffset;
-    }
-    const slowLen = this.dualSlowText.length;
-    const fastLen = this.dualFastText.length;
-    let displayText;
-    if (fastLen > slowLen) {
-      displayText = this.dualSlowText + this.dualFastText.substring(slowLen);
-    } else {
-      displayText = this.dualSlowText;
-    }
-    const from = editor.offsetToPos(this.dualInsertOffset);
-    const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
-    if (from.ch === 0 && this.dualDisplayLen === 0) {
-      displayText = displayText.replace(/^\s+/, "");
-    }
-    editor.replaceRange(displayText, from, to);
-    this.dualDisplayLen = displayText.length;
-    const endOffset = this.dualInsertOffset + this.dualDisplayLen;
-    editor.setCursor(editor.offsetToPos(endOffset));
-  }
-  /**
-   * Process voice commands from the slow stream (more accurate).
-   * Checks completed sentences in dualSlowText for voice commands.
-   */
-  processDualSlowCommands(editor) {
-    if (!this.dualSlowText) return;
-    if (this.dualCommandJustRan && /^[\s.!?,;:]*$/.test(this.dualSlowText)) {
-      this.dualCommandJustRan = false;
-      if (this.dualDisplayLen > 0) {
-        const from2 = editor.offsetToPos(this.dualInsertOffset);
-        const to2 = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
-        editor.replaceRange("", from2, to2);
-        editor.setCursor(from2);
-        this.dualDisplayLen = 0;
-      }
-      this.dualSlowCommitted += this.dualSlowText.length;
-      this.dualSlowText = "";
-      this.dualFastText = "";
-      this.dualInsertOffset = editor.posToOffset(editor.getCursor());
-      return;
-    }
-    this.dualCommandJustRan = false;
-    const segments = this.dualSlowText.match(/[^.!?]+[.!?]+\s*/g);
-    const segmentText = segments ? segments.join("") : "";
-    const remainder = this.dualSlowText.substring(segmentText.length);
-    if (!segments && remainder.trim()) {
-      const cmdMatch = matchCommand(remainder.trim());
-      if (cmdMatch && !cmdMatch.textBefore) {
-        const from2 = editor.offsetToPos(this.dualInsertOffset);
-        const to2 = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
-        editor.replaceRange("", from2, to2);
-        editor.setCursor(from2);
-        this.dualDisplayLen = 0;
-        cmdMatch.command.action(editor);
-        if (cmdMatch.command.id === "stopRecording") {
-          setTimeout(() => {
-            void this.stopRecording();
-          }, 0);
-        }
-        if (isSlotActive()) {
-          this.updateStatusBar("slot");
-        }
-        this.dualCommandJustRan = true;
-        this.dualSlowCommitted += this.dualSlowText.length;
-        this.dualSlowText = "";
-        this.dualFastText = "";
-        this.dualInsertOffset = editor.posToOffset(editor.getCursor());
-        return;
-      }
-      return;
-    }
-    if (!segments) return;
-    const matchedLength = segmentText.length;
-    const from = editor.offsetToPos(this.dualInsertOffset);
-    const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
-    editor.replaceRange("", from, to);
-    editor.setCursor(from);
-    this.dualDisplayLen = 0;
-    for (const segment of segments) {
-      const match = matchCommand(segment);
-      if (match) {
-        if (match.textBefore) {
-          let before = match.textBefore;
-          if (match.command.punctuation) {
-            before = before.replace(/[,;.!?]+\s*$/, "");
-          }
-          this.trackInsertAtCursor(editor, before);
-        }
-        match.command.action(editor);
-        this.dualCommandJustRan = true;
-        if (match.command.id === "stopRecording") {
-          setTimeout(() => {
-            void this.stopRecording();
-          }, 0);
-        }
-        if (isSlotActive()) {
-          this.updateStatusBar("slot");
-        }
-      } else {
-        this.trackInsertAtCursor(editor, segment);
-      }
-    }
-    this.dualSlowCommitted += matchedLength;
-    this.dualSlowText = remainder;
-    this.dualFastText = "";
-    this.dualInsertOffset = editor.posToOffset(editor.getCursor());
-    this.dualDisplayLen = 0;
-    if (this.dualSlowText || this.dualFastText) {
-      this.renderDualText(editor);
-    }
-  }
-  /**
-   * Helper: insert text at cursor and track the range for auto-correct.
-   */
-  trackInsertAtCursor(editor, text) {
-    const cursor = editor.getCursor();
-    if (cursor.ch > 0 && text.length > 0 && !/^[\s\n]/.test(text)) {
-      const charBefore = editor.getRange(
-        { line: cursor.line, ch: cursor.ch - 1 },
-        cursor
-      );
-      if (charBefore && /\S/.test(charBefore)) {
-        text = " " + text;
-      }
-    }
-    const offsetBefore = editor.posToOffset(cursor);
-    editor.replaceRange(text, cursor);
-    const lines = text.split("\n");
-    const lastLine = lines[lines.length - 1];
-    const newLine = cursor.line + lines.length - 1;
-    const newCh = lines.length === 1 ? cursor.ch + lastLine.length : lastLine.length;
-    editor.setCursor({ line: newLine, ch: newCh });
-    const offsetAfter = editor.posToOffset(editor.getCursor());
-    const delta = offsetAfter - offsetBefore;
-    if (delta > 0) {
-      for (const range of this.dictatedRanges) {
-        if (range.from >= offsetBefore) {
-          range.from += delta;
-          range.to += delta;
-        } else if (range.to > offsetBefore) {
-          range.to += delta;
-        }
-      }
-      this.dictatedRanges.push({ from: offsetBefore, to: offsetAfter });
-    }
-  }
-  async stopDualDelayRecording() {
-    var _a, _b, _c, _d;
-    (_a = this.realtimeTranscriber) == null ? void 0 : _a.endAudio();
-    (_b = this.dualSlowTranscriber) == null ? void 0 : _b.endAudio();
-    await new Promise((resolve) => setTimeout(resolve, 1e3));
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
-    if (view) {
-      const editor = view.editor;
-      this.processDualSlowCommands(editor);
-      const finalText = this.dualSlowText || this.dualFastText;
-      if (finalText) {
-        const from = editor.offsetToPos(this.dualInsertOffset);
-        const to = editor.offsetToPos(this.dualInsertOffset + this.dualDisplayLen);
-        editor.replaceRange(finalText, from, to);
-        const endOffset = this.dualInsertOffset + finalText.length;
-        editor.setCursor(editor.offsetToPos(endOffset));
-        this.dictatedRanges.push({
-          from: this.dualInsertOffset,
-          to: this.dualInsertOffset + finalText.length
-        });
-      }
-    }
-    (_c = this.realtimeTranscriber) == null ? void 0 : _c.close();
-    (_d = this.dualSlowTranscriber) == null ? void 0 : _d.close();
-    this.realtimeTranscriber = null;
-    this.dualSlowTranscriber = null;
-    await this.recorder.stop();
-    this.dualFastText = "";
-    this.dualSlowText = "";
-    this.dualDisplayLen = 0;
-    this.dualSlowCommitted = 0;
-    this.dualSlowTurnDelta = 0;
-    if (this.settings.autoCorrect && view) {
-      await this.autoCorrectAfterStop(view.editor);
+      await this.tracker.autoCorrectAfterStop(view.editor, this.settings);
     }
   }
   // ── Batch recording ──
@@ -4053,18 +4335,18 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
     const deviceId = this.settings.microphoneDeviceId || void 0;
     await this.recorder.start(deviceId, void 0, this.settings.noiseSuppression);
     if (this.recorder.fallbackUsed) {
-      new import_obsidian5.Notice("Selected mic unavailable \u2014 using default");
+      new import_obsidian7.Notice("Selected mic unavailable \u2014 using default");
     }
   }
   async stopBatchRecording() {
     const blob = await this.recorder.stop();
     if (blob.size === 0) {
-      new import_obsidian5.Notice("No audio recorded");
+      new import_obsidian7.Notice("No audio recorded");
       return;
     }
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
     if (!view) {
-      new import_obsidian5.Notice("No active note found");
+      new import_obsidian7.Notice("No active note found");
       return;
     }
     const editor = view.editor;
@@ -4086,160 +4368,62 @@ var VoxtralPlugin = class _VoxtralPlugin extends import_obsidian5.Plugin {
       }
     } catch (e) {
       vlog.error("Voxtral: Batch transcription failed", e);
-      new import_obsidian5.Notice(`Transcription failed: ${e}`);
-    }
-  }
-  // ── Dictation range tracking ──
-  /**
-   * Wrap processText to track what was inserted in the editor.
-   * Records the cursor offset before and after to determine the
-   * range of inserted text, and adjusts existing ranges when an
-   * insertion shifts them.
-   */
-  trackProcessText(editor, text) {
-    const offsetBefore = editor.posToOffset(editor.getCursor());
-    processText(editor, text);
-    if (isSlotActive()) {
-      this.updateStatusBar("slot");
-    }
-    const offsetAfter = editor.posToOffset(editor.getCursor());
-    const delta = offsetAfter - offsetBefore;
-    if (delta > 0) {
-      for (const range of this.dictatedRanges) {
-        if (range.from >= offsetBefore) {
-          range.from += delta;
-          range.to += delta;
-        } else if (range.to > offsetBefore) {
-          range.to += delta;
-        }
-      }
-      this.dictatedRanges.push({ from: offsetBefore, to: offsetAfter });
-    } else if (delta < 0) {
-      const deletedLen = -delta;
-      const deletedFrom = offsetAfter;
-      const deletedTo = offsetBefore;
-      for (const range of this.dictatedRanges) {
-        if (range.from >= deletedTo) {
-          range.from -= deletedLen;
-          range.to -= deletedLen;
-        } else if (range.from >= deletedFrom) {
-          range.from = deletedFrom;
-          range.to = range.to <= deletedTo ? deletedFrom : range.to - deletedLen;
-        } else if (range.to > deletedFrom) {
-          range.to = range.to <= deletedTo ? deletedFrom : range.to - deletedLen;
-        }
-      }
-      this.dictatedRanges = this.dictatedRanges.filter(
-        (r) => r.to > r.from
-      );
+      new import_obsidian7.Notice(`Transcription failed: ${e}`);
     }
   }
   // ── Text correction ──
-  /**
-   * Merge overlapping or adjacent dictated ranges into a minimal set.
-   */
-  static mergeRanges(ranges) {
-    if (ranges.length === 0) return [];
-    const sorted = [...ranges].sort((a, b) => a.from - b.from);
-    const merged = [sorted[0]];
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = merged[merged.length - 1];
-      const cur = sorted[i];
-      if (cur.from <= prev.to) {
-        prev.to = Math.max(prev.to, cur.to);
-      } else {
-        merged.push({ ...cur });
-      }
-    }
-    return merged;
-  }
-  /**
-   * After stopping realtime recording, correct only the text
-   * that was actually dictated.  Each tracked range is corrected
-   * independently, processed from end to start so that earlier
-   * offsets remain valid after replacements.
-   */
-  async autoCorrectAfterStop(editor) {
-    if (this.dictatedRanges.length === 0) return;
-    const merged = _VoxtralPlugin.mergeRanges(this.dictatedRanges);
-    merged.sort((a, b) => b.from - a.from);
-    const fullText = editor.getValue();
-    const corrections = [];
-    for (const range of merged) {
-      if (range.from >= fullText.length || range.to > fullText.length) {
-        continue;
-      }
-      const text = fullText.substring(range.from, range.to);
-      if (!text.trim()) continue;
-      corrections.push({
-        from: editor.offsetToPos(range.from),
-        to: editor.offsetToPos(range.to),
-        text
-      });
-    }
-    for (const c of corrections) {
-      try {
-        const corrected = await correctText(c.text, this.settings);
-        if (corrected && corrected !== c.text) {
-          editor.replaceRange(corrected, c.from, c.to);
-        }
-      } catch (e) {
-        vlog.error("Voxtral: Auto-correct failed", e);
-      }
-    }
-  }
-  async exportLogs() {
-    if (logBuffer.length === 0) {
-      new import_obsidian5.Notice("No logs to export");
-      return;
-    }
-    const text = logBuffer.join("\n");
-    await navigator.clipboard.writeText(text);
-    new import_obsidian5.Notice(`${logBuffer.length} log entries copied to clipboard`);
-  }
   async correctSelection(editor) {
     const selection = editor.getSelection();
     if (!selection) {
-      new import_obsidian5.Notice("Select text first to correct it");
+      new import_obsidian7.Notice("Select text first to correct it");
       return;
     }
     if (!this.settings.apiKey) {
-      new import_obsidian5.Notice("Please set your API key first");
+      new import_obsidian7.Notice("Please set your API key first");
       return;
     }
     try {
-      new import_obsidian5.Notice("Correcting...");
+      new import_obsidian7.Notice("Correcting...");
       const corrected = await correctText(selection, this.settings);
       if (corrected) {
         editor.replaceSelection(corrected);
-        new import_obsidian5.Notice("Selection corrected");
+        new import_obsidian7.Notice("Selection corrected");
       }
     } catch (e) {
-      new import_obsidian5.Notice(`Correction failed: ${e}`);
+      new import_obsidian7.Notice(`Correction failed: ${e}`);
     }
   }
   async correctAll(editor) {
     const text = editor.getValue();
     if (!text.trim()) {
-      new import_obsidian5.Notice("Note is empty");
+      new import_obsidian7.Notice("Note is empty");
       return;
     }
     if (!this.settings.apiKey) {
-      new import_obsidian5.Notice("Please set your API key first");
+      new import_obsidian7.Notice("Please set your API key first");
       return;
     }
     try {
-      new import_obsidian5.Notice("Correcting...");
+      new import_obsidian7.Notice("Correcting...");
       const corrected = await correctText(text, this.settings);
       if (corrected && corrected !== text) {
         editor.setValue(corrected);
-        new import_obsidian5.Notice("Note corrected");
+        new import_obsidian7.Notice("Note corrected");
       } else {
-        new import_obsidian5.Notice("No corrections needed");
+        new import_obsidian7.Notice("No corrections needed");
       }
     } catch (e) {
-      new import_obsidian5.Notice(`Correction failed: ${e}`);
+      new import_obsidian7.Notice(`Correction failed: ${e}`);
     }
+  }
+  // ── Logs ──
+  async exportLogs() {
+    if (getLogCount() === 0) {
+      new import_obsidian7.Notice("No logs to export");
+      return;
+    }
+    await navigator.clipboard.writeText(getLogText());
+    new import_obsidian7.Notice(`${getLogCount()} log entries copied to clipboard`);
   }
   // ── Help panel ──
   async openHelpPanel() {
