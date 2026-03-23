@@ -2074,8 +2074,8 @@ async function loadModels(currentSettings) {
             cachedModels = data.models || [];
         }
 
+        const realtimeModels = cachedModels.filter(m => m.id.includes("realtime"));
         const allTranscription = cachedModels.filter(m => !!m.capabilities?.audio_transcription);
-        const realtimeModels = allTranscription.filter(m => m.id.includes("realtime"));
         const batchModels = allTranscription.filter(m => !m.id.includes("realtime"));
         const chatModels = cachedModels.filter(m =>
             !!m.capabilities?.completion_chat &&
