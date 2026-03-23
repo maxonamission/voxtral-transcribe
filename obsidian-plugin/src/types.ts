@@ -21,8 +21,8 @@ export interface CustomCommand {
 	slotExit?: "voice" | "enter" | "space" | "enter-or-space";
 	/** Pre-configured built-in command (reset to defaults only touches these) */
 	builtIn?: boolean;
-	/** Human-readable label for the help panel (falls back to trigger phrase) */
-	label?: string;
+	/** Human-readable label for the help panel per language (falls back to trigger phrase) */
+	labels?: Record<string, string>;
 }
 
 /** Default built-in custom commands (table, callouts) */
@@ -31,7 +31,11 @@ export function getDefaultBuiltInCommands(): CustomCommand[] {
 		{
 			id: "builtin-table",
 			builtIn: true,
-			label: "Table",
+			labels: {
+				nl: "Tabel", en: "Table", fr: "Tableau", de: "Tabelle",
+				es: "Tabla", pt: "Tabela", it: "Tabella", ru: "Таблица",
+				zh: "表格", ja: "テーブル", ko: "테이블", hi: "टेबल", ar: "جدول",
+			},
 			type: "insert",
 			insertText: "\n\n| Kolom 1 | Kolom 2 | Kolom 3 |\n| --- | --- | --- |\n| | | |\n",
 			triggers: {
@@ -53,7 +57,12 @@ export function getDefaultBuiltInCommands(): CustomCommand[] {
 		{
 			id: "builtin-callout",
 			builtIn: true,
-			label: "Callout (note)",
+			labels: {
+				nl: "Callout (opmerking)", en: "Callout (note)", fr: "Callout (note)",
+				de: "Callout (Hinweis)", es: "Callout (nota)", pt: "Callout (nota)",
+				it: "Callout (nota)", ru: "Заметка", zh: "标注（备注）",
+				ja: "コールアウト（注釈）", ko: "콜아웃 (메모)", hi: "कॉलआउट (नोट)", ar: "تنبيه (ملاحظة)",
+			},
 			type: "insert",
 			insertText: "\n\n> [!note]\n> ",
 			triggers: {
@@ -75,7 +84,12 @@ export function getDefaultBuiltInCommands(): CustomCommand[] {
 		{
 			id: "builtin-warning",
 			builtIn: true,
-			label: "Callout (warning)",
+			labels: {
+				nl: "Callout (waarschuwing)", en: "Callout (warning)", fr: "Callout (avertissement)",
+				de: "Callout (Warnung)", es: "Callout (advertencia)", pt: "Callout (aviso)",
+				it: "Callout (avviso)", ru: "Предупреждение", zh: "标注（警告）",
+				ja: "コールアウト（警告）", ko: "콜아웃 (경고)", hi: "कॉलआउट (चेतावनी)", ar: "تنبيه (تحذير)",
+			},
 			type: "insert",
 			insertText: "\n\n> [!warning]\n> ",
 			triggers: {
@@ -97,7 +111,12 @@ export function getDefaultBuiltInCommands(): CustomCommand[] {
 		{
 			id: "builtin-tip",
 			builtIn: true,
-			label: "Callout (tip)",
+			labels: {
+				nl: "Callout (tip)", en: "Callout (tip)", fr: "Callout (astuce)",
+				de: "Callout (Tipp)", es: "Callout (consejo)", pt: "Callout (dica)",
+				it: "Callout (suggerimento)", ru: "Совет", zh: "标注（提示）",
+				ja: "コールアウト（ヒント）", ko: "콜아웃 (팁)", hi: "कॉलआउट (सुझाव)", ar: "تنبيه (نصيحة)",
+			},
 			type: "insert",
 			insertText: "\n\n> [!tip]\n> ",
 			triggers: {

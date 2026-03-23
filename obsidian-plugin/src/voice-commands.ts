@@ -468,7 +468,8 @@ export function loadCustomCommands(commands: CustomCommand[]): void {
 			const prefix = cmd.slotPrefix;
 			const suffix = cmd.slotSuffix ?? "";
 			const exit = cmd.slotExit ?? "enter";
-			customCommandLabels.set(cmd.id, cmd.label ?? `${prefix}…${suffix}`);
+			const slotLabel = cmd.labels?.[activeLang] ?? cmd.labels?.en ?? `${prefix}…${suffix}`;
+			customCommandLabels.set(cmd.id, slotLabel);
 			return {
 				id: cmd.id as CommandId,
 				slot: { prefix, suffix, exitTrigger: exit },
@@ -487,7 +488,8 @@ export function loadCustomCommands(commands: CustomCommand[]): void {
 		// Insert command
 		const text = cmd.insertText ?? "";
 		const fallbackLabel = text.replace(/\n/g, "↵").slice(0, 30);
-		customCommandLabels.set(cmd.id, cmd.label ?? (fallbackLabel || cmd.id));
+		const insertLabel = cmd.labels?.[activeLang] ?? cmd.labels?.en ?? (fallbackLabel || cmd.id);
+		customCommandLabels.set(cmd.id, insertLabel);
 		return {
 			id: cmd.id as CommandId,
 			action: (editor: Editor) => insertAtCursor(editor, text),
