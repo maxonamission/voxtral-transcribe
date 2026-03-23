@@ -142,11 +142,17 @@ function createSettings(overrides?: Partial<VoxtralSettings>): VoxtralSettings {
 	return { ...DEFAULT_SETTINGS, ...overrides };
 }
 
+/** Standalone mock fns — avoids unbound-method lint errors in assertions */
+const mockStopRecording = vi.fn();
+const mockIsRecording = vi.fn(() => true);
+
 function createCallbacks(editor: Editor): SessionCallbacks {
+	mockStopRecording.mockClear();
+	mockIsRecording.mockClear().mockReturnValue(true);
 	return {
 		updateStatusBar: vi.fn(),
-		stopRecording: vi.fn(),
-		isRecording: vi.fn(() => true),
+		stopRecording: mockStopRecording,
+		isRecording: mockIsRecording,
 		getEditor: vi.fn(() => editor),
 	};
 }
@@ -272,7 +278,7 @@ describe("RealtimeSession", () => {
 
 			tc.onDelta("Stop opname. ");
 
-			expect(callbacks.stopRecording).toHaveBeenCalled();
+			expect(mockStopRecording).toHaveBeenCalled();
 		});
 
 		it("detects 'beeindig opname' and stops recording", async () => {
@@ -282,7 +288,7 @@ describe("RealtimeSession", () => {
 
 			tc.onDelta("Beëindig opname. ");
 
-			expect(callbacks.stopRecording).toHaveBeenCalled();
+			expect(mockStopRecording).toHaveBeenCalled();
 		});
 
 		it("detects 'stop recording' in English", async () => {
@@ -292,7 +298,7 @@ describe("RealtimeSession", () => {
 
 			tc.onDelta("Stop recording. ");
 
-			expect(callbacks.stopRecording).toHaveBeenCalled();
+			expect(mockStopRecording).toHaveBeenCalled();
 		});
 	});
 
@@ -319,7 +325,7 @@ describe("RealtimeSession", () => {
 			const tc = getTranscriberCallbacks();
 
 			// Stop recording
-			vi.mocked(callbacks.isRecording).mockReturnValue(false);
+			mockIsRecording.mockReturnValue(false);
 
 			const instancesBefore = transcriberInstances.length;
 			tc.onDisconnect();
@@ -375,8 +381,8 @@ describe("RealtimeSession", () => {
 
 			await session.stop(editor);
 
-			expect(transcriber.endAudio).toHaveBeenCalled();
-			expect(transcriber.close).toHaveBeenCalled();
+			expect(transcriber.endAudio.mock.calls.length).toBeGreaterThan(0);
+			expect(transcriber.close.mock.calls.length).toBeGreaterThan(0);
 		});
 	});
 

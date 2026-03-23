@@ -36,11 +36,4 @@ export default tseslint.config(
 			"@typescript-eslint/no-unsafe-return": "off",
 		},
 	},
-	// Relax rules for test files — vitest mocks trigger unbound-method
-	{
-		files: ["src/__tests__/**/*.ts"],
-		rules: {
-			"@typescript-eslint/unbound-method": "off",
-		},
-	},
 );
