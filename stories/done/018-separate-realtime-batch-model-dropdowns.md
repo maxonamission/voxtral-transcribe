@@ -17,7 +17,7 @@ The Mistral `/v1/models` API returns a single `audio_transcription` capability f
 
 Filter by model ID convention:
 
-- **Realtime dropdown:** only models where `id.includes("realtime")` AND `audio_transcription === true`
+- **Realtime dropdown:** any model where `id.includes("realtime")` (capability flag not required — the Mistral API may not set `audio_transcription` for realtime models)
 - **Batch dropdown:** only models where `!id.includes("realtime")` AND `audio_transcription === true`
 
 Both dropdowns retain the "(huidig)" fallback for a currently-configured model that doesn't appear in the filtered list.
