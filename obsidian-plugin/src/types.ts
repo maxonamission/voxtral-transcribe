@@ -21,6 +21,8 @@ export interface CustomCommand {
 	slotExit?: "voice" | "enter" | "space" | "enter-or-space";
 	/** Pre-configured built-in command (reset to defaults only touches these) */
 	builtIn?: boolean;
+	/** Human-readable label for the help panel (falls back to trigger phrase) */
+	label?: string;
 }
 
 /** Default built-in custom commands (table, callouts) */
@@ -29,6 +31,7 @@ export function getDefaultBuiltInCommands(): CustomCommand[] {
 		{
 			id: "builtin-table",
 			builtIn: true,
+			label: "Table",
 			type: "insert",
 			insertText: "\n\n| Kolom 1 | Kolom 2 | Kolom 3 |\n| --- | --- | --- |\n| | | |\n",
 			triggers: {
@@ -50,6 +53,7 @@ export function getDefaultBuiltInCommands(): CustomCommand[] {
 		{
 			id: "builtin-callout",
 			builtIn: true,
+			label: "Callout (note)",
 			type: "insert",
 			insertText: "\n\n> [!note]\n> ",
 			triggers: {
@@ -71,6 +75,7 @@ export function getDefaultBuiltInCommands(): CustomCommand[] {
 		{
 			id: "builtin-warning",
 			builtIn: true,
+			label: "Callout (warning)",
 			type: "insert",
 			insertText: "\n\n> [!warning]\n> ",
 			triggers: {
@@ -92,6 +97,7 @@ export function getDefaultBuiltInCommands(): CustomCommand[] {
 		{
 			id: "builtin-tip",
 			builtIn: true,
+			label: "Callout (tip)",
 			type: "insert",
 			insertText: "\n\n> [!tip]\n> ",
 			triggers: {
