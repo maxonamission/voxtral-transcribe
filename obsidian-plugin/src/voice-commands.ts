@@ -635,30 +635,36 @@ export function setPreMatchHook(hook: PreMatchHook | null): void {
  * Process transcribed text: split into sentences, check each for voice
  * commands, and execute them or insert the text as-is.
  */
-export function processText(editor: Editor, text: string): void {
+export function processText(editor: Editor, text: string): boolean {
+	let stopRequested = false;
 	const segments = text.match(/[^.!?]+[.!?]+\s*/g);
 
 	if (!segments) {
-		processSegment(editor, text);
-		return;
+		stopRequested = processSegment(editor, text);
+		return stopRequested;
 	}
 
 	const joined = segments.join("");
 	const remainder = text.slice(joined.length);
 
 	for (const segment of segments) {
-		processSegment(editor, segment);
+		if (processSegment(editor, segment)) {
+			stopRequested = true;
+		}
 	}
 	if (remainder.trim()) {
-		processSegment(editor, remainder);
+		if (processSegment(editor, remainder)) {
+			stopRequested = true;
+		}
 	}
+	return stopRequested;
 }
 
-function processSegment(editor: Editor, text: string): void {
+function processSegment(editor: Editor, text: string): boolean {
 	// Try pre-match hook (templates) first
 	if (preMatchHook) {
 		const normalized = fixMishearings(normalizeCommand(text));
-		if (preMatchHook(editor, normalized, text)) return;
+		if (preMatchHook(editor, normalized, text)) return false;
 	}
 
 	const match = matchCommand(text);
@@ -671,9 +677,11 @@ function processSegment(editor: Editor, text: string): void {
 			insertAtCursor(editor, before);
 		}
 		match.command.action(editor);
+		return match.command.id === "stopRecording";
 	} else {
 		insertAtCursor(editor, text);
 	}
+	return false;
 }
 
 /**
