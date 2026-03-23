@@ -7,24 +7,58 @@ on:
       - '[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Existing tag to build and release (e.g. v0.3.0)'
+      version:
+        description: 'Version to release (e.g. v0.7.0) — tag is created automatically if it does not exist'
         required: true
         type: string
 
 permissions:
   contents: write
 
-env:
-  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  ensure-tag:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Validate version format
+        run: |
+          TAG="${{ inputs.version }}"
+          if ! echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version must be in the format vX.Y.Z (e.g. v0.7.0)"
+            exit 1
+          fi
+
+      - name: Create tag if needed
+        id: resolve
+        run: |
+          TAG="${{ inputs.version }}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping creation"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "Created and pushed tag $TAG"
+          fi
+
+  build-windows:
+    needs: [ensure-tag]
+    if: always() && (needs.ensure-tag.result == 'success' || needs.ensure-tag.result == 'skipped')
+    runs-on: windows-latest
+    env:
+      BUILD_REF: ${{ needs.ensure-tag.outputs.tag || github.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
 
       - uses: actions/setup-python@v5
         with:
@@ -89,11 +123,15 @@ jobs:
           path: VoxtralTranscribe-windows.zip
 
   build-macos:
+    needs: [ensure-tag]
+    if: always() && (needs.ensure-tag.result == 'success' || needs.ensure-tag.result == 'skipped')
     runs-on: macos-latest
+    env:
+      BUILD_REF: ${{ needs.ensure-tag.outputs.tag || github.ref }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ env.BUILD_REF }}
 
       - uses: actions/setup-python@v5
         with:
@@ -142,11 +180,15 @@ jobs:
           path: VoxtralTranscribe-macos.zip
 
   build-linux:
+    needs: [ensure-tag]
+    if: always() && (needs.ensure-tag.result == 'success' || needs.ensure-tag.result == 'skipped')
     runs-on: ubuntu-latest
+    env:
+      BUILD_REF: ${{ needs.ensure-tag.outputs.tag || github.ref }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ env.BUILD_REF }}
 
       - uses: actions/setup-python@v5
         with:
@@ -195,11 +237,15 @@ jobs:
           path: VoxtralTranscribe-linux-x64.tar.gz
 
   build-rpi:
+    needs: [ensure-tag]
+    if: always() && (needs.ensure-tag.result == 'success' || needs.ensure-tag.result == 'skipped')
     runs-on: ubuntu-latest
+    env:
+      BUILD_REF: ${{ needs.ensure-tag.outputs.tag || github.ref }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ env.BUILD_REF }}
 
       - name: Build for Raspberry Pi (ARM64) via QEMU
         uses: uraimo/run-on-arch-action@v2
@@ -244,11 +290,15 @@ jobs:
           path: VoxtralTranscribe-linux-arm64-rpi.tar.gz
 
   build-obsidian-plugin:
+    needs: [ensure-tag]
+    if: always() && (needs.ensure-tag.result == 'success' || needs.ensure-tag.result == 'skipped')
     runs-on: ubuntu-latest
+    env:
+      BUILD_REF: ${{ needs.ensure-tag.outputs.tag || github.ref }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ env.BUILD_REF }}
 
       - name: Package Obsidian plugin
         run: |
@@ -261,8 +311,11 @@ jobs:
           path: VoxtralTranscribe-obsidian-plugin.zip
 
   release:
-    needs: [build-windows, build-macos, build-linux, build-rpi, build-obsidian-plugin]
+    needs: [ensure-tag, build-windows, build-macos, build-linux, build-rpi, build-obsidian-plugin]
+    if: always() && !contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ needs.ensure-tag.outputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 

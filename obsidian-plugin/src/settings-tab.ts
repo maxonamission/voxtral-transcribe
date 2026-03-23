@@ -6,6 +6,7 @@ import type VoxtralPlugin from "./main";
 import { AudioRecorder } from "./audio-recorder";
 import { listModels } from "./mistral-api";
 import type { MistralModel, } from "./mistral-api";
+import { getDefaultBuiltInCommands } from "./types";
 import type { FocusBehavior, CustomCommand } from "./types";
 import { SUPPORTED_LANGUAGES, LANGUAGE_NAMES } from "./lang";
 
@@ -26,7 +27,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Mistral API key")
-			.setDesc("Your API key from platform.mistral.ai")
+			.setDesc("Your API key from platform.mistral.ai. Stored in Obsidian\u2019s plugin data folder (data.json), unencrypted. Do not share your data.json file.")
 			.addText((text) =>
 				text
 					.setPlaceholder("Enter your API key")
@@ -347,14 +348,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
-			.setName("Built-in quick-templates")
-			.setDesc(
-				'Say "tabel", "codeblok", "callout", "tip", or "waarschuwing" to insert ' +
-				"common Markdown structures. Always active."
-			);
-
-		// Custom voice commands
+		// Custom voice commands (includes pre-configured table, callout, etc.)
 		new Setting(containerEl).setName("Custom voice commands").setHeading();
 		this.renderCustomCommands(containerEl);
 
@@ -362,10 +356,14 @@ export class VoxtralSettingTab extends PluginSettingTab {
 		new Setting(containerEl).setName("Advanced").setHeading();
 
 		// Filter helpers based on model capabilities
-		const isTranscriptionModel = (m: MistralModel) =>
-			!!m.capabilities?.audio_transcription;
-		const isChatModel = (m: MistralModel) =>
-			!!m.capabilities?.completion_chat;
+		const isRealtimeModel = (m: MistralModel) =>
+			m.id.includes("realtime");
+		const isBatchModel = (m: MistralModel) =>
+			!!m.capabilities?.audio_transcription && !m.id.includes("realtime");
+		const isTextChatModel = (m: MistralModel) =>
+			!!m.capabilities?.completion_chat &&
+			!m.capabilities?.audio_transcription &&
+			!m.id.startsWith("voxtral");
 
 		this.addModelDropdown(
 			containerEl,
@@ -376,7 +374,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 				this.plugin.settings.realtimeModel = value.trim();
 				await this.plugin.saveSettings();
 			},
-			isTranscriptionModel
+			isRealtimeModel
 		);
 
 		this.addModelDropdown(
@@ -388,7 +386,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 				this.plugin.settings.batchModel = value.trim();
 				await this.plugin.saveSettings();
 			},
-			isTranscriptionModel
+			isBatchModel
 		);
 
 		this.addModelDropdown(
@@ -400,7 +398,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 				this.plugin.settings.correctModel = value.trim();
 				await this.plugin.saveSettings();
 			},
-			isChatModel
+			isTextChatModel
 		);
 
 		new Setting(containerEl)
@@ -435,9 +433,12 @@ export class VoxtralSettingTab extends PluginSettingTab {
 			const typeLabel = cmd.type === "slot"
 				? `${cmd.slotPrefix ?? ""}…${cmd.slotSuffix ?? ""}`
 				: (cmd.insertText ?? "").replace(/\n/g, "↵").slice(0, 30);
+			const namePrefix = cmd.builtIn ? "⚙ " : "";
+			const displayLabel = cmd.labels?.[lang] ?? cmd.labels?.["en"] ?? "";
+			const displayName = displayLabel || triggers.join(", ") || cmd.id;
 
 			new Setting(containerEl)
-				.setName(triggers.join(", ") || cmd.id)
+				.setName(namePrefix + displayName)
 				.setDesc(`${cmd.type === "slot" ? "Slot" : "Insert"}: ${typeLabel}`)
 				.addButton((btn) =>
 					btn
@@ -474,6 +475,26 @@ export class VoxtralSettingTab extends PluginSettingTab {
 						};
 						commands.push(newCmd);
 						this.openCommandEditor(newCmd, commands.length - 1);
+					})
+			);
+
+		// Reset built-in commands to defaults
+		new Setting(containerEl)
+			.setDesc(
+				"Restore the built-in commands (table, callout, etc.) to their defaults. " +
+				"Your own custom commands are not affected."
+			)
+			.addButton((btn) =>
+				btn
+					.setButtonText("Reset built-ins")
+					.onClick(async () => {
+						const userCommands = commands.filter((c) => !c.builtIn);
+						this.plugin.settings.customCommands = [
+							...getDefaultBuiltInCommands(),
+							...userCommands,
+						];
+						await this.plugin.saveSettings();
+						this.display();
 					})
 			);
 	}
@@ -525,6 +546,16 @@ export class VoxtralSettingTab extends PluginSettingTab {
 						text.setValue((cmd.triggers[lang] ?? []).join(", "));
 					});
 
+				// Label (display name in help panel)
+				let labelInput: HTMLInputElement;
+				new Setting(contentEl)
+					.setName("Label (name in help panel)")
+					.setDesc("Leave empty to use trigger phrase")
+					.addText((text) => {
+						labelInput = text.inputEl;
+						text.setValue(cmd.labels?.[lang] ?? "");
+					});
+
 				// Type selector
 				let typeValue = cmd.type;
 				new Setting(contentEl)
@@ -573,12 +604,13 @@ export class VoxtralSettingTab extends PluginSettingTab {
 				new Setting(slotContainer)
 					.setName("Close slot on")
 					.addDropdown((drop) => {
+						drop.addOption("voice", "Voice command only");
 						drop.addOption("enter", "Enter");
 						drop.addOption("space", "Space");
 						drop.addOption("enter-or-space", "Enter or space");
 						drop.setValue(exitValue);
 						drop.onChange((value) => {
-							exitValue = value as "enter" | "space" | "enter-or-space";
+							exitValue = value as "voice" | "enter" | "space" | "enter-or-space";
 						});
 					});
 
@@ -617,6 +649,16 @@ export class VoxtralSettingTab extends PluginSettingTab {
 								}
 
 								cmd.triggers[lang] = triggers;
+
+								// Save label
+								const labelVal = labelInput.value.trim();
+								if (labelVal) {
+									if (!cmd.labels) cmd.labels = {};
+									cmd.labels[lang] = labelVal;
+								} else if (cmd.labels) {
+									delete cmd.labels[lang];
+								}
+
 								cmd.type = typeValue;
 
 								if (cmd.type === "insert") {

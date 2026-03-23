@@ -2074,8 +2074,13 @@ async function loadModels(currentSettings) {
             cachedModels = data.models || [];
         }
 
-        const transcriptionModels = cachedModels.filter(m => !!m.capabilities?.audio_transcription);
-        const chatModels = cachedModels.filter(m => !!m.capabilities?.completion_chat);
+        const realtimeModels = cachedModels.filter(m => m.id.includes("realtime"));
+        const allTranscription = cachedModels.filter(m => !!m.capabilities?.audio_transcription);
+        const batchModels = allTranscription.filter(m => !m.id.includes("realtime"));
+        const chatModels = cachedModels.filter(m =>
+            !!m.capabilities?.completion_chat &&
+            !m.capabilities?.audio_transcription &&
+            !m.id.startsWith("voxtral"));
 
         function populate(select, models, currentVal) {
             select.innerHTML = "";
@@ -2095,8 +2100,8 @@ async function loadModels(currentSettings) {
             if (currentVal) select.value = currentVal;
         }
 
-        populate(selectRealtimeModel, transcriptionModels, realtimeVal);
-        populate(selectBatchModel, transcriptionModels, batchVal);
+        populate(selectRealtimeModel, realtimeModels, realtimeVal);
+        populate(selectBatchModel, batchModels, batchVal);
         populate(selectCorrectModel, chatModels, correctVal);
     } catch {
         // Keep current values shown

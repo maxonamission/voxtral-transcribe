@@ -1,0 +1,61 @@
+name: Plugin CI
+
+on:
+  push:
+    paths:
+      - 'obsidian-plugin/**'
+  pull_request:
+    paths:
+      - 'obsidian-plugin/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: obsidian-plugin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: obsidian-plugin/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npx eslint src/
+
+      - name: TypeScript check
+        run: npx tsc -noEmit -skipLibCheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify version consistency
+        run: |
+          MANIFEST_VERSION=$(node -p "require('./manifest.json').version")
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          VERSIONS_HAS_KEY=$(node -p "!!require('./versions.json')['$MANIFEST_VERSION']")
+
+          echo "manifest.json: $MANIFEST_VERSION"
+          echo "package.json:  $PACKAGE_VERSION"
+          echo "versions.json has key: $VERSIONS_HAS_KEY"
+
+          if [ "$MANIFEST_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "::error::Version mismatch: manifest.json ($MANIFEST_VERSION) != package.json ($PACKAGE_VERSION)"
+            exit 1
+          fi
+
+          if [ "$VERSIONS_HAS_KEY" != "true" ]; then
+            echo "::error::versions.json is missing entry for $MANIFEST_VERSION"
+            exit 1
+          fi
+
+          echo "All versions consistent at $MANIFEST_VERSION"

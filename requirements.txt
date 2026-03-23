@@ -1,6 +1,6 @@
 fastapi
 uvicorn[standard]
-mistralai[realtime]
+mistralai[realtime]>=1.12.4
 python-dotenv
 python-multipart
 pystray

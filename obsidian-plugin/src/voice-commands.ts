@@ -43,14 +43,16 @@ interface CommandDef {
 export interface SlotDef {
 	prefix: string;
 	suffix: string;
-	/** What closes the slot: "enter" (default), "space", or "enter-or-space" */
-	exitTrigger: "enter" | "space" | "enter-or-space";
+	/** What closes the slot: "voice" = only via voice command, or keyboard triggers */
+	exitTrigger: "voice" | "enter" | "space" | "enter-or-space";
 }
 
 /** Currently active slot, or null */
 export interface ActiveSlot {
 	def: SlotDef;
 	commandId: CommandId;
+	/** Cursor position right after the opening prefix was inserted */
+	startPos?: { line: number; ch: number };
 }
 
 let activeSlot: ActiveSlot | null = null;
@@ -71,10 +73,45 @@ export function getActiveSlot(): ActiveSlot | null {
  */
 export function closeSlot(editor: Editor): boolean {
 	if (!activeSlot) return false;
-	const cursor = editor.getCursor();
-	editor.replaceRange(activeSlot.def.suffix, cursor);
-	const newCh = cursor.ch + activeSlot.def.suffix.length;
-	editor.setCursor({ line: cursor.line, ch: newCh });
+	let pos = editor.getCursor();
+	const suffix = activeSlot.def.suffix;
+
+	// If the suffix already appears between the slot start and the cursor,
+	// Obsidian's autocomplete (e.g. wikilink suggester) already closed it.
+	// Just clear the slot — don't insert a duplicate suffix.
+	if (suffix && activeSlot.startPos) {
+		const textSinceOpen = editor.getRange(activeSlot.startPos, pos);
+		if (textSinceOpen.includes(suffix)) {
+			activeSlot = null;
+			return true;
+		}
+	}
+
+	// Trim trailing whitespace before inserting suffix so that
+	// markdown formatting is not broken (e.g. "**text **" won't
+	// render as bold — we want "**text**").
+	if (suffix) {
+		const line = editor.getLine(pos.line);
+		const before = line.substring(0, pos.ch);
+		const trimmed = before.replace(/\s+$/, "");
+		if (trimmed.length < before.length) {
+			const trimFrom = { line: pos.line, ch: trimmed.length };
+			editor.replaceRange("", trimFrom, pos);
+			pos = { line: pos.line, ch: trimmed.length };
+		}
+	}
+
+	// Check if the suffix is already present at the cursor position
+	// (e.g. Obsidian's autocomplete or auto-pair may have inserted it).
+	const line = editor.getLine(pos.line);
+	const afterCursor = line.substring(pos.ch, pos.ch + suffix.length);
+	if (afterCursor === suffix) {
+		// Suffix already present — just move past it
+		editor.setCursor({ line: pos.line, ch: pos.ch + suffix.length });
+	} else {
+		editor.replaceRange(suffix, pos);
+		editor.setCursor({ line: pos.line, ch: pos.ch + suffix.length });
+	}
 	activeSlot = null;
 	return true;
 }
@@ -89,8 +126,8 @@ export function cancelSlot(): void {
 /**
  * Programmatically open a slot (for quick-templates like code blocks).
  */
-export function openSlot(commandId: string, def: SlotDef): void {
-	activeSlot = { def, commandId: commandId as CommandId };
+export function openSlot(commandId: string, def: SlotDef, startPos?: { line: number; ch: number }): void {
+	activeSlot = { def, commandId: commandId as CommandId, startPos };
 }
 
 // Normalize text for command matching: remove diacritics, hyphens, punctuation
@@ -131,8 +168,16 @@ function levenshtein(a: string, b: string): number {
 function insertAtCursor(editor: Editor, text: string): void {
 	const cursor = editor.getCursor();
 
+	// Never start a line with spaces from auto-transcription
+	// (preserve newlines — those are intentional formatting)
+	if (cursor.ch === 0) {
+		text = text.replace(/^ +/, "");
+	}
+
 	// Ensure a space between existing text and new text when needed.
-	if (cursor.ch > 0 && text.length > 0 && !/^[\s\n]/.test(text)) {
+	// Skip when a slot is active — text is inserted right after a
+	// formatting prefix (e.g. "**") and a space would break markdown.
+	if (cursor.ch > 0 && text.length > 0 && !/^[\s\n]/.test(text) && !isSlotActive()) {
 		const charBefore = editor.getRange(
 			{ line: cursor.line, ch: cursor.ch - 1 },
 			cursor
@@ -210,6 +255,24 @@ function colonAction(editor: Editor): void {
 }
 
 /**
+ * Close the active slot (if it matches the expected open command) and add
+ * a trailing space so the user can continue dictating after the marker.
+ */
+function closeSlotAndSpace(editor: Editor, expectedOpenId: CommandId): void {
+	if (activeSlot?.commandId === expectedOpenId) {
+		closeSlot(editor);
+	} else {
+		// No matching open slot — insert suffix directly as a fallback
+		// (e.g. user says "vet sluiten" without "vet openen")
+		return;
+	}
+	// Add a space after the closing marker
+	const pos = editor.getCursor();
+	editor.replaceRange(" ", pos);
+	editor.setCursor({ line: pos.line, ch: pos.ch + 1 });
+}
+
+/**
  * Command definitions — the action logic is language-independent.
  * Patterns are resolved at runtime from lang.ts.
  */
@@ -260,65 +323,100 @@ const COMMAND_DEFS: CommandDef[] = [
 		action: () => { /* handled by caller */ },
 	},
 	{ id: "colon", punctuation: true, action: colonAction },
-	// ── Slot commands: open prefix, user types, exit closes suffix ──
+	// ── Wikilink: just insert [[, Obsidian handles ]] via autocomplete ──
 	{
 		id: "wikilink",
-		slot: { prefix: "[[", suffix: "]]", exitTrigger: "enter" },
 		action: (editor) => {
 			const cursor = editor.getCursor();
-			editor.replaceRange("[[", cursor);
-			editor.setCursor({ line: cursor.line, ch: cursor.ch + 2 });
+			const line = editor.getLine(cursor.line);
+			const before = line.substring(0, cursor.ch);
+			const needsSpace = before.length > 0 && !/\s$/.test(before);
+			const insert = needsSpace ? " [[" : "[[";
+			editor.replaceRange(insert, cursor);
+			editor.setCursor({ line: cursor.line, ch: cursor.ch + insert.length });
+		},
+	},
+	// ── Open/close commands: voice command opens, voice command closes ──
+	{
+		id: "boldOpen",
+		slot: { prefix: "**", suffix: "**", exitTrigger: "voice" },
+		action: (editor) => {
+			const cursor = editor.getCursor();
+			const line = editor.getLine(cursor.line);
+			const before = line.substring(0, cursor.ch);
+			const needsSpace = before.length > 0 && !/\s$/.test(before);
+			const insert = needsSpace ? " **" : "**";
+			editor.replaceRange(insert, cursor);
+			const endCh = cursor.ch + insert.length;
+			editor.setCursor({ line: cursor.line, ch: endCh });
 			activeSlot = {
-				def: { prefix: "[[", suffix: "]]", exitTrigger: "enter" },
-				commandId: "wikilink",
+				def: { prefix: "**", suffix: "**", exitTrigger: "voice" },
+				commandId: "boldOpen",
+				startPos: { line: cursor.line, ch: endCh },
 			};
 		},
 	},
 	{
-		id: "bold",
-		slot: { prefix: "**", suffix: "**", exitTrigger: "enter" },
+		id: "boldClose",
+		action: (editor) => {
+			closeSlotAndSpace(editor, "boldOpen");
+		},
+	},
+	{
+		id: "italicOpen",
+		slot: { prefix: "*", suffix: "*", exitTrigger: "voice" },
 		action: (editor) => {
 			const cursor = editor.getCursor();
-			editor.replaceRange("**", cursor);
-			editor.setCursor({ line: cursor.line, ch: cursor.ch + 2 });
+			const line = editor.getLine(cursor.line);
+			const before = line.substring(0, cursor.ch);
+			const needsSpace = before.length > 0 && !/\s$/.test(before);
+			const insert = needsSpace ? " *" : "*";
+			editor.replaceRange(insert, cursor);
+			const endCh = cursor.ch + insert.length;
+			editor.setCursor({ line: cursor.line, ch: endCh });
 			activeSlot = {
-				def: { prefix: "**", suffix: "**", exitTrigger: "enter" },
-				commandId: "bold",
+				def: { prefix: "*", suffix: "*", exitTrigger: "voice" },
+				commandId: "italicOpen",
+				startPos: { line: cursor.line, ch: endCh },
 			};
 		},
 	},
 	{
-		id: "italic",
-		slot: { prefix: "*", suffix: "*", exitTrigger: "enter" },
+		id: "italicClose",
+		action: (editor) => {
+			closeSlotAndSpace(editor, "italicOpen");
+		},
+	},
+	{
+		id: "inlineCodeOpen",
+		slot: { prefix: "`", suffix: "`", exitTrigger: "voice" },
 		action: (editor) => {
 			const cursor = editor.getCursor();
-			editor.replaceRange("*", cursor);
-			editor.setCursor({ line: cursor.line, ch: cursor.ch + 1 });
+			const line = editor.getLine(cursor.line);
+			const before = line.substring(0, cursor.ch);
+			const needsSpace = before.length > 0 && !/\s$/.test(before);
+			const insert = needsSpace ? " `" : "`";
+			editor.replaceRange(insert, cursor);
+			const endCh = cursor.ch + insert.length;
+			editor.setCursor({ line: cursor.line, ch: endCh });
 			activeSlot = {
-				def: { prefix: "*", suffix: "*", exitTrigger: "enter" },
-				commandId: "italic",
+				def: { prefix: "`", suffix: "`", exitTrigger: "voice" },
+				commandId: "inlineCodeOpen",
+				startPos: { line: cursor.line, ch: endCh },
 			};
 		},
 	},
 	{
-		id: "inlineCode",
-		slot: { prefix: "`", suffix: "`", exitTrigger: "enter" },
+		id: "inlineCodeClose",
 		action: (editor) => {
-			const cursor = editor.getCursor();
-			editor.replaceRange("`", cursor);
-			editor.setCursor({ line: cursor.line, ch: cursor.ch + 1 });
-			activeSlot = {
-				def: { prefix: "`", suffix: "`", exitTrigger: "enter" },
-				commandId: "inlineCode",
-			};
+			closeSlotAndSpace(editor, "inlineCodeOpen");
 		},
 	},
 	{
-		id: "tag",
-		slot: { prefix: "#", suffix: "", exitTrigger: "enter-or-space" },
+		id: "tagOpen",
+		slot: { prefix: "#", suffix: "", exitTrigger: "voice" },
 		action: (editor) => {
 			const cursor = editor.getCursor();
-			// Ensure space before tag if needed
 			let prefix = "#";
 			if (cursor.ch > 0) {
 				const charBefore = editor.getRange(
@@ -330,11 +428,40 @@ const COMMAND_DEFS: CommandDef[] = [
 				}
 			}
 			editor.replaceRange(prefix, cursor);
-			editor.setCursor({ line: cursor.line, ch: cursor.ch + prefix.length });
+			const endCh = cursor.ch + prefix.length;
+			editor.setCursor({ line: cursor.line, ch: endCh });
 			activeSlot = {
-				def: { prefix: "#", suffix: "", exitTrigger: "enter-or-space" },
-				commandId: "tag",
+				def: { prefix: "#", suffix: "", exitTrigger: "voice" },
+				commandId: "tagOpen",
+				startPos: { line: cursor.line, ch: endCh },
 			};
+		},
+	},
+	{
+		id: "tagClose",
+		action: (editor) => {
+			closeSlotAndSpace(editor, "tagOpen");
+		},
+	},
+	{
+		id: "codeBlockOpen",
+		slot: { prefix: "```", suffix: "\n```", exitTrigger: "voice" },
+		action: (editor) => {
+			const cursor = editor.getCursor();
+			editor.replaceRange("\n```\n", cursor);
+			const endLine = cursor.line + 2;
+			editor.setCursor({ line: endLine, ch: 0 });
+			activeSlot = {
+				def: { prefix: "```", suffix: "\n```", exitTrigger: "voice" },
+				commandId: "codeBlockOpen",
+				startPos: { line: endLine, ch: 0 },
+			};
+		},
+	},
+	{
+		id: "codeBlockClose",
+		action: (editor) => {
+			closeSlotAndSpace(editor, "codeBlockOpen");
 		},
 	},
 ];
@@ -353,7 +480,8 @@ export function loadCustomCommands(commands: CustomCommand[]): void {
 			const prefix = cmd.slotPrefix;
 			const suffix = cmd.slotSuffix ?? "";
 			const exit = cmd.slotExit ?? "enter";
-			customCommandLabels.set(cmd.id, `${prefix}…${suffix}`);
+			const slotLabel = cmd.labels?.[activeLang] ?? cmd.labels?.en ?? `${prefix}…${suffix}`;
+			customCommandLabels.set(cmd.id, slotLabel);
 			return {
 				id: cmd.id as CommandId,
 				slot: { prefix, suffix, exitTrigger: exit },
@@ -364,14 +492,16 @@ export function loadCustomCommands(commands: CustomCommand[]): void {
 					activeSlot = {
 						def: { prefix, suffix, exitTrigger: exit },
 						commandId: cmd.id as CommandId,
+						startPos: { line: cursor.line, ch: cursor.ch + prefix.length },
 					};
 				},
 			};
 		}
 		// Insert command
 		const text = cmd.insertText ?? "";
-		const displayText = text.replace(/\n/g, "↵").slice(0, 30);
-		customCommandLabels.set(cmd.id, displayText || cmd.id);
+		const fallbackLabel = text.replace(/\n/g, "↵").slice(0, 30);
+		const insertLabel = cmd.labels?.[activeLang] ?? cmd.labels?.en ?? (fallbackLabel || cmd.id);
+		customCommandLabels.set(cmd.id, insertLabel);
 		return {
 			id: cmd.id as CommandId,
 			action: (editor: Editor) => insertAtCursor(editor, text),
@@ -618,30 +748,36 @@ export function setPreMatchHook(hook: PreMatchHook | null): void {
  * Process transcribed text: split into sentences, check each for voice
  * commands, and execute them or insert the text as-is.
  */
-export function processText(editor: Editor, text: string): void {
+export function processText(editor: Editor, text: string): boolean {
+	let stopRequested = false;
 	const segments = text.match(/[^.!?]+[.!?]+\s*/g);
 
 	if (!segments) {
-		processSegment(editor, text);
-		return;
+		stopRequested = processSegment(editor, text);
+		return stopRequested;
 	}
 
 	const joined = segments.join("");
 	const remainder = text.slice(joined.length);
 
 	for (const segment of segments) {
-		processSegment(editor, segment);
+		if (processSegment(editor, segment)) {
+			stopRequested = true;
+		}
 	}
 	if (remainder.trim()) {
-		processSegment(editor, remainder);
+		if (processSegment(editor, remainder)) {
+			stopRequested = true;
+		}
 	}
+	return stopRequested;
 }
 
-function processSegment(editor: Editor, text: string): void {
+function processSegment(editor: Editor, text: string): boolean {
 	// Try pre-match hook (templates) first
 	if (preMatchHook) {
 		const normalized = fixMishearings(normalizeCommand(text));
-		if (preMatchHook(editor, normalized, text)) return;
+		if (preMatchHook(editor, normalized, text)) return false;
 	}
 
 	const match = matchCommand(text);
@@ -654,20 +790,51 @@ function processSegment(editor: Editor, text: string): void {
 			insertAtCursor(editor, before);
 		}
 		match.command.action(editor);
+		return match.command.id === "stopRecording";
 	} else {
 		insertAtCursor(editor, text);
 	}
+	return false;
 }
+
+/** Open/close command pairs to merge into a single help row */
+const OPEN_CLOSE_PAIRS: [CommandId, CommandId][] = [
+	["boldOpen", "boldClose"],
+	["italicOpen", "italicClose"],
+	["inlineCodeOpen", "inlineCodeClose"],
+	["tagOpen", "tagClose"],
+	["codeBlockOpen", "codeBlockClose"],
+];
 
 /**
  * Get all commands for the help panel, with localized labels and
  * patterns for the active language.
+ * Open/close pairs are merged into a single row.
  */
 export function getCommandList(): { label: string; patterns: string[] }[] {
-	const builtIn = COMMAND_DEFS.map((c) => ({
-		label: getLabel(c.id, activeLang),
-		patterns: getPatternsForCommand(c.id, activeLang),
-	}));
+	const closeIds = new Set(OPEN_CLOSE_PAIRS.map(([, c]) => c));
+	const openMap = new Map(OPEN_CLOSE_PAIRS);
+
+	const builtIn: { label: string; patterns: string[] }[] = [];
+	for (const c of COMMAND_DEFS) {
+		if (closeIds.has(c.id)) continue; // skip close — merged with open
+		const closeId = openMap.get(c.id);
+		if (closeId) {
+			// Merge open/close into one row
+			const openPatterns = getPatternsForCommand(c.id, activeLang);
+			const closePatterns = getPatternsForCommand(closeId, activeLang);
+			builtIn.push({
+				label: getLabel(c.id, activeLang) + " / " + getLabel(closeId, activeLang),
+				patterns: [...openPatterns.slice(0, 1), ...closePatterns.slice(0, 1)],
+			});
+		} else {
+			builtIn.push({
+				label: getLabel(c.id, activeLang),
+				patterns: getPatternsForCommand(c.id, activeLang),
+			});
+		}
+	}
+
 	const custom = customCommandDefs.map((c) => ({
 		label: customCommandLabels.get(c.id) ?? c.id,
 		patterns: getPatternsForAnyCommand(c.id, activeLang),

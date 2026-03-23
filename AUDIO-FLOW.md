@@ -19,7 +19,7 @@ flowchart TB
     DEFMIC --> NS
 
     NS{"noiseSuppression\nenabled?"}
-    NS -- ja --> NS_ON["MediaTrackConstraints:\nnoiseSuppression: true\nechoCancellation: true\nautoGainControl: true\n\naudio-recorder.ts:93-97\napp.js:1133-1137"]
+    NS -- ja --> NS_ON["MediaTrackConstraints:\nnoiseSuppression: true\nechoCancellation: true\nautoGainControl: true\n\naudio-recorder.ts:93-97\napp.js:1358-1361"]
     NS -- nee --> NS_OFF["channelCount: 1\n(geen filtering)"]
     NS_ON --> STREAM["MediaStream"]
     NS_OFF --> STREAM
@@ -59,7 +59,7 @@ flowchart TB
         LBL -- ">=0.75" --> TEHARD["te hard"]
     end
 
-    subgraph TYPING["Typing Mute (plugin only)\nmain.ts:324-406"]
+    subgraph TYPING["Typing Mute (plugin only)\nmain.ts:438-547"]
         KEY["keydown event\n(capture phase)"]
         KEY --> MOD{"Modifier/nav\nkey?"}
         MOD -- ja --> IGNORE["Negeer\n(Ctrl/Alt/Shift/Meta\npijltjes/F-toetsen)"]
@@ -68,7 +68,7 @@ flowchart TB
         COOL --> UNMUTE["recorder.unmute()\ntrack.enabled = true"]
     end
 
-    subgraph FOCUS["Focus Pause (plugin only)\nmain.ts:265-320"]
+    subgraph FOCUS["Focus Pause (plugin only)\nmain.ts:379-427"]
         VIS["visibilitychange"]
         VIS --> HIDDEN{"document.hidden?"}
         HIDDEN -- ja --> BEH{"focusBehavior?"}
@@ -93,7 +93,7 @@ flowchart TB
     TRIG -- "sendChunk()\ntap-to-send" --> UPLOAD
     TRIG -- "Enter toets\n(plugin only)" --> ENTER_CHECK
 
-    ENTER_CHECK{"enterToSend=true\nAND batch mode\nAND !isTypingMuted\nAND !typingResumeTimer\nmain.ts:339-352"}
+    ENTER_CHECK{"enterToSend=true\nAND batch mode\nAND !isTypingMuted\nAND !typingResumeTimer\nmain.ts:480-493"}
     ENTER_CHECK -- ja --> UPLOAD
     ENTER_CHECK -- nee --> NEWLINE["Gewone newline\nin editor"]
 
@@ -129,7 +129,7 @@ flowchart TB
 
     PROCESS["processText(editor, text)\nof feedText() in web"]
 
-    subgraph OFFLINE["Offline Queue (web only)\napp.js:889-978"]
+    subgraph OFFLINE["Offline Queue (web only)\napp.js:1114-1215"]
         IDB["saveToQueue()\nIndexedDB store"]
         IDB --> RETRY{"Retry trigger?"}
         RETRY -- "window online event" --> PROC["processQueue()"]
@@ -181,8 +181,8 @@ flowchart TB
     EVENTS -- "error" --> ERR["Log + Notice"]
 
     EVENTS -- "WS close" --> RECONN{"Reconnect"}
-    RECONN -- "Web" --> RECONN_W["setTimeout 1500ms\nstartRealtime()\napp.js:1186-1208"]
-    RECONN -- "Plugin" --> RECONN_P["Exponential backoff\n500ms * failures\nmax 3000ms\nmax 5 pogingen\nmain.ts:635-680"]
+    RECONN -- "Web" --> RECONN_W["setTimeout 1500ms\nstartRealtime()\napp.js:1415-1436"]
+    RECONN -- "Plugin" --> RECONN_P["Exponential backoff\n500ms * failures\nmax 3000ms\nmax 5 pogingen\nmain.ts:779-827"]
     RECONN_P -- "gelukt" --> MISTRAL_D
     RECONN_W -- "gelukt" --> WS_WEB
     RECONN_P -- "5x mislukt" --> STOP["Stop opname"]
@@ -190,7 +190,7 @@ flowchart TB
     STOP_REC["Bij stop opname"] --> DRAIN["endAudio()\nwacht 1000ms\nflush pendingText"]
     DRAIN --> AC_STOP{"autoCorrect?"}
     AC_STOP -- "Web" --> AC_WEB["autoCorrectAfterStop()\nhele transcript"]
-    AC_STOP -- "Plugin" --> AC_PLG["autoCorrectAfterStop(editor)\nalleen dictatedRanges\nmerge + sort eind-naar-begin\nmain.ts:1203-1242"]
+    AC_STOP -- "Plugin" --> AC_PLG["autoCorrectAfterStop(editor)\nalleen dictatedRanges\nmerge + sort eind-naar-begin\nmain.ts:1565-1604"]
     AC_STOP -- nee --> DONE["Klaar"]
     AC_WEB --> DONE
     AC_PLG --> DONE
@@ -219,7 +219,7 @@ flowchart TB
     SRV_GATHER --> FAST_M["Mistral stream\ndelay=240ms"]
     SRV_GATHER --> SLOW_M["Mistral stream\ndelay=2400ms"]
 
-    ARCH -- "Plugin" --> PLG_DUAL["2 aparte\nRealtimeTranscriber\ninstanties\nmain.ts:769-821"]
+    ARCH -- "Plugin" --> PLG_DUAL["2 aparte\nRealtimeTranscriber\ninstanties\nmain.ts:974-1047"]
     PLG_DUAL --> FAST_M2["Mistral WS\ndelayOverride=240ms"]
     PLG_DUAL --> SLOW_M2["Mistral WS\ndelayOverride=2400ms"]
 
@@ -237,8 +237,11 @@ flowchart TB
     SLOW_ACC --> RENDER
     SLOW_DONE --> RENDER
 
-    RENDER["renderDualText()"]
-    RENDER --> DISPLAY{"fastLen > slowLen?"}
+    RENDER["renderDualText()\nmain.ts:1146-1207"]
+    RENDER --> STRIP_WS{"kolom 0 EN\ndualDisplayLen=0?"}
+    STRIP_WS -- ja --> STRIP_DO["Strip leading\nwhitespace"]
+    STRIP_WS -- nee --> DISPLAY
+    STRIP_DO --> DISPLAY{"fastLen > slowLen?"}
     DISPLAY -- ja --> COMBINED["slow tekst (bevestigd/wit)\n+ fast voorbij slow (preview/grijs)"]
     DISPLAY -- nee --> SLOW_ONLY["alleen slow tekst"]
 
@@ -250,13 +253,16 @@ flowchart TB
     SENT_MATCH --> PER_SENT{"Per zin:"}
     PER_SENT -- "matchCommand()" --> CMD_EXEC["Voer commando uit\n(insert/delete/stop)"]
     PER_SENT -- "geen command" --> TXT_COMMIT["Commit tekst permanent\nals span / editor insert"]
-    CMD_EXEC --> TRIM
-    TXT_COMMIT --> TRIM
+    CMD_EXEC --> REBASE
+    TXT_COMMIT --> REBASE
+
+    REBASE["Cursor rebase:\ndualInsertOffset =\neditor.posToOffset(cursor)\ndualDisplayLen = 0\nmain.ts:1232, 1268"]
+    REBASE --> TRIM
 
     TRIM["Trim accumulators:\ndualSlowText = remainder\ndualFastText.substring(matched)\nupdate offset"]
     TRIM --> RENDER
 
-    RECONN_D["Per-stream reconnect\nfast en slow onafhankelijk\nzelfde backoff als single"]
+    RECONN_D["Per-stream reconnect\nfast en slow onafhankelijk\nzelfde backoff als single\nmain.ts:1049-1140"]
     FAST_M -. disconnect .-> RECONN_D
     SLOW_M -. disconnect .-> RECONN_D
     FAST_M2 -. disconnect .-> RECONN_D
@@ -279,14 +285,26 @@ flowchart TB
 flowchart TB
     RAW["Ruwe zin van transcriptie"]
 
-    RAW --> NORM["normalizeCommand()\n1. toLowerCase()\n2. NFD + strip combining chars\n   (e met trema -> e)\n3. strip hyphens (alle Unicode variants)\n4. strip leestekens (.,!?;:)"]
-    NORM --> MISHEAR["fixMishearings(lang)\nTaalspecifieke regex:\nnl: niveau->nieuwe\nnl: beeindigde->beeindig de\nnl: linea->alinea\nnl: nieuw alinea->nieuwe alinea\nfr: nouveau ligne->nouvelle ligne\nde: neue absatz->neuer absatz"]
+    RAW --> PREMATCH{"preMatchHook?\n(template matching)"}
+    PREMATCH -- "template match" --> TEMPLATE["Template invoegen\n(zie Slot System)"]
+    PREMATCH -- "geen match" --> NORM
 
-    MISHEAR --> PASS1["Pass 1: Exact match\nVoor elk commando:\nnormalized.endsWith(pattern)?\nof normalized === pattern?"]
+    NORM["normalizeCommand()\nvoice-commands.ts:97-105\n1. NFD + strip combining chars\n   (e met trema -> e)\n2. replace hyphens met spaties\n3. strip leestekens (.,!?;:'\n   en haakjes)\n4. toLowerCase()\n5. trim()"]
+    NORM --> MISHEAR["fixMishearings(lang)\nTaalspecifieke regex:\nnl: niveau->nieuwe, niva->nieuwe\nnl: beeindigde->beeindig de\nnl: linea->alinea, linie->alinea\nnl: nieuw alinea->nieuwe alinea\nnl: nieuw regel->nieuwe regel\nfr: nouveau ligne->nouvelle ligne\nfr: nouvelle paragraphe->nouveau paragraphe\nde: neue absatz->neuer absatz\nde: neues zeile->neue zeile"]
+
+    MISHEAR --> PASS1["Pass 1: Exact match\nnormalized.endsWith(pattern)?"]
     PASS1 -- match --> SPLIT["Splits textBefore + command\nop basis van woordtelling"]
-    PASS1 -- "geen match" --> PASS2["Pass 2: Fuzzy match\nLevenshtein distance\nalleen als hele zin\ndrempel: distance < 3"]
-    PASS2 -- "match" --> SPLIT2["textBefore = leeg\n(hele zin is command)"]
-    PASS2 -- "geen match" --> PLAIN["Gewone tekst invoegen\ninsertAtCursor()"]
+    PASS1 -- "geen match" --> PASS2["Pass 2: Strip trailing fillers\n(alsjeblieft, please, etc.)\n+ hermatchen"]
+    PASS2 -- match --> SPLIT
+    PASS2 -- "geen match" --> PASS2B["Pass 2b: Strip leading articles\nuit trailing portion\n(de, het, een, the, a, etc.)"]
+    PASS2B -- match --> SPLIT
+    PASS2B -- "geen match" --> PASS3["Pass 3: Phonetic match\nphoneticNormalize() op\nboth sides, dan endsWith"]
+    PASS3 -- match --> SPLIT
+    PASS3 -- "geen match" --> PASS4["Pass 4: Compound-word split\n(nieuwealinea -> nieuwe alinea)\ntrySplitCompound() +\nre-run exact match"]
+    PASS4 -- match --> SPLIT
+    PASS4 -- "geen match" --> PASS5["Pass 5: Fuzzy match\nLevenshtein distance < 3\nalleen als hele zin\nmin 6 chars, max 3 len verschil"]
+    PASS5 -- "match" --> SPLIT2["textBefore = leeg\n(hele zin is command)"]
+    PASS5 -- "geen match" --> PLAIN["Gewone tekst invoegen\ninsertAtCursor()"]
 
     SPLIT --> EXEC
     SPLIT2 --> EXEC
@@ -301,18 +319,53 @@ flowchart TB
     PUNCT -- nee --> ACTION
     STRIP_P --> ACTION
 
-    ACTION{"Command ID?"}
-    ACTION -- newParagraph --> A1["\\n\\n"]
-    ACTION -- newLine --> A2["\\n"]
-    ACTION -- heading1/2/3 --> A3["\\n\\n# / ## / ###"]
-    ACTION -- bulletPoint --> A4["\\n- "]
-    ACTION -- todoItem --> A5["\\n- [ ] "]
-    ACTION -- numberedItem --> A6["Auto-increment:\nzoek laatste N. patroon\ninsert \\nN+1. "]
-    ACTION -- colon --> A7["Strip trailing punct\n+ insert ': '"]
-    ACTION -- deleteLastParagraph --> A8["Verwijder alles na\nlaatste \\n\\n"]
-    ACTION -- deleteLastLine --> A9["Verwijder alles na\nlaatste .!? of \\n"]
-    ACTION -- undo --> A10["Herstel vorige staat\nundoStack.pop()\nmax 20 entries"]
-    ACTION -- stopRecording --> A11["setTimeout 0ms\nstopRecording()"]
+    ACTION{"Command type?"}
+
+    ACTION -- "Insert commands" --> INS_CMDS
+    ACTION -- "Slot commands\n(plugin only)" --> SLOT_CMDS
+    ACTION -- "Delete/control" --> DEL_CMDS
+    ACTION -- "Custom command" --> CUSTOM_CMDS
+
+    subgraph INS_CMDS["Insert Commands"]
+        A1["newParagraph: \\n\\n"]
+        A2["newLine: \\n"]
+        A3["heading1/2/3: \\n\\n# / ## / ###"]
+        A4["bulletPoint: \\n- "]
+        A5["todoItem: \\n- [ ] "]
+        A6["numberedItem: auto-increment\nzoek laatste N. -> \\nN+1. "]
+        A7["colon: strip trailing punct\n+ insert ': '"]
+    end
+
+    subgraph SLOT_CMDS["Slot Commands (plugin only)\nvoice-commands.ts:263-339"]
+        S1["wikilink: [[ cursor ]]"]
+        S2["bold: ** cursor **"]
+        S3["italic: * cursor *"]
+        S4["inlineCode: `` cursor ``"]
+        S5["tag: # cursor\n(exit bij enter of spatie)"]
+    end
+
+    subgraph DEL_CMDS["Delete / Control"]
+        A8["deleteLastParagraph:\nverwijder na laatste \\n\\n"]
+        A9["deleteLastLine:\nverwijder na laatste .!? of \\n"]
+        A10["undo: editor.undo()"]
+        A11["stopRecording:\nsetTimeout 0ms stopRecording()"]
+    end
+
+    subgraph CUSTOM_CMDS["Custom Commands\nvoice-commands.ts:349-380"]
+        CC1{"type?"}
+        CC1 -- insert --> CC_INS["insertText invoegen\n(zoals gewone commands)"]
+        CC1 -- slot --> CC_SLOT["Open slot met\nslotPrefix/slotSuffix\nexit via slotExit trigger"]
+    end
+
+    SLOT_CMDS --> SLOT_SYS
+
+    subgraph SLOT_SYS["Slot System\nvoice-commands.ts:43-94"]
+        SL_OPEN["openSlot(): prefix invoegen\nactiveSlot instellen"]
+        SL_OPEN --> SL_BUFF["slotBuffer: dictatie\naccumuleert in buffer"]
+        SL_BUFF --> SL_EXIT{"Exit trigger?\n(enter / space /\nenter-or-space)"}
+        SL_EXIT -- ja --> SL_CLOSE["closeSlot(): suffix invoegen\nflushSlotBuffer()"]
+        SL_EXIT -- "cancel command" --> SL_CANCEL["cancelSlot(): suffix\noverslaan, buffer flushen"]
+    end
 ```
 
 ---
@@ -326,7 +379,7 @@ flowchart TB
     WHEN{"Wanneer?"}
     WHEN -- "Batch: direct\nna transcriptie" --> SCOPE_B["Hele chunk"]
     WHEN -- "Realtime/Dual:\nbij stop opname" --> SCOPE_R
-    WHEN -- "Handmatig:\nknop/command" --> SCOPE_M["Selectie of\nhele note"]
+    WHEN -- "Handmatig:\ncorrectSelection() /\ncorrectAll()\nmain.ts:1616-1664" --> SCOPE_M["Selectie of\nhele note"]
 
     subgraph SCOPE_R["Plugin: dictatedRanges scope"]
         MERGE["mergeRanges()\noverlapping samenvoegen"]
@@ -369,17 +422,20 @@ flowchart TB
 
 | Optie | Waar in code | Wanneer | Effect |
 |-------|-------------|---------|--------|
-| **noiseSuppression** | `audio-recorder.ts:93-97`, `app.js:1133-1137` | Bij `getUserMedia()` start | Browser WebRTC: noiseSuppression + echoCancellation + autoGainControl |
-| **Typing mute** | `main.ts:324-406` | Elke keydown tijdens opname (plugin) | `track.enabled=false`, unmute na `typingCooldownMs` (800ms) |
-| **Focus pause** | `main.ts:265-320` | `visibilitychange` event (plugin) | `recorder.pause()` + `track.enabled=false` |
+| **noiseSuppression** | `audio-recorder.ts:93-97`, `app.js:1358-1361` | Bij `getUserMedia()` start | Browser WebRTC: noiseSuppression + echoCancellation + autoGainControl |
+| **Typing mute** | `main.ts:438-547` | Elke keydown tijdens opname (plugin) | `track.enabled=false`, unmute na `typingCooldownMs` (800ms) |
+| **Focus pause** | `main.ts:379-427` | `visibilitychange` event (plugin) | `recorder.pause()` + `track.enabled=false` |
 | **Hallucination check** | `mistral-api.ts:104-153` | Na batch transcriptie (plugin) | Verwerp als >5w/s, herhaalde blokken, of identieke zinnen |
-| **Auto-correct** | `main.ts:566`, `main.ts:1105`, `app.js:1723` | Batch: direct. Realtime: bij stop | `correctText()` via Mistral Chat, skip bij voice commands |
+| **Auto-correct** | `main.ts:707-708`, `main.ts:1463-1464`, `app.js:1953-1976` | Batch: direct. Realtime: bij stop | `correctText()` via Mistral Chat, skip bij voice commands |
+| **Manual correction** | `main.ts:1616-1664` | Handmatig via knop/command (plugin) | `correctSelection()` of `correctAll()` onafhankelijk van auto-correct |
 | **Correction guards** | `mistral-api.ts:258-273` | Na elke correctie-response | `stripLlmCommentary()` + lengte-check (1.5x + 50) |
-| **Enter-to-send** | `main.ts:339-352` | Keydown Enter in batch mode (plugin) | `sendChunk()` als mic niet gedempt |
+| **Enter-to-send** | `main.ts:480-493` | Keydown Enter in batch mode (plugin) | `sendChunk()` als mic niet gedempt |
 | **Diarize** | `server.py:291-311` | Batch transcriptie (web only) | Spreker-segmenten in response |
-| **Offline queue** | `app.js:889-978` | Netwerk fout bij batch upload (web) | IndexedDB opslag, auto-retry |
-| **dictatedRanges** | `main.ts:1118-1170`, `main.ts:1203-1242` | Tijdens realtime/dual dictatie (plugin) | Track ingevoegde bereiken voor precise auto-correct |
-| **Mic level** | `app.js:1038-1106` | Tijdens opname (web only) | AnalyserNode RMS + slow EMA → status indicator |
+| **Offline queue** | `app.js:1114-1215` | Netwerk fout bij batch upload (web) | IndexedDB opslag, auto-retry |
+| **dictatedRanges** | `main.ts:1484-1531`, `main.ts:1565-1604` | Tijdens realtime/dual dictatie (plugin) | Track ingevoegde bereiken voor precise auto-correct |
+| **Mic level** | `app.js:1265-1320` | Tijdens opname (web only) | AnalyserNode RMS + slow EMA → status indicator |
+| **Custom commands** | `voice-commands.ts:349-380` | Bij alle transcriptie modi | Gebruiker-gedefinieerde commando's, type insert of slot |
+| **Slot system** | `voice-commands.ts:43-94`, `main.ts:906-920` | Bij slot-commands (wikilink, bold, etc.) | Prefix/suffix patroon met gebufferde dictatie |
 
 ---
 
@@ -396,6 +452,9 @@ flowchart TB
 | **Auto-correct scope** | Hele transcript na stop | Alleen `dictatedRanges[]` (precise tracking) |
 | **Typing mute** | Niet beschikbaar | `keydown` → `mute()` → cooldown → `unmute()` |
 | **Focus handling** | Niet beschikbaar | pause / pause-after-delay / keep-recording |
+| **Custom commands** | Niet beschikbaar | `loadCustomCommands()` + UI editor modal |
+| **Slot commands** | Niet beschikbaar | wikilink, bold, italic, inlineCode, tag |
+| **Manual correction** | Niet beschikbaar | `correctSelection()` + `correctAll()` commands |
 | **Mobile** | Volledig (PWA + offline queue) | Forced batch (geen WS custom headers) |
 | **Rate limiting** | `MAX_WS_CONNECTIONS=4` (server) | Geen (directe API) |
 
@@ -406,7 +465,8 @@ flowchart TB
 ```mermaid
 flowchart TB
     START["Plugin gestart"]
-    START --> PLATFORM{"Platform.isMobile?\nmain.ts:95"}
+    START --> PLATFORM{"Platform.isMobile?\ncanRealtime getter\nmain.ts:119-121"}
+    START --> EFFMODE["effectiveMode getter\nmain.ts:124-129\nreturn canRealtime ?\nsettings.mode : batch"]
 
     PLATFORM -- "Desktop" --> DESK
     PLATFORM -- "Mobiel" --> MOB
@@ -419,20 +479,20 @@ flowchart TB
         D_DUAL -- ja --> D_DD["Dual-Delay modus\n(2 WS streams)"]
         D_DUAL -- nee --> D_SINGLE["Single stream\n(1 WS)"]
 
-        D_STATUS["StatusBar\naddStatusBarItem()\nmain.ts:123-126"]
-        D_HELP["Auto-open help panel\nmain.ts:446-448"]
-        D_TYPING["Typing mute\nkeydown → mute/unmute\nmain.ts:324-406"]
-        D_FOCUS["Focus pause\nvisibilitychange\nmain.ts:265-320"]
+        D_STATUS["StatusBar\naddStatusBarItem()\nmain.ts:148-150"]
+        D_HELP["Auto-open help panel\nmain.ts:587-589"]
+        D_TYPING["Typing mute\nkeydown → mute/unmute\nmain.ts:438-547"]
+        D_FOCUS["Focus pause\nvisibilitychange\nmain.ts:379-427"]
     end
 
     subgraph MOB["Mobiel Obsidian"]
-        M_MODE["effectiveMode = batch\n(altijd, ongeacht instelling)\nmain.ts:98-104"]
+        M_MODE["effectiveMode = batch\n(altijd, ongeacht instelling)\nmain.ts:124-129"]
         M_MODE --> M_BATCH["Batch modus\n(enige optie)"]
 
-        M_SEND["Mobiele send-knop\nview.addAction('send')\nmain.ts:238-248"]
-        M_NOTICE["Eenmalige batch-notice\ndismissMobileBatchNotice\nmain.ts:457-480"]
+        M_SEND["Mobiele send-knop\nview.addAction('send')\nmain.ts:350-363"]
+        M_NOTICE["Eenmalige batch-notice\ndismissMobileBatchNotice\nmain.ts:597-619"]
         M_NO_STATUS["Geen StatusBar"]
-        M_NO_HELP["Help panel niet\nauto-geopend\nmain.ts:446"]
+        M_NO_HELP["Help panel niet\nauto-geopend\nmain.ts:587"]
         M_NO_TYPING["Geen typing mute\n(geen fysiek toetsenbord)"]
         M_FOCUS_REL["Focus pause = relevant\n(app wisselen = background)"]
     end
@@ -453,6 +513,7 @@ flowchart TB
 | **noiseSuppression** | Werkt | Werkt | Browser-level via `getUserMedia()` |
 | **autoCorrect** | Werkt | Werkt | Zelfde Mistral Chat API |
 | **microphoneDeviceId** | Werkt (meerdere mics) | Werkt (meestal 1 mic) | Fallback bij fout |
+| **customCommands** | Niet beschikbaar | Werkt (UI editor modal) | Gebruiker-gedefinieerde commands met triggers per taal |
 | **dismissMobileBatchNotice** | Niet getoond | Getoond (eenmalig) | Alleen zichtbaar op mobiel |
 
 ### Bereikbare verwerkingsstromen

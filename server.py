@@ -29,14 +29,26 @@ logger = logging.getLogger("voxtral")
 from fastapi import FastAPI, Form, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from mistralai import Mistral
-from mistralai.models import (
-    AudioFormat,
-    RealtimeTranscriptionError,
-    RealtimeTranscriptionSessionCreated,
-    TranscriptionStreamDone,
-    TranscriptionStreamTextDelta,
-)
+try:
+    # mistralai v2.x (new package layout)
+    from mistralai.client import Mistral
+    from mistralai.client.models import (
+        AudioFormat,
+        RealtimeTranscriptionError,
+        RealtimeTranscriptionSessionCreated,
+        TranscriptionStreamDone,
+        TranscriptionStreamTextDelta,
+    )
+except ImportError:
+    # mistralai v1.x (original layout)
+    from mistralai import Mistral
+    from mistralai.models import (
+        AudioFormat,
+        RealtimeTranscriptionError,
+        RealtimeTranscriptionSessionCreated,
+        TranscriptionStreamDone,
+        TranscriptionStreamTextDelta,
+    )
 
 app = FastAPI()
 
