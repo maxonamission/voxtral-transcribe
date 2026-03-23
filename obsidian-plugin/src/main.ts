@@ -101,7 +101,7 @@ export default class VoxtralPlugin extends Plugin {
 		);
 
 		// Ribbon icon: toggle recording
-		this.addRibbonIcon("mic", "Voxtral: Start/stop recording", () => {
+		this.addRibbonIcon("mic", "Voxtral: start/stop recording", () => {
 			void this.toggleRecording();
 		});
 
