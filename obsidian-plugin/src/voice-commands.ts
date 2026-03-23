@@ -87,9 +87,18 @@ export function closeSlot(editor: Editor): boolean {
 		}
 	}
 
-	editor.replaceRange(activeSlot.def.suffix, pos);
-	const newCh = pos.ch + activeSlot.def.suffix.length;
-	editor.setCursor({ line: pos.line, ch: newCh });
+	// Check if the suffix is already present at the cursor position
+	// (e.g. Obsidian's autocomplete or auto-pair may have inserted it).
+	const suffix = activeSlot.def.suffix;
+	const line = editor.getLine(pos.line);
+	const afterCursor = line.substring(pos.ch, pos.ch + suffix.length);
+	if (afterCursor === suffix) {
+		// Suffix already present — just move past it
+		editor.setCursor({ line: pos.line, ch: pos.ch + suffix.length });
+	} else {
+		editor.replaceRange(suffix, pos);
+		editor.setCursor({ line: pos.line, ch: pos.ch + suffix.length });
+	}
 	activeSlot = null;
 	return true;
 }
