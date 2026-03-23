@@ -3363,6 +3363,8 @@ var DualDelaySession = class {
     this.callbacks = callbacks;
     this.fastTranscriber = null;
     this.slowTranscriber = null;
+    // Session state
+    this.state = "idle" /* Idle */;
     // Text accumulators
     this.fastText = "";
     this.slowText = "";
@@ -3378,8 +3380,15 @@ var DualDelaySession = class {
     this.consecutiveFailures = 0;
     this.maxConsecutiveFailures = 5;
   }
+  /** Transition to a new state with debug logging. */
+  setState(newState) {
+    const prev = this.state;
+    this.state = newState;
+    vlog.debug(`Voxtral: DualDelay state: ${prev} \u2192 ${newState}`);
+  }
   /** Connect both WebSocket streams and initialize state. */
   async start(editor) {
+    this.setState("connecting" /* Connecting */);
     this.fastText = "";
     this.slowText = "";
     this.insertOffset = editor.posToOffset(editor.getCursor());
@@ -3391,6 +3400,7 @@ var DualDelaySession = class {
     this.commandJustRan = false;
     this.consecutiveFailures = 0;
     await this.connectWebSockets(editor);
+    this.setState("streaming" /* Streaming */);
   }
   /** Send PCM audio data to both transcribers. */
   sendAudio(pcmData) {
@@ -3401,6 +3411,7 @@ var DualDelaySession = class {
   /** Finalize the session: flush remaining text and close streams. */
   async stop() {
     var _a, _b, _c, _d;
+    this.setState("finalizing" /* Finalizing */);
     (_a = this.fastTranscriber) == null ? void 0 : _a.endAudio();
     (_b = this.slowTranscriber) == null ? void 0 : _b.endAudio();
     await new Promise((resolve) => setTimeout(resolve, 1e3));
@@ -3431,6 +3442,7 @@ var DualDelaySession = class {
     this.displayLen = 0;
     this.slowCommitted = 0;
     this.slowTurnDelta = 0;
+    this.setState("idle" /* Idle */);
   }
   // ── WebSocket lifecycle ──
   async connectWebSockets(editor) {
@@ -3504,6 +3516,7 @@ var DualDelaySession = class {
       this.callbacks.stopRecording();
       return;
     }
+    this.setState("reconnecting" /* Reconnecting */);
     vlog.debug(
       `Voxtral: ${stream} stream ended, reconnecting...`
     );
@@ -3514,6 +3527,7 @@ var DualDelaySession = class {
         await this.reconnectSlowStream(editor);
       }
       this.consecutiveFailures = 0;
+      this.setState("streaming" /* Streaming */);
     } catch (e) {
       this.consecutiveFailures++;
       vlog.error(

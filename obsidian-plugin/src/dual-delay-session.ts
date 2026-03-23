@@ -13,19 +13,117 @@ import { vlog } from "./plugin-logger";
 import type { SessionCallbacks } from "./realtime-session";
 
 /**
- * Manages a dual-delay realtime transcription session.
+ * Dual-delay realtime transcription session.
  *
- * Two parallel WebSocket streams:
- * - **Fast stream** (low delay): provides immediate text feedback
- * - **Slow stream** (high delay): provides accurate text + voice command detection
+ * ## Architecture
  *
- * The editor always shows: slow (confirmed) text + any fast text beyond slow.
- * When the slow stream catches up, its text replaces the fast preview.
- * Voice commands are only detected in the slow stream to avoid false positives.
+ * Two parallel WebSocket streams receive the same PCM audio:
+ *
+ * ```
+ *  Microphone ──► AudioRecorder ──► PCM chunks
+ *                                       │
+ *                       ┌───────────────┼───────────────┐
+ *                       ▼                               ▼
+ *               Fast stream                      Slow stream
+ *            (low delay, e.g. 240ms)          (high delay, e.g. 2400ms)
+ *                       │                               │
+ *                       ▼                               ▼
+ *              Immediate preview              Accurate transcription
+ *              (may contain errors)          + voice command detection
+ *                       │                               │
+ *                       └───────────┬───────────────────┘
+ *                                   ▼
+ *                            Reconciliation
+ *                                   │
+ *                                   ▼
+ *                            Editor display
+ * ```
+ *
+ * ## Reconciliation algorithm
+ *
+ * The editor displays a single range of text starting at `insertOffset`:
+ *
+ *   displayText = slowText + fastText.substring(slowText.length)
+ *
+ * In other words: slow text is the source of truth; fast text only shows
+ * the portion that extends BEYOND what slow has confirmed so far.
+ *
+ * When slow catches up (slowText grows), its text automatically replaces
+ * the fast preview — no explicit "swap" is needed because the display
+ * formula always prefers slow.
+ *
+ * ## Voice command flow
+ *
+ * Commands are ONLY detected in the slow stream (more accurate):
+ *
+ * 1. Slow delta arrives → `slowText` grows
+ * 2. `processSlowCommands()` scans for complete sentences
+ * 3. Each sentence is checked via `matchCommand()`
+ * 4. If command found: clear display range, execute action, commit
+ * 5. If no command: insert text permanently via `tracker.trackInsertAtCursor()`
+ * 6. Remainder (incomplete sentence) stays in `slowText` for next delta
+ *
+ * ## State machine
+ *
+ * ```
+ *  ┌─────────┐   start()    ┌────────────┐
+ *  │  idle   │─────────────►│ connecting │
+ *  └─────────┘              └─────┬──────┘
+ *                                 │ both WS connected
+ *                                 ▼
+ *                          ┌────────────┐   stream ends    ┌──────────────┐
+ *                          │  streaming │─────────────────►│ reconnecting │
+ *                          └──────┬─────┘                  └──────┬───────┘
+ *                                 │                               │ success
+ *                                 │                               ▼
+ *                                 │                        ┌────────────┐
+ *                                 │                        │  streaming │
+ *                                 │                        └────────────┘
+ *                                 │ stop()
+ *                                 ▼
+ *                          ┌────────────┐
+ *                          │ finalizing │ (flush remaining text)
+ *                          └──────┬─────┘
+ *                                 │
+ *                                 ▼
+ *                          ┌─────────┐
+ *                          │  idle   │
+ *                          └─────────┘
+ * ```
+ *
+ * ## Edge cases
+ *
+ * - **Slow stream disconnects**: Flush confirmed text at current position,
+ *   reset accumulators, reconnect. Fast stream continues providing preview.
+ * - **Fast stream disconnects**: Reconnect silently. Display falls back to
+ *   slow-only until fast catches up.
+ * - **Streams drift apart**: Fast is always ahead of slow (lower delay).
+ *   The display formula handles this naturally: fast shows the preview,
+ *   slow replaces it when ready.
+ * - **User moves cursor**: Detected in `renderText()`. Confirmed slow text
+ *   is committed at the old position, accumulators reset, new text starts
+ *   at the cursor's new location.
+ * - **Command followed by trailing punctuation**: The API may send "." after
+ *   a command was already executed. `commandJustRan` flag causes this
+ *   trailing punctuation to be silently discarded.
+ * - **Both streams fail repeatedly**: After `maxConsecutiveFailures` (5)
+ *   reconnect attempts, recording is stopped with a user notice.
  */
+
+/** Session state for debug logging. */
+const enum SessionState {
+	Idle = "idle",
+	Connecting = "connecting",
+	Streaming = "streaming",
+	Reconnecting = "reconnecting",
+	Finalizing = "finalizing",
+}
 export class DualDelaySession {
 	private fastTranscriber: RealtimeTranscriber | null = null;
 	private slowTranscriber: RealtimeTranscriber | null = null;
+
+	// Session state
+	private state: SessionState = SessionState.Idle;
 
 	// Text accumulators
 	private fastText = "";
@@ -50,8 +148,16 @@ export class DualDelaySession {
 		private callbacks: SessionCallbacks,
 	) {}
 
+	/** Transition to a new state with debug logging. */
+	private setState(newState: SessionState): void {
+		const prev = this.state;
+		this.state = newState;
+		vlog.debug(`Voxtral: DualDelay state: ${prev} → ${newState}`);
+	}
+
 	/** Connect both WebSocket streams and initialize state. */
 	async start(editor: Editor): Promise<void> {
+		this.setState(SessionState.Connecting);
 		this.fastText = "";
 		this.slowText = "";
 		this.insertOffset = editor.posToOffset(editor.getCursor());
@@ -64,6 +170,7 @@ export class DualDelaySession {
 		this.consecutiveFailures = 0;
 
 		await this.connectWebSockets(editor);
+		this.setState(SessionState.Streaming);
 	}
 
 	/** Send PCM audio data to both transcribers. */
@@ -74,6 +181,7 @@ export class DualDelaySession {
 
 	/** Finalize the session: flush remaining text and close streams. */
 	async stop(): Promise<void> {
+		this.setState(SessionState.Finalizing);
 		this.fastTranscriber?.endAudio();
 		this.slowTranscriber?.endAudio();
 
@@ -114,6 +222,7 @@ export class DualDelaySession {
 		this.displayLen = 0;
 		this.slowCommitted = 0;
 		this.slowTurnDelta = 0;
+		this.setState(SessionState.Idle);
 	}
 
 	// ── WebSocket lifecycle ──
@@ -199,6 +308,7 @@ export class DualDelaySession {
 			return;
 		}
 
+		this.setState(SessionState.Reconnecting);
 		vlog.debug(
 			`Voxtral: ${stream} stream ended, reconnecting...`,
 		);
@@ -210,6 +320,7 @@ export class DualDelaySession {
 				await this.reconnectSlowStream(editor);
 			}
 			this.consecutiveFailures = 0;
+			this.setState(SessionState.Streaming);
 		} catch (e) {
 			this.consecutiveFailures++;
 			vlog.error(

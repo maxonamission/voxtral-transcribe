@@ -10,8 +10,8 @@ Improve the Obsidian plugin's codebase structure, testability and long-term main
 
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
-| 010 | [Split main.ts into focused modules](backlog/010-split-main-ts.md) | Backlog | High |
-| 011 | [Isolate and document dual-delay mode](backlog/011-isolate-dual-delay.md) | Backlog | High |
+| 010 | [Split main.ts into focused modules](done/010-split-main-ts.md) | Done | High |
+| 011 | [Isolate and document dual-delay mode](done/011-isolate-dual-delay.md) | Done | High |
 | 012 | [Add test suite for command matching and hallucination detection](done/012-test-command-matching.md) | Done | High |
 | 013 | [Abstract WebSocket upgrade mechanism](backlog/013-websocket-upgrade-abstraction.md) | Backlog | Medium |
 | 014 | [Add versioned settings migration](done/014-settings-migration.md) | Done | Medium |

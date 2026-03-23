@@ -3,6 +3,9 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
 	{
+		ignores: ["src/__tests__/**"],
+	},
+	{
 		files: ["src/**/*.ts"],
 		extends: [
 			...tseslint.configs.recommendedTypeChecked,

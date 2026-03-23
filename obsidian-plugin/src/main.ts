@@ -22,7 +22,6 @@ import {
 	isLikelyHallucination,
 } from "./mistral-api";
 import {
-	normalizeCommand,
 	processText,
 	matchCommand,
 	setLanguage,
