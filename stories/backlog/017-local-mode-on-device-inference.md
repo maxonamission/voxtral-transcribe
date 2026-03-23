@@ -24,7 +24,7 @@ Mistral released [Voxtral-Mini-4B-Realtime-2602](https://huggingface.co/mistrala
 
 | Runtime | Platform | Notes |
 |---------|----------|-------|
-| [ExecuTorch](https://github.com/pytorch/executorch/tree/main/examples/models/voxtral) | iOS, Android, macOS, Linux | PyTorch-native; supports CPU, Metal, CUDA, Qualcomm NPU, MediaTek NPU. Android+Voxtral tracked in [pytorch/executorch#15238](https://github.com/pytorch/executorch/issues/15238) |
+| [ExecuTorch](https://github.com/pytorch/executorch/tree/main/examples/models/voxtral) | iOS, Android, macOS, Linux | PyTorch-native; supports CPU (XNNPACK), Metal, CUDA, Vulkan, Qualcomm NPU (QNN). Android+Voxtral shipped in [ExecuTorch 1.0](https://pytorch.org/blog/introducing-executorch-1-0/) (`org.pytorch:executorch-android:1.0.0`). Also supports newer `Voxtral-Mini-3B-2507` (smaller, 3B params). |
 | [voxtral.c](https://github.com/antirez/voxtral.c) | macOS (Metal), Linux (OpenBLAS) | Pure C, zero dependencies, by antirez |
 | [voxtral-mini-realtime-rs](https://github.com/TrevorS/voxtral-mini-realtime-rs) | Native + browser (WebGPU/WASM) | Pure Rust (Burn framework) |
 | GGUF via llama.cpp | Cross-platform | Community GGUF quants available |
@@ -32,9 +32,10 @@ Mistral released [Voxtral-Mini-4B-Realtime-2602](https://huggingface.co/mistrala
 ### Mobile / NPU feasibility
 
 - Mistral claims the model targets "laptops, phones, smartwatches"
-- ExecuTorch supports Qualcomm NPU, Apple Neural Engine, MediaTek, ARM backends
-- No published mobile NPU benchmarks yet — needs hands-on validation
+- ExecuTorch 1.0 ships with Android Voxtral support (Java/Kotlin API, QNN/Vulkan/XNNPACK backends)
+- A smaller `Voxtral-Mini-3B-2507` variant (3B params) is available — even more suitable for mobile
 - Q4 at 2.5 GB fits modern high-end phone RAM; mid-range may be tight
+- No published mobile NPU benchmarks yet — needs hands-on validation
 
 ## Proposed approach
 
@@ -70,7 +71,7 @@ Mistral released [Voxtral-Mini-4B-Realtime-2602](https://huggingface.co/mistrala
 - **Pro:** Full privacy, no API costs, works offline
 - **Con:** Significant increase in complexity; model download size; hardware requirements exclude low-end machines
 - **Con:** No diarisation in local mode (realtime model doesn't support it)
-- **Con:** Mobile NPU path is immature — ExecuTorch Android support is still in development
+- **Con:** Mobile NPU path is new — ExecuTorch 1.0 ships Android support but real-world benchmarks are scarce
 
 ## References
 
