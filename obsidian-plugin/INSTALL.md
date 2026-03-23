@@ -222,7 +222,7 @@ git push origin 1.0.0
     "id": "voxtral-transcribe",
     "name": "Voxtral Transcribe",
     "author": "Voxtral Transcribe",
-    "description": "Speech-to-text dictation using Mistral Voxtral with real-time streaming, voice commands, and auto-correction.",
+    "description": "Speech-to-text dictation using Mistral Voxtral. Supports real-time streaming, voice commands (headings, lists, to-dos), and automatic text correction.",
     "repo": "your-username/voxtral-obsidian-plugin"
 }
 ```

@@ -17,6 +17,9 @@ Improve the Obsidian plugin's codebase structure, testability and long-term main
 | 014 | [Add versioned settings migration](done/014-settings-migration.md) | Done | Medium |
 | 015 | [Extract language definitions to data format](done/015-lang-data-extraction.md) | Done | Low |
 | 016 | [Privacy documentation and log redaction](done/016-privacy-logging-docs.md) | Done | Medium |
+| 019 | [Add npm test to CI and sync workflows](done/019-add-npm-test-to-ci.md) | Done | High |
+| 021 | [DualDelaySession tests — core logic and edge cases](done/021-dual-delay-session-tests.md) | Done | High |
+| 022 | [RealtimeSession tests — delta handling and slot buffering](done/022-realtime-session-tests.md) | Done | Medium |
 
 ### Dependencies within this epic
 
@@ -74,6 +77,8 @@ Make the app easy to download and run for testers and users.
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
 | 004 | [Automated GitHub Releases with cross-platform builds](doing/004-github-releases-ci.md) | Doing | High |
+| 018 | [Sync plugin description across all config files](done/018-sync-descriptions.md) | Done | High |
+| 020 | [Version bump automation](done/020-version-bump-automation.md) | Done | Medium |
 
 ## Epic: Pipeline Simplification
 
@@ -82,6 +87,14 @@ Evaluate whether processing steps can be simplified or removed without losing es
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
 | 009 | [Evaluate and potentially remove LLM text correction](backlog/009-evaluate-llm-correction-removal.md) | Backlog | Medium |
+
+## Epic: Bug Fixes
+
+Fix bugs discovered during testing.
+
+| # | Story | Status | Priority |
+|---|-------|--------|----------|
+| 017 | [Fix bold/italic slot mechanism with real-time transcription](done/017-fix-bold-italic-slot-transcription.md) | Done | High |
 
 ## Epic: Custom Commands & Extensibility
 
