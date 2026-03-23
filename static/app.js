@@ -2075,7 +2075,10 @@ async function loadModels(currentSettings) {
         }
 
         const transcriptionModels = cachedModels.filter(m => !!m.capabilities?.audio_transcription);
-        const chatModels = cachedModels.filter(m => !!m.capabilities?.completion_chat);
+        const chatModels = cachedModels.filter(m =>
+            !!m.capabilities?.completion_chat &&
+            !m.capabilities?.audio_transcription &&
+            !m.capabilities?.vision);
 
         function populate(select, models, currentVal) {
             select.innerHTML = "";
