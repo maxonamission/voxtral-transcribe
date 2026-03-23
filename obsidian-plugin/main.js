@@ -1903,13 +1903,17 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
     new import_obsidian2.Setting(containerEl).setName("Custom voice commands").setHeading();
     this.renderCustomCommands(containerEl);
     new import_obsidian2.Setting(containerEl).setName("Advanced").setHeading();
-    const isTranscriptionModel = (m) => {
+    const isRealtimeModel = (m) => {
       var _a;
-      return !!((_a = m.capabilities) == null ? void 0 : _a.audio_transcription);
+      return !!((_a = m.capabilities) == null ? void 0 : _a.audio_transcription) && m.id.includes("realtime");
     };
-    const isChatModel = (m) => {
+    const isBatchModel = (m) => {
       var _a;
-      return !!((_a = m.capabilities) == null ? void 0 : _a.completion_chat);
+      return !!((_a = m.capabilities) == null ? void 0 : _a.audio_transcription) && !m.id.includes("realtime");
+    };
+    const isTextChatModel = (m) => {
+      var _a, _b;
+      return !!((_a = m.capabilities) == null ? void 0 : _a.completion_chat) && !((_b = m.capabilities) == null ? void 0 : _b.audio_transcription) && !m.id.startsWith("voxtral");
     };
     this.addModelDropdown(
       containerEl,
@@ -1920,7 +1924,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         this.plugin.settings.realtimeModel = value.trim();
         await this.plugin.saveSettings();
       },
-      isTranscriptionModel
+      isRealtimeModel
     );
     this.addModelDropdown(
       containerEl,
@@ -1931,7 +1935,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         this.plugin.settings.batchModel = value.trim();
         await this.plugin.saveSettings();
       },
-      isTranscriptionModel
+      isBatchModel
     );
     this.addModelDropdown(
       containerEl,
@@ -1942,7 +1946,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         this.plugin.settings.correctModel = value.trim();
         await this.plugin.saveSettings();
       },
-      isChatModel
+      isTextChatModel
     );
     new import_obsidian2.Setting(containerEl).setName("Correction system prompt").setDesc("Leave empty to use the default prompt").addTextArea(
       (text) => text.setPlaceholder("Default correction prompt will be used...").setValue(this.plugin.settings.systemPrompt).onChange(async (value) => {
@@ -3219,6 +3223,10 @@ var DictationTracker = class _DictationTracker {
       this.dictatedRanges.push({ from: offsetBefore, to: offsetAfter });
     }
   }
+  /** True when at least one dictated range has been recorded. */
+  hasRanges() {
+    return this.dictatedRanges.length > 0;
+  }
   /** Record a range directly (for dual-delay finalization). */
   addRange(from, to) {
     this.dictatedRanges.push({ from, to });
@@ -4022,7 +4030,7 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
     });
     this.addCommand({
       id: "correct-all",
-      name: "Correct entire note",
+      name: "Correct dictated text",
       icon: "file-check",
       editorCallback: (editor) => {
         void this.correctAll(editor);
@@ -4534,9 +4542,8 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
     }
   }
   async correctAll(editor) {
-    const text = editor.getValue();
-    if (!text.trim()) {
-      new import_obsidian7.Notice("Note is empty");
+    if (!this.tracker.hasRanges()) {
+      new import_obsidian7.Notice("No dictated text to correct");
       return;
     }
     if (!this.settings.apiKey) {
@@ -4545,13 +4552,8 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
     }
     try {
       new import_obsidian7.Notice("Correcting...");
-      const corrected = await correctText(text, this.settings);
-      if (corrected && corrected !== text) {
-        editor.setValue(corrected);
-        new import_obsidian7.Notice("Note corrected");
-      } else {
-        new import_obsidian7.Notice("No corrections needed");
-      }
+      await this.tracker.autoCorrectAfterStop(editor, this.settings);
+      new import_obsidian7.Notice("Dictated text corrected");
     } catch (e) {
       new import_obsidian7.Notice(`Correction failed: ${e}`);
     }
