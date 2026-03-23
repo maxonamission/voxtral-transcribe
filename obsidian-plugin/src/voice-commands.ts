@@ -51,6 +51,8 @@ export interface SlotDef {
 export interface ActiveSlot {
 	def: SlotDef;
 	commandId: CommandId;
+	/** Cursor position right after the opening prefix was inserted */
+	startPos?: { line: number; ch: number };
 }
 
 let activeSlot: ActiveSlot | null = null;
@@ -72,11 +74,23 @@ export function getActiveSlot(): ActiveSlot | null {
 export function closeSlot(editor: Editor): boolean {
 	if (!activeSlot) return false;
 	let pos = editor.getCursor();
+	const suffix = activeSlot.def.suffix;
+
+	// If the suffix already appears between the slot start and the cursor,
+	// Obsidian's autocomplete (e.g. wikilink suggester) already closed it.
+	// Just clear the slot — don't insert a duplicate suffix.
+	if (suffix && activeSlot.startPos) {
+		const textSinceOpen = editor.getRange(activeSlot.startPos, pos);
+		if (textSinceOpen.includes(suffix)) {
+			activeSlot = null;
+			return true;
+		}
+	}
 
 	// Trim trailing whitespace before inserting suffix so that
 	// markdown formatting is not broken (e.g. "**text **" won't
 	// render as bold — we want "**text**").
-	if (activeSlot.def.suffix) {
+	if (suffix) {
 		const line = editor.getLine(pos.line);
 		const before = line.substring(0, pos.ch);
 		const trimmed = before.replace(/\s+$/, "");
@@ -89,7 +103,6 @@ export function closeSlot(editor: Editor): boolean {
 
 	// Check if the suffix is already present at the cursor position
 	// (e.g. Obsidian's autocomplete or auto-pair may have inserted it).
-	const suffix = activeSlot.def.suffix;
 	const line = editor.getLine(pos.line);
 	const afterCursor = line.substring(pos.ch, pos.ch + suffix.length);
 	if (afterCursor === suffix) {
@@ -113,8 +126,8 @@ export function cancelSlot(): void {
 /**
  * Programmatically open a slot (for quick-templates like code blocks).
  */
-export function openSlot(commandId: string, def: SlotDef): void {
-	activeSlot = { def, commandId: commandId as CommandId };
+export function openSlot(commandId: string, def: SlotDef, startPos?: { line: number; ch: number }): void {
+	activeSlot = { def, commandId: commandId as CommandId, startPos };
 }
 
 // Normalize text for command matching: remove diacritics, hyphens, punctuation
@@ -292,11 +305,18 @@ const COMMAND_DEFS: CommandDef[] = [
 		slot: { prefix: "[[", suffix: "]]", exitTrigger: "enter" },
 		action: (editor) => {
 			const cursor = editor.getCursor();
-			editor.replaceRange("[[", cursor);
-			editor.setCursor({ line: cursor.line, ch: cursor.ch + 2 });
+			const line = editor.getLine(cursor.line);
+			const before = line.substring(0, cursor.ch);
+			// Insert a space before [[ if preceded by non-whitespace
+			const needsSpace = before.length > 0 && !/\s$/.test(before);
+			const insert = needsSpace ? " [[" : "[[";
+			editor.replaceRange(insert, cursor);
+			const endCh = cursor.ch + insert.length;
+			editor.setCursor({ line: cursor.line, ch: endCh });
 			activeSlot = {
 				def: { prefix: "[[", suffix: "]]", exitTrigger: "enter" },
 				commandId: "wikilink",
+				startPos: { line: cursor.line, ch: endCh },
 			};
 		},
 	},
@@ -310,6 +330,7 @@ const COMMAND_DEFS: CommandDef[] = [
 			activeSlot = {
 				def: { prefix: "**", suffix: "**", exitTrigger: "enter" },
 				commandId: "bold",
+				startPos: { line: cursor.line, ch: cursor.ch + 2 },
 			};
 		},
 	},
@@ -323,6 +344,7 @@ const COMMAND_DEFS: CommandDef[] = [
 			activeSlot = {
 				def: { prefix: "*", suffix: "*", exitTrigger: "enter" },
 				commandId: "italic",
+				startPos: { line: cursor.line, ch: cursor.ch + 1 },
 			};
 		},
 	},
@@ -336,6 +358,7 @@ const COMMAND_DEFS: CommandDef[] = [
 			activeSlot = {
 				def: { prefix: "`", suffix: "`", exitTrigger: "enter" },
 				commandId: "inlineCode",
+				startPos: { line: cursor.line, ch: cursor.ch + 1 },
 			};
 		},
 	},
@@ -360,6 +383,7 @@ const COMMAND_DEFS: CommandDef[] = [
 			activeSlot = {
 				def: { prefix: "#", suffix: "", exitTrigger: "enter-or-space" },
 				commandId: "tag",
+				startPos: { line: cursor.line, ch: cursor.ch + prefix.length },
 			};
 		},
 	},
@@ -390,6 +414,7 @@ export function loadCustomCommands(commands: CustomCommand[]): void {
 					activeSlot = {
 						def: { prefix, suffix, exitTrigger: exit },
 						commandId: cmd.id as CommandId,
+						startPos: { line: cursor.line, ch: cursor.ch + prefix.length },
 					};
 				},
 			};
