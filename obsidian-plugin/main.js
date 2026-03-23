@@ -26,6 +26,7 @@ var import_obsidian7 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_SETTINGS = {
+  settingsVersion: 1,
   apiKey: "",
   language: "nl",
   realtimeModel: "voxtral-mini-transcribe-realtime-2602",
@@ -49,6 +50,24 @@ var DEFAULT_SETTINGS = {
   templatesFolder: ""
 };
 var DEFAULT_CORRECT_PROMPT = "You are a precise text corrector for dictated text. The input language may vary (commonly Dutch, but follow whatever language the text is in).\n\nCORRECT ONLY:\n- Capitalization (sentence starts, proper nouns)\n- Clearly misspelled or garbled words (from speech recognition)\n- Missing or wrong punctuation\n\nDO NOT CHANGE:\n- Sentence structure or word order\n- Style or tone\n- Markdown formatting (# headings, - lists, - [ ] to-do items)\n\nINLINE CORRECTION INSTRUCTIONS:\nThe text was dictated via speech recognition. The speaker sometimes gives inline instructions meant for you. Recognize these patterns:\n- Explicit markers: 'voor de correctie', 'voor de correctie achteraf', 'for the correction', 'correction note'\n- Spelled-out words: 'V-O-X-T-R-A-L' or 'with an x' \u2192 merge into the intended word\n- Self-corrections: 'no not X but Y', 'nee niet X maar Y', 'I mean Y', 'ik bedoel Y'\n- Meta-commentary: 'that's a Dutch word', 'with a capital letter', 'met een hoofdletter'\n\nWhen you encounter such instructions:\n1. Apply the instruction to the REST of the text\n2. Remove the instruction/meta-commentary itself from the output\n3. Keep all content text \u2014 NEVER remove normal sentences\n\nCRITICAL RULES:\n- Your output must be SHORTER than or equal to the input (after removing meta-instructions)\n- NEVER add your own text, commentary, explanations, or notes\n- NEVER add parenthesized text like '(text missing)' or '(no corrections needed)'\n- NEVER continue, elaborate, or expand on the content\n- NEVER invent or hallucinate text that wasn't in the input\n- If the input is short (even one word), just return it corrected\n- Your output must contain ONLY the corrected version of the input text, NOTHING else";
+
+// src/settings-migration.ts
+var CURRENT_VERSION = 1;
+var migrations = {
+  // No migrations yet — v0 → v1 is handled by the default merge below
+};
+function migrateSettings(data) {
+  if (!data) {
+    return { ...DEFAULT_SETTINGS, settingsVersion: CURRENT_VERSION };
+  }
+  let version = typeof data.settingsVersion === "number" ? data.settingsVersion : 0;
+  while (migrations[version]) {
+    data = migrations[version](data);
+    version++;
+  }
+  data.settingsVersion = CURRENT_VERSION;
+  return { ...DEFAULT_SETTINGS, ...data };
+}
 
 // src/settings-tab.ts
 var import_obsidian2 = require("obsidian");
@@ -3900,11 +3919,7 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
     }
   }
   async loadSettings() {
-    this.settings = Object.assign(
-      {},
-      DEFAULT_SETTINGS,
-      await this.loadData()
-    );
+    this.settings = migrateSettings(await this.loadData());
     setLanguage(this.settings.language);
     loadCustomCommands(this.settings.customCommands);
     loadCustomCommandTriggers(this.settings.customCommands);

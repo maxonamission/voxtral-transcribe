@@ -8,7 +8,8 @@ import {
 	Platform,
 	Plugin,
 } from "obsidian";
-import { VoxtralSettings, DEFAULT_SETTINGS } from "./types";
+import { VoxtralSettings } from "./types";
+import { migrateSettings } from "./settings-migration";
 import { VoxtralSettingTab } from "./settings-tab";
 import {
 	VoxtralHelpView,
@@ -184,11 +185,7 @@ export default class VoxtralPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			await this.loadData(),
-		);
+		this.settings = migrateSettings(await this.loadData());
 		setLanguage(this.settings.language);
 		loadCustomCommands(this.settings.customCommands);
 		loadCustomCommandTriggers(this.settings.customCommands);
