@@ -4,23 +4,25 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag to create (e.g. 0.4.0)'
+        description: 'Version tag to create (e.g. 0.7.0)'
         required: true
         type: string
       dry_run:
-        description: 'Dry run (skip push to target repo)'
+        description: 'Dry run (skip push to both repos)'
         required: false
         type: boolean
         default: false
 
 jobs:
-  validate:
+  bump-and-validate:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: obsidian-plugin
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -30,6 +32,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Bump version to ${{ inputs.version }}
+        run: |
+          node scripts/bump-version.mjs "${{ inputs.version }}"
+          echo "Updated files:"
+          git diff --stat
 
       - name: ESLint
         run: npx eslint src/
@@ -43,21 +51,56 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Verify version matches input
+      - name: Verify version consistency
         run: |
           MANIFEST_VERSION=$(node -p "require('./manifest.json').version")
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          VERSIONS_HAS_KEY=$(node -p "!!require('./versions.json')['$MANIFEST_VERSION']")
+
           if [ "$MANIFEST_VERSION" != "${{ inputs.version }}" ]; then
-            echo "::error::manifest.json version ($MANIFEST_VERSION) does not match input version (${{ inputs.version }})"
+            echo "::error::Version bump failed: manifest.json ($MANIFEST_VERSION) != input (${{ inputs.version }})"
             exit 1
           fi
+          if [ "$MANIFEST_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "::error::Version mismatch: manifest.json ($MANIFEST_VERSION) != package.json ($PACKAGE_VERSION)"
+            exit 1
+          fi
+          if [ "$VERSIONS_HAS_KEY" != "true" ]; then
+            echo "::error::versions.json is missing entry for $MANIFEST_VERSION"
+            exit 1
+          fi
+          echo "All versions consistent at $MANIFEST_VERSION ✓"
+
+      - name: Commit version bump to source repo
+        if: inputs.dry_run == false
+        working-directory: .
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add obsidian-plugin/package.json obsidian-plugin/manifest.json obsidian-plugin/versions.json obsidian-plugin/main.js
+          git commit -m "Release v${{ inputs.version }}"
+          git push
+
+      - name: Dry run — show version bump diff
+        if: inputs.dry_run == true
+        run: |
+          echo "## Would bump version to ${{ inputs.version }}:"
+          git diff
 
   sync:
-    needs: validate
+    needs: bump-and-validate
+    if: inputs.dry_run == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          # Re-checkout to get the version bump commit
+          ref: ${{ github.ref }}
           path: source
+
+      - name: Pull latest (includes version bump commit)
+        working-directory: source
+        run: git pull origin ${{ github.ref_name }}
 
       - name: Setup SSH for target repo
         run: |
@@ -108,7 +151,7 @@ jobs:
           fi
 
       - name: Commit, tag, and push
-        if: steps.changes.outputs.has_changes == 'true' && inputs.dry_run == false
+        if: steps.changes.outputs.has_changes == 'true'
         working-directory: target
         run: |
           git config user.name "github-actions[bot]"
@@ -122,12 +165,3 @@ jobs:
           git push origin "${{ inputs.version }}"
 
           echo "::notice::Pushed v${{ inputs.version }} to obsidian-voxtral — release workflow will trigger automatically"
-
-      - name: Dry run summary
-        if: inputs.dry_run == true
-        working-directory: target
-        run: |
-          echo "## Dry run — these changes would be pushed:"
-          git diff --cached --stat
-          echo ""
-          echo "Tag that would be created: ${{ inputs.version }}"
