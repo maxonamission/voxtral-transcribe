@@ -2078,7 +2078,7 @@ async function loadModels(currentSettings) {
         const chatModels = cachedModels.filter(m =>
             !!m.capabilities?.completion_chat &&
             !m.capabilities?.audio_transcription &&
-            !m.capabilities?.vision);
+            !m.id.startsWith("voxtral"));
 
         function populate(select, models, currentVal) {
             select.innerHTML = "";
