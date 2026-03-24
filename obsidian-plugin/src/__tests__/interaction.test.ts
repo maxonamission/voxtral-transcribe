@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Editor } from "obsidian";
 import type { SessionCallbacks } from "../realtime-session";
 import { DEFAULT_SETTINGS, VoxtralSettings } from "../types";
@@ -320,6 +320,7 @@ describe("Story 2: Dual-Stream Reconciliation under pressure", () => {
 	let settings: VoxtralSettings;
 
 	beforeEach(() => {
+		vi.useFakeTimers();
 		vi.clearAllMocks();
 		transcriberInstances.length = 0;
 		setLanguage("nl");
@@ -328,6 +329,10 @@ describe("Story 2: Dual-Stream Reconciliation under pressure", () => {
 		tracker = new DictationTracker();
 		settings = createSettings({ dualDelay: true });
 		callbacks = createCallbacks(editor);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	describe("2a: Fast stream delivers voice command before slow", () => {
@@ -346,6 +351,7 @@ describe("Story 2: Dual-Stream Reconciliation under pressure", () => {
 
 			// Slow stream catches up — command is now detected and executed
 			tc.slow.onDelta("nieuwe alinea");
+			vi.advanceTimersByTime(400); // standalone command debounce
 
 			const finalText = editor.getValue();
 			// Command should have been executed (new paragraph)
@@ -391,7 +397,7 @@ describe("Story 2: Dual-Stream Reconciliation under pressure", () => {
 			tc.fast.onDisconnect();
 			tc.slow.onDisconnect();
 
-			await new Promise((r) => setTimeout(r, 100));
+			await vi.advanceTimersByTimeAsync(100);
 
 			// Session should still be functional if recording
 			// (new transcribers created for both streams)
@@ -403,8 +409,6 @@ describe("Story 2: Dual-Stream Reconciliation under pressure", () => {
 			const session = new DualDelaySession(localSettings, tracker, callbacks);
 			await session.start(editor);
 			const tc = getDualTranscriberCallbacks();
-
-			vi.useFakeTimers();
 
 			// Each disconnect creates a new transcriber. We make them
 			// all fail by temporarily overriding push on the array.
@@ -426,9 +430,8 @@ describe("Story 2: Dual-Stream Reconciliation under pressure", () => {
 				await vi.advanceTimersByTimeAsync(5000);
 			}
 
-			// Restore push BEFORE useRealTimers to prevent leaking
+			// Restore push to prevent leaking
 			transcriberInstances.push = origPush as typeof transcriberInstances.push;
-			vi.useRealTimers();
 
 			// After 5 failures, stopRecording should be called
 			expect(mockStopRecording).toHaveBeenCalled();
@@ -564,6 +567,7 @@ describe("Story 4: Slot system interactions", () => {
 	let callbacks: SessionCallbacks;
 
 	beforeEach(() => {
+		vi.useFakeTimers();
 		vi.clearAllMocks();
 		transcriberInstances.length = 0;
 		setLanguage("nl");
@@ -571,6 +575,10 @@ describe("Story 4: Slot system interactions", () => {
 		editor = createMockEditor("");
 		tracker = new DictationTracker();
 		callbacks = createCallbacks(editor);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	describe("4a: Double close — voice command + keyboard escape", () => {
@@ -582,6 +590,7 @@ describe("Story 4: Slot system interactions", () => {
 
 			// Open a bold slot
 			tc.slow.onDelta("vet openen");
+			vi.advanceTimersByTime(400);
 			expect(isSlotActive()).toBe(true);
 
 			// Type some text in the slot
@@ -589,6 +598,7 @@ describe("Story 4: Slot system interactions", () => {
 
 			// Voice close
 			tc.slow.onDelta("vet sluiten");
+			vi.advanceTimersByTime(400);
 			expect(isSlotActive()).toBe(false);
 
 			// Keyboard Escape comes right after (race condition) — should not crash
@@ -634,6 +644,7 @@ describe("Story 4: Slot system interactions", () => {
 
 			// Open a bold slot
 			tc.slow.onDelta("vet openen");
+			vi.advanceTimersByTime(400);
 			expect(isSlotActive()).toBe(true);
 
 			// activeSlot is a global — it doesn't track which editor it belongs to
@@ -655,10 +666,15 @@ describe("Story 4: Slot system interactions", () => {
 
 describe("Story 5: Voice command conflicts", () => {
 	beforeEach(() => {
+		vi.useFakeTimers();
 		vi.clearAllMocks();
 		transcriberInstances.length = 0;
 		setLanguage("nl");
 		cancelSlot();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	describe("5a: Custom command overlaps built-in", () => {
@@ -735,6 +751,7 @@ describe("Story 5: Voice command conflicts", () => {
 			// Start with Dutch
 			setLanguage("nl");
 			tc.slow.onDelta("nieuwe alinea");
+			vi.advanceTimersByTime(400);
 
 			const textNl = editor.getValue();
 			expect(textNl).toContain("\n\n");
@@ -744,6 +761,7 @@ describe("Story 5: Voice command conflicts", () => {
 
 			// English command should now work
 			tc.slow.onDelta("new paragraph");
+			vi.advanceTimersByTime(400);
 
 			const textEn = editor.getValue();
 			// Should contain two paragraph breaks total
