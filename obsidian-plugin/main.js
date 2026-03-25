@@ -197,7 +197,7 @@ var DEFAULT_SETTINGS = {
   customCommands: [],
   templatesFolder: ""
 };
-var DEFAULT_CORRECT_PROMPT = "You are a precise text corrector for dictated text. The input language may vary (commonly Dutch, but follow whatever language the text is in).\n\nCORRECT ONLY:\n- Capitalization (sentence starts, proper nouns)\n- Clearly misspelled or garbled words (from speech recognition)\n- Missing or wrong punctuation\n\nDO NOT CHANGE:\n- Sentence structure or word order\n- Style or tone\n- Markdown formatting (# headings, - lists, - [ ] to-do items)\n\nINLINE CORRECTION INSTRUCTIONS:\nThe text was dictated via speech recognition. The speaker sometimes gives inline instructions meant for you. Recognize these patterns:\n- Explicit markers: 'voor de correctie', 'voor de correctie achteraf', 'for the correction', 'correction note'\n- Spelled-out words: 'V-O-X-T-R-A-L' or 'with an x' \u2192 merge into the intended word\n- Self-corrections: 'no not X but Y', 'nee niet X maar Y', 'I mean Y', 'ik bedoel Y'\n- Meta-commentary: 'that's a Dutch word', 'with a capital letter', 'met een hoofdletter'\n\nWhen you encounter such instructions:\n1. Apply the instruction to the REST of the text\n2. Remove the instruction/meta-commentary itself from the output\n3. Keep all content text \u2014 NEVER remove normal sentences\n\nCRITICAL RULES:\n- Your output must be SHORTER than or equal to the input (after removing meta-instructions)\n- NEVER add your own text, commentary, explanations, or notes\n- NEVER add parenthesized text like '(text missing)' or '(no corrections needed)'\n- NEVER continue, elaborate, or expand on the content\n- NEVER invent or hallucinate text that wasn't in the input\n- If the input is short (even one word), just return it corrected\n- Your output must contain ONLY the corrected version of the input text, NOTHING else";
+var DEFAULT_CORRECT_PROMPT = "You are a precise text corrector for dictated text. The input language may vary (commonly Dutch, but follow whatever language the text is in).\n\nCORRECT ONLY:\n- Capitalization (sentence starts, proper nouns)\n- Clearly misspelled or garbled words (from speech recognition)\n- Missing or wrong punctuation\n\nDO NOT CHANGE:\n- Sentence structure or word order\n- Style or tone\n- Markdown formatting (# headings, - lists, - [ ] to-do items)\n- Special prefix markers at the start of lines (e.g. >>, >, > [!note], etc.)\n- Text inserted by custom commands \u2014 these are intentional formatting elements\n\nINLINE CORRECTION INSTRUCTIONS:\nThe text was dictated via speech recognition. The speaker sometimes gives inline instructions meant for you. Recognize these patterns:\n- Explicit markers: 'voor de correctie', 'voor de correctie achteraf', 'for the correction', 'correction note'\n- Spelled-out words: 'V-O-X-T-R-A-L' or 'with an x' \u2192 merge into the intended word\n- Self-corrections: 'no not X but Y', 'nee niet X maar Y', 'I mean Y', 'ik bedoel Y'\n- Meta-commentary: 'that's a Dutch word', 'with a capital letter', 'met een hoofdletter'\n\nWhen you encounter such instructions:\n1. Apply the instruction to the REST of the text\n2. Remove the instruction/meta-commentary itself from the output\n3. Keep all content text \u2014 NEVER remove normal sentences\n\nCRITICAL RULES:\n- Your output must be SHORTER than or equal to the input (after removing meta-instructions)\n- NEVER add your own text, commentary, explanations, or notes\n- NEVER add parenthesized text like '(text missing)' or '(no corrections needed)'\n- NEVER continue, elaborate, or expand on the content\n- NEVER invent or hallucinate text that wasn't in the input\n- If the input is short (even one word), just return it corrected\n- Your output must contain ONLY the corrected version of the input text, NOTHING else";
 
 // src/settings-migration.ts
 var CURRENT_VERSION = 1;
@@ -814,9 +814,23 @@ true\r
   }
   return ((_a = response.json) == null ? void 0 : _a.text) || "";
 }
+function buildCustomCommandGuard(settings) {
+  var _a;
+  const markers = [];
+  for (const cmd of (_a = settings.customCommands) != null ? _a : []) {
+    if (cmd.insertText) markers.push(cmd.insertText.trim());
+    if (cmd.slotPrefix) markers.push(cmd.slotPrefix.trim());
+    if (cmd.slotSuffix) markers.push(cmd.slotSuffix.trim());
+  }
+  const unique = [...new Set(markers)].filter(Boolean);
+  if (unique.length === 0) return "";
+  const escaped = unique.map((m) => `"${m}"`).join(", ");
+  return "\n\nCUSTOM COMMAND OUTPUT \u2014 DO NOT REMOVE:\nThe user has voice commands that insert specific text markers. These markers MUST be preserved exactly as-is: " + escaped + "\nNever strip, rewrite, or 'correct' these markers.";
+}
 async function correctText(text, settings) {
   var _a, _b, _c, _d;
-  const systemPrompt = settings.systemPrompt || DEFAULT_CORRECT_PROMPT;
+  const basePrompt = settings.systemPrompt || DEFAULT_CORRECT_PROMPT;
+  const systemPrompt = basePrompt + buildCustomCommandGuard(settings);
   const body = {
     model: settings.correctModel,
     messages: [
@@ -2138,8 +2152,8 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
       })
     );
     const isRealtime = !isBatch && !import_obsidian2.Platform.isMobile;
-    new import_obsidian2.Setting(containerEl).setName("Dual-delay mode").setDesc(
-      import_obsidian2.Platform.isMobile ? "Not available on mobile (requires realtime streaming)." : !isRealtime ? "Only available in realtime mode." : "Run two parallel streams: a fast one for immediate text and a slow one for higher accuracy and voice command detection. Overrides the streaming delay setting."
+    new import_obsidian2.Setting(containerEl).setName("Dual-delay mode (experimental)").setDesc(
+      import_obsidian2.Platform.isMobile ? "Not available on mobile (requires realtime streaming)." : !isRealtime ? "Only available in realtime mode." : "Experimental: run two parallel streams (fast preview + slow accuracy). Uses 2x API bandwidth and may produce unexpected results. Overrides the streaming delay setting."
     ).addToggle((toggle) => {
       toggle.setValue(this.plugin.settings.dualDelay).setDisabled(!isRealtime).onChange(async (value) => {
         this.plugin.settings.dualDelay = value;
@@ -2632,8 +2646,40 @@ function levenshtein(a, b) {
   }
   return dp[m][n];
 }
+function detectInsertionContext(editor) {
+  const cursor = editor.getCursor();
+  if (cursor.ch === 0) return "new-line";
+  const lineBefore = editor.getRange({ line: cursor.line, ch: 0 }, cursor);
+  const trimmed = lineBefore.trimEnd();
+  if (!trimmed) return "new-line";
+  const lastChar = trimmed[trimmed.length - 1];
+  if (lastChar === "." || lastChar === "!" || lastChar === "?") {
+    return "sentence-start";
+  }
+  if (/^(?:[-*]\s|[-*]\s\[.\]\s|>+\s|#{1,6}\s)/.test(lineBefore)) {
+    const afterMarker = lineBefore.replace(
+      /^(?:[-*]\s(?:\[.\]\s)?|>+\s|#{1,6}\s)/,
+      ""
+    );
+    if (!afterMarker.trim()) return "list-or-heading";
+  }
+  return "mid-sentence";
+}
+function lowercaseFirstLetter(text) {
+  const match = text.match(
+    /^(\s*)([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖÙÚÛÜÝŸ])/
+  );
+  if (match) {
+    return match[1] + match[2].toLowerCase() + text.slice(match[1].length + 1);
+  }
+  return text;
+}
+function stripTrailingPunctuation(text) {
+  return text.replace(/[.!?]+\s*$/, "");
+}
 function insertAtCursor(editor, text) {
   const cursor = editor.getCursor();
+  const context = detectInsertionContext(editor);
   if (cursor.ch === 0) {
     text = text.replace(/^ +/, "");
   }
@@ -2645,6 +2691,18 @@ function insertAtCursor(editor, text) {
     if (charBefore && /\S/.test(charBefore)) {
       text = " " + text;
     }
+  }
+  switch (context) {
+    case "mid-sentence":
+      text = lowercaseFirstLetter(text);
+      text = stripTrailingPunctuation(text);
+      break;
+    case "list-or-heading":
+      text = stripTrailingPunctuation(text);
+      break;
+    case "sentence-start":
+    case "new-line":
+      break;
   }
   editor.replaceRange(text, cursor);
   const lines = text.split("\n");
@@ -3842,7 +3900,7 @@ var RealtimeSession = class {
 
 // src/dual-delay-session.ts
 var import_obsidian6 = require("obsidian");
-var DualDelaySession = class {
+var _DualDelaySession = class _DualDelaySession {
   constructor(settings, tracker, callbacks) {
     this.settings = settings;
     this.tracker = tracker;
@@ -3862,6 +3920,10 @@ var DualDelaySession = class {
     this.displayLen = 0;
     this.slowCommitted = 0;
     this.commandJustRan = false;
+    // Remainder command debounce — prevents premature matching when
+    // cumulative deltas haven't finished (e.g. "nieuw todo" matching
+    // before the full "nieuw todo item" arrives)
+    this.remainderTimer = null;
     // Reconnection
     this.consecutiveFailures = 0;
     this.maxConsecutiveFailures = 5;
@@ -3885,6 +3947,10 @@ var DualDelaySession = class {
     this.slowPrevRaw = "";
     this.commandJustRan = false;
     this.consecutiveFailures = 0;
+    if (this.remainderTimer) {
+      clearTimeout(this.remainderTimer);
+      this.remainderTimer = null;
+    }
     await this.connectWebSockets(editor);
     this.setState("streaming" /* Streaming */);
   }
@@ -3905,9 +3971,14 @@ var DualDelaySession = class {
     this.setState("finalizing" /* Finalizing */);
     (_a = this.fastTranscriber) == null ? void 0 : _a.endAudio();
     (_b = this.slowTranscriber) == null ? void 0 : _b.endAudio();
+    if (this.remainderTimer) {
+      clearTimeout(this.remainderTimer);
+      this.remainderTimer = null;
+    }
     await new Promise((resolve) => setTimeout(resolve, 1e3));
     const editor = this.callbacks.getEditor();
     if (editor) {
+      this.executeRemainderCommand(editor);
       this.processSlowCommands(editor);
       const finalText = this.slowText || this.fastText;
       if (finalText) {
@@ -4069,6 +4140,11 @@ var DualDelaySession = class {
     await this.fastTranscriber.connect();
   }
   async reconnectSlowStream(editor) {
+    if (this.remainderTimer) {
+      clearTimeout(this.remainderTimer);
+      this.remainderTimer = null;
+    }
+    this.executeRemainderCommand(editor);
     if (this.slowText.trim()) {
       const from = editor.offsetToPos(this.insertOffset);
       const to = editor.offsetToPos(
@@ -4183,6 +4259,8 @@ var DualDelaySession = class {
       ) : "";
       if (from.ch === 0 || charBefore === " " || charBefore === "	") {
         displayText = displayText.replace(/^\s+/, "");
+        this.slowText = this.slowText.replace(/^\s+/, "");
+        this.fastText = this.fastText.replace(/^\s+/, "");
       }
     }
     editor.replaceRange(displayText, from, to);
@@ -4225,33 +4303,18 @@ var DualDelaySession = class {
     if (!segments && remainder.trim()) {
       const cmdMatch = matchCommand(remainder.trim());
       if (cmdMatch && !cmdMatch.textBefore) {
-        const from2 = editor.offsetToPos(this.insertOffset);
-        const to2 = editor.offsetToPos(
-          this.insertOffset + this.displayLen
-        );
-        editor.replaceRange("", from2, to2);
-        editor.setCursor(from2);
-        this.displayLen = 0;
-        cmdMatch.command.action(editor);
-        if (cmdMatch.command.id === "stopRecording") {
-          setTimeout(
-            () => this.callbacks.stopRecording(),
-            0
-          );
-        }
-        if (isSlotActive()) {
-          this.callbacks.updateStatusBar("slot");
-        }
-        this.commandJustRan = true;
-        this.slowCommitted += this.slowText.length;
-        this.slowText = "";
-        this.fastText = "";
-        this.insertOffset = editor.posToOffset(
-          editor.getCursor()
-        );
+        if (this.remainderTimer) clearTimeout(this.remainderTimer);
+        this.remainderTimer = setTimeout(() => {
+          this.remainderTimer = null;
+          this.executeRemainderCommand(editor);
+        }, _DualDelaySession.REMAINDER_DEBOUNCE_MS);
         return;
       }
       return;
+    }
+    if (this.remainderTimer) {
+      clearTimeout(this.remainderTimer);
+      this.remainderTimer = null;
     }
     if (!segments) return;
     const matchedLength = segmentText.length;
@@ -4302,7 +4365,48 @@ var DualDelaySession = class {
       this.renderText(editor);
     }
   }
+  /**
+   * Execute a standalone voice command from the remainder text.
+   * Called after the debounce timer fires (no new deltas arrived).
+   * Re-checks the match in case text changed before the timer fired.
+   */
+  executeRemainderCommand(editor) {
+    if (!this.slowText) return;
+    const segments = this.slowText.match(/[^.!?]+[.!?]+\s*/g);
+    if (segments) {
+      this.processSlowCommands(editor);
+      return;
+    }
+    const cmdMatch = matchCommand(this.slowText.trim());
+    if (!cmdMatch || cmdMatch.textBefore) return;
+    const from = editor.offsetToPos(this.insertOffset);
+    const to = editor.offsetToPos(
+      this.insertOffset + this.displayLen
+    );
+    editor.replaceRange("", from, to);
+    editor.setCursor(from);
+    this.displayLen = 0;
+    cmdMatch.command.action(editor);
+    if (cmdMatch.command.id === "stopRecording") {
+      setTimeout(
+        () => this.callbacks.stopRecording(),
+        0
+      );
+    }
+    if (isSlotActive()) {
+      this.callbacks.updateStatusBar("slot");
+    }
+    this.commandJustRan = true;
+    this.slowCommitted += this.slowText.length;
+    this.slowText = "";
+    this.fastText = "";
+    this.insertOffset = editor.posToOffset(
+      editor.getCursor()
+    );
+  }
 };
+_DualDelaySession.REMAINDER_DEBOUNCE_MS = 400;
+var DualDelaySession = _DualDelaySession;
 
 // src/main.ts
 var VoxtralPlugin = class extends import_obsidian7.Plugin {
