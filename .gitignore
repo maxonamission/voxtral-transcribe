@@ -13,6 +13,9 @@ __pycache__/
 build/
 dist/
 
+# Dependencies
+node_modules/
+
 # IDE / tools
 .claude/
 
