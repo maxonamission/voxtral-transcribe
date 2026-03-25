@@ -5,7 +5,7 @@ let audioContext = null;
 let mediaStream = null;
 let processorNode = null;
 let useRealtime = true;
-let useDiarize = false;
+let useDiarize = JSON.parse(localStorage.getItem("voxtral-diarize") || "false");
 let useDualDelay = JSON.parse(localStorage.getItem("voxtral-dual-delay") || "false");
 let activeInsert = null; // span where incoming text is inserted
 let isMidSentenceInsert = false; // true when inserting inside a sentence (not after . ! ?)
@@ -178,9 +178,11 @@ modeToggle.addEventListener("change", () => {
     updateModeUI();
 });
 
+diarizeToggle.checked = useDiarize;
 diarizeToggle.addEventListener("change", () => {
     if (isRecording) { diarizeToggle.checked = useDiarize; return; }
     useDiarize = diarizeToggle.checked;
+    localStorage.setItem("voxtral-diarize", JSON.stringify(useDiarize));
 });
 
 // ── Active insert point management ──
@@ -1123,10 +1125,10 @@ function openDB() {
     });
 }
 
-async function saveToQueue(blob) {
+async function saveToQueue(blob, diarize = false) {
     const db = await openDB();
     const tx = db.transaction("recordings", "readwrite");
-    tx.objectStore("recordings").add(blob);
+    tx.objectStore("recordings").add({ blob, diarize });
     await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
     updateQueueBadge();
 }
@@ -1163,22 +1165,32 @@ async function processQueue() {
     let processed = 0;
     for (const key of allKeys) {
         const getTx = db.transaction("recordings", "readonly");
-        const blob = await new Promise((res) => {
+        const record = await new Promise((res) => {
             const req = getTx.objectStore("recordings").get(key);
             req.onsuccess = () => res(req.result);
             req.onerror = () => res(null);
         });
+        if (!record) continue;
+        // Support both old format (bare blob) and new format ({blob, diarize})
+        const blob = record instanceof Blob ? record : record.blob;
+        const diarize = record instanceof Blob ? false : !!record.diarize;
         if (!blob) continue;
         try {
             const formData = new FormData();
             formData.append("file", blob, "recording.webm");
+            if (diarize) formData.append("diarize", "true");
             const resp = await fetch("/api/transcribe", { method: "POST", body: formData });
             if (!resp.ok) {
                 console.warn(`Queue item ${key}: server returned ${resp.status}, skipping for now`);
                 continue;
             }
             const data = await resp.json();
-            if (data.text) appendFinalText(data.text + " ");
+            if (data.segments && data.segments.length > 0) {
+                clearPlaceholder();
+                appendDiarizedText(data.segments);
+            } else if (data.text) {
+                appendFinalText(data.text + " ");
+            }
             // Delete successfully processed item
             const delTx = db.transaction("recordings", "readwrite");
             delTx.objectStore("recordings").delete(key);
@@ -1799,10 +1811,10 @@ async function startOffline() {
                         checkForCommand();
                     }
                 } else {
-                    await saveToQueue(blob);
+                    await saveToQueue(blob, useDiarize);
                 }
             } catch {
-                await saveToQueue(blob);
+                await saveToQueue(blob, useDiarize);
             }
             updateModeUI();
         }
