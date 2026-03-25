@@ -3,7 +3,6 @@ import type { Editor } from "obsidian";
 import {
 	detectInsertionContext,
 	lowercaseFirstLetter,
-	type InsertionContext,
 } from "../voice-commands";
 
 vi.mock("obsidian", () => ({
