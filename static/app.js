@@ -26,6 +26,10 @@ let dualSlowPrevRaw = ""; // raw cumulative text from slow API (for delta detect
 // ── Realtime state ──
 let realtimePrevRaw = ""; // raw cumulative text from API (for delta detection)
 
+// ── Backend settings ──
+let activeBackend = localStorage.getItem("voxtral-backend") || "mistral-api";
+let localServerUrl = localStorage.getItem("voxtral-local-url") || "http://localhost:8000";
+
 // ── Correction settings ──
 let autoCorrect = JSON.parse(localStorage.getItem("voxtral-autocorrect") || "false");
 let noiseSuppression = JSON.parse(localStorage.getItem("voxtral-noise-suppression") || "false");
@@ -2033,8 +2037,77 @@ const selectMicrophone = document.getElementById("select-microphone");
 const selectRealtimeModel = document.getElementById("select-realtime-model");
 const selectBatchModel = document.getElementById("select-batch-model");
 const selectCorrectModel = document.getElementById("select-correct-model");
+const selectBackend = document.getElementById("select-backend");
+const localVllmSettings = document.getElementById("local-vllm-settings");
+const inputLocalUrl = document.getElementById("input-local-url");
+const btnTestLocal = document.getElementById("btn-test-local");
+const localStatus = document.getElementById("local-status");
+const backendBadge = document.getElementById("backend-badge");
+const inputMaxModelLen = document.getElementById("input-max-model-len");
+const vllmStartCmd = document.getElementById("vllm-start-cmd");
+const btnCopyCmd = document.getElementById("btn-copy-cmd");
 let selectedMicId = localStorage.getItem("voxtral-mic") || "";
 let cachedModels = null;
+
+// ── Backend badge ──
+function updateBackendBadge() {
+    if (activeBackend === "local-vllm") {
+        backendBadge.textContent = "lokaal";
+        backendBadge.classList.remove("hidden", "badge-cloud");
+        backendBadge.classList.add("badge-local");
+    } else {
+        backendBadge.textContent = "cloud";
+        backendBadge.classList.remove("hidden", "badge-local");
+        backendBadge.classList.add("badge-cloud");
+    }
+}
+updateBackendBadge();
+
+// Show/hide local settings based on backend selection
+selectBackend.addEventListener("change", () => {
+    localVllmSettings.classList.toggle("hidden", selectBackend.value !== "local-vllm");
+});
+
+// Test local server connection
+btnTestLocal.addEventListener("click", async () => {
+    const origText = localStatus.textContent;
+    localStatus.textContent = "Verbinding testen...";
+    localStatus.style.color = "";
+    try {
+        const resp = await fetch("/api/local-health");
+        const data = await resp.json();
+        if (data.status === "ok") {
+            localStatus.textContent = `Verbonden met ${data.url}`;
+            localStatus.style.color = "#4caf50";
+        } else {
+            localStatus.textContent = `Niet bereikbaar: ${data.error || "onbekende fout"}`;
+            localStatus.style.color = "#f44336";
+        }
+    } catch (err) {
+        localStatus.textContent = "Verbindingsfout: " + err.message;
+        localStatus.style.color = "#f44336";
+    }
+    // Reset after 5 seconds
+    setTimeout(() => {
+        localStatus.textContent = origText;
+        localStatus.style.color = "";
+    }, 5000);
+});
+
+// Update vLLM start command when max-model-len changes
+function updateVllmCmd() {
+    const len = inputMaxModelLen.value;
+    vllmStartCmd.textContent = `vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 --enforce-eager --max-model-len ${len}`;
+}
+inputMaxModelLen.addEventListener("change", updateVllmCmd);
+
+// Copy vLLM start command
+btnCopyCmd.addEventListener("click", () => {
+    navigator.clipboard.writeText(vllmStartCmd.textContent).then(() => {
+        btnCopyCmd.textContent = "\u2713";
+        setTimeout(() => { btnCopyCmd.innerHTML = "&#128203;"; }, 1500);
+    });
+});
 
 async function loadMicrophones() {
     try {
@@ -2131,8 +2204,22 @@ function openSettings() {
         if (data.language) {
             selectLanguage.value = data.language;
         }
+        if (data.backend) {
+            selectBackend.value = data.backend;
+            activeBackend = data.backend;
+            localVllmSettings.classList.toggle("hidden", data.backend !== "local-vllm");
+            updateBackendBadge();
+        }
+        if (data.local_server_url) {
+            inputLocalUrl.value = data.local_server_url;
+            localServerUrl = data.local_server_url;
+        }
         loadModels(data);
     }).catch(() => {});
+    // Load backend settings
+    selectBackend.value = activeBackend;
+    inputLocalUrl.value = localServerUrl;
+    localVllmSettings.classList.toggle("hidden", activeBackend !== "local-vllm");
     // Load correction settings
     toggleDualDelay.checked = useDualDelay;
     toggleAutocorrect.checked = autoCorrect;
@@ -2161,6 +2248,11 @@ document.getElementById("btn-toggle-key").addEventListener("click", () => {
 // Save key
 document.getElementById("btn-save-key").addEventListener("click", async () => {
     // Always save all settings
+    activeBackend = selectBackend.value;
+    localStorage.setItem("voxtral-backend", activeBackend);
+    localServerUrl = inputLocalUrl.value.trim() || "http://localhost:8000";
+    localStorage.setItem("voxtral-local-url", localServerUrl);
+    updateBackendBadge();
     useDualDelay = toggleDualDelay.checked;
     localStorage.setItem("voxtral-dual-delay", JSON.stringify(useDualDelay));
     updateModeUI();
@@ -2182,13 +2274,15 @@ document.getElementById("btn-save-key").addEventListener("click", async () => {
         updateBmcLink();
     }
 
-    // Build the server payload: language + models always, API key only if entered
+    // Build the server payload: language + models + backend always, API key only if entered
     const key = inputApiKey.value.trim();
     const payload = {
         language: activeLang,
         realtime_model: selectRealtimeModel.value,
         batch_model: selectBatchModel.value,
         correct_model: selectCorrectModel.value,
+        backend: activeBackend,
+        local_server_url: localServerUrl,
     };
     if (key) payload.api_key = key;
 

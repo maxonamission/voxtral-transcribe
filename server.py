@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -82,6 +83,10 @@ CORRECT_MODEL_DEFAULT = "mistral-small-latest"
 BATCH_LANGUAGE_DEFAULT = "nl"
 AUDIO_FORMAT = AudioFormat(encoding="pcm_s16le", sample_rate=16000)
 
+# Local vLLM backend defaults
+LOCAL_BACKEND_DEFAULT = "mistral-api"  # "mistral-api" or "local-vllm"
+LOCAL_SERVER_URL_DEFAULT = "http://localhost:8000"
+
 
 # ── API key management ──
 def load_config() -> dict:
@@ -135,6 +140,14 @@ def get_correct_model() -> str:
     return _cfg_or_env("correct_model", "VOXTRAL_CORRECT_MODEL", CORRECT_MODEL_DEFAULT)
 
 
+def get_backend() -> str:
+    return _cfg_or_env("backend", "VOXTRAL_BACKEND", LOCAL_BACKEND_DEFAULT)
+
+
+def get_local_server_url() -> str:
+    return _cfg_or_env("local_server_url", "VOXTRAL_LOCAL_SERVER_URL", LOCAL_SERVER_URL_DEFAULT)
+
+
 def get_client() -> Mistral:
     """Create a fresh Mistral client with the current API key."""
     return Mistral(api_key=get_api_key())
@@ -164,6 +177,8 @@ async def get_settings():
         "realtime_model": get_realtime_model(),
         "batch_model": get_batch_model(),
         "correct_model": get_correct_model(),
+        "backend": get_backend(),
+        "local_server_url": get_local_server_url(),
     }
 
 
@@ -210,6 +225,16 @@ async def save_settings(body: dict):
         if val:
             cfg[cfg_key] = val
 
+    # Save backend selection if provided
+    backend = body.get("backend", "").strip()
+    if backend in ("mistral-api", "local-vllm"):
+        cfg["backend"] = backend
+
+    # Save local server URL if provided
+    local_url = body.get("local_server_url", "").strip()
+    if local_url:
+        cfg["local_server_url"] = local_url
+
     # Save API key if provided (with validation)
     api_key = body.get("api_key", "").strip()
     if api_key:
@@ -221,7 +246,8 @@ async def save_settings(body: dict):
         cfg["api_key"] = api_key
 
     has_model_change = any(body.get(k, "").strip() for k in ("realtime_model", "batch_model", "correct_model"))
-    if not api_key and not language and not has_model_change:
+    has_backend_change = backend or local_url
+    if not api_key and not language and not has_model_change and not has_backend_change:
         return JSONResponse({"error": "Geen instellingen opgegeven"}, status_code=400)
 
     save_config(cfg)
@@ -328,6 +354,167 @@ async def transcribe_batch(file: UploadFile, diarize: bool = Form(False)):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+@app.get("/api/local-health")
+async def local_health():
+    """Check if the local vLLM server is reachable."""
+    import urllib.request
+
+    url = get_local_server_url()
+    try:
+        req = urllib.request.Request(f"{url}/health", method="GET")
+        req.add_header("Accept", "application/json")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return {"status": "ok", "url": url, "server_status": resp.status}
+    except Exception as e:
+        return JSONResponse(
+            {"status": "unreachable", "url": url, "error": str(e)},
+            status_code=200,  # Not a server error — informational
+        )
+
+
+# ── vLLM WebSocket proxy ──
+
+async def _vllm_realtime_proxy(
+    websocket: WebSocket,
+    delay_ms: int,
+    label: str | None = None,
+):
+    """Proxy browser audio to a local vLLM /v1/realtime WebSocket endpoint.
+
+    Translates between:
+    - Browser → server: raw PCM bytes
+    - Server → vLLM:    JSON {"type": "input_audio.append", "audio": "<base64>"}
+    - vLLM → server:    JSON {"type": "transcription.text.delta", "text": "..."}
+    - Server → browser: JSON {"type": "delta", "text": "...", "stream": "<label>"}
+    """
+    import websockets
+
+    base_url = get_local_server_url()
+    # Convert http(s) to ws(s)
+    ws_url = base_url.replace("https://", "wss://").replace("http://", "ws://")
+    vllm_url = f"{ws_url}/v1/realtime"
+
+    logger.info(f"Connecting to local vLLM: {vllm_url} (delay={delay_ms}ms, stream={label or 'single'})")
+
+    vllm_ws = None
+    ws_closed = False
+
+    def _build_msg(msg_type: str, text: str = "") -> dict:
+        """Build a message dict, adding stream label if present."""
+        d: dict = {"type": msg_type}
+        if text:
+            d["text"] = text
+        if label:
+            d["stream"] = label
+        return d
+
+    try:
+        vllm_ws = await websockets.connect(vllm_url, max_size=10 * 1024 * 1024)
+
+        # Send session config
+        session_update = {
+            "type": "session.update",
+            "session": {
+                "audio_format": {
+                    "encoding": "pcm_s16le",
+                    "sample_rate": 16000,
+                },
+                "target_streaming_delay_ms": delay_ms,
+            },
+        }
+        await vllm_ws.send(json.dumps(session_update))
+
+        # Notify browser that session is ready
+        await websocket.send_json(_build_msg("session_created"))
+
+        async def forward_audio():
+            """Receive PCM from browser, base64-encode, forward to vLLM."""
+            nonlocal ws_closed
+            try:
+                while True:
+                    data = await websocket.receive_bytes()
+                    audio_b64 = base64.b64encode(data).decode("ascii")
+                    msg = json.dumps({
+                        "type": "input_audio.append",
+                        "audio": audio_b64,
+                    })
+                    await vllm_ws.send(msg)
+            except WebSocketDisconnect:
+                ws_closed = True
+                # Signal end of audio to vLLM
+                try:
+                    await vllm_ws.send(json.dumps({"type": "input_audio.end"}))
+                except Exception:
+                    pass
+            except Exception:
+                ws_closed = True
+
+        async def forward_transcription():
+            """Receive transcription events from vLLM, forward to browser."""
+            nonlocal ws_closed
+            try:
+                async for raw_msg in vllm_ws:
+                    if ws_closed:
+                        break
+                    msg = json.loads(raw_msg)
+                    msg_type = msg.get("type", "")
+
+                    if msg_type == "transcription.text.delta":
+                        await websocket.send_json(
+                            _build_msg("delta", msg.get("text", ""))
+                        )
+                    elif msg_type == "transcription.done":
+                        await websocket.send_json(
+                            _build_msg("done", msg.get("text", ""))
+                        )
+                    elif msg_type == "error":
+                        err_msg = msg.get("error", {})
+                        if isinstance(err_msg, dict):
+                            err_msg = err_msg.get("message", str(err_msg))
+                        logger.error(f"vLLM error: {err_msg}")
+                        await websocket.send_json(
+                            _build_msg("error", str(err_msg))
+                        )
+                    elif msg_type == "session.created":
+                        # vLLM may also send session.created — already handled above
+                        pass
+                    elif msg_type == "session.updated":
+                        logger.debug(f"vLLM session updated: {msg}")
+                    else:
+                        logger.debug(f"vLLM unknown message: {msg_type}")
+            except websockets.ConnectionClosed:
+                if not ws_closed:
+                    logger.info("vLLM WebSocket closed")
+            except Exception as e:
+                if not ws_closed:
+                    logger.error(f"vLLM forward error: {e}")
+                    try:
+                        await websocket.send_json(
+                            _build_msg("error", str(e))
+                        )
+                    except Exception:
+                        pass
+
+        # Run both directions concurrently
+        await asyncio.gather(forward_audio(), forward_transcription())
+
+    except Exception as e:
+        logger.error(f"vLLM proxy failed:\n{traceback.format_exc()}")
+        if not ws_closed:
+            try:
+                await websocket.send_json(
+                    _build_msg("error", f"Lokale server niet bereikbaar: {e}")
+                )
+            except Exception:
+                pass
+    finally:
+        if vllm_ws:
+            try:
+                await vllm_ws.close()
+            except Exception:
+                pass
+
+
 @app.websocket("/ws/transcribe")
 async def ws_transcribe(websocket: WebSocket):
     """Realtime transcription via WebSocket. Browser sends PCM s16le 16kHz mono chunks."""
@@ -345,6 +532,15 @@ async def ws_transcribe(websocket: WebSocket):
 
     # Read delay from query parameter (default 1000ms)
     delay_ms = int(websocket.query_params.get("delay", "1000"))
+
+    # Route to local vLLM backend if configured
+    if get_backend() == "local-vllm":
+        try:
+            await _vllm_realtime_proxy(websocket, delay_ms)
+        finally:
+            active_ws_count -= 1
+            logger.info(f"WebSocket closed ({active_ws_count}/{MAX_WS_CONNECTIONS} active)")
+        return
 
     audio_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
     ws_closed = False  # Guard: prevent sending after client disconnects
@@ -428,6 +624,19 @@ async def ws_transcribe_dual(websocket: WebSocket):
 
     fast_delay = int(websocket.query_params.get("fast_delay", "240"))
     slow_delay = int(websocket.query_params.get("slow_delay", "2400"))
+
+    # Route to local vLLM backend if configured
+    if get_backend() == "local-vllm":
+        try:
+            # For dual-delay over vLLM we need to duplicate audio to two proxy sessions.
+            # This is complex — for now, fall back to single-stream with the fast delay
+            # and log a warning. Full dual-delay vLLM support can be added later.
+            logger.warning("Dual-delay not yet supported with local vLLM — using single stream with fast delay")
+            await _vllm_realtime_proxy(websocket, fast_delay)
+        finally:
+            active_ws_count -= 1
+            logger.info(f"Dual-delay WebSocket closed ({active_ws_count}/{MAX_WS_CONNECTIONS} active)")
+        return
 
     # Two queues: audio is duplicated to both streams
     fast_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
