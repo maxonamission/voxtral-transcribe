@@ -319,6 +319,21 @@ footer {
     color: #999;
 }
 
+.queue-clear {
+    background: none;
+    border: none;
+    color: #ef4444;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0 0.3em;
+    margin-left: 0.3em;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+.queue-clear:hover {
+    opacity: 1;
+}
+
 .footer-links {
     font-size: 0.9rem;
     color: #555;
