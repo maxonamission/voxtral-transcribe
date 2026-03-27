@@ -1128,9 +1128,18 @@ function openDB() {
 async function saveToQueue(blob, diarize = false) {
     const db = await openDB();
     const tx = db.transaction("recordings", "readwrite");
-    tx.objectStore("recordings").add({ blob, diarize });
+    tx.objectStore("recordings").add({ blob, diarize, retries: 0 });
     await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
     updateQueueBadge();
+}
+
+async function clearQueue() {
+    const db = await openDB();
+    const tx = db.transaction("recordings", "readwrite");
+    tx.objectStore("recordings").clear();
+    await new Promise((res) => { tx.oncomplete = res; });
+    updateQueueBadge();
+    showToast("Wachtrij gewist");
 }
 
 async function getQueueCount() {
@@ -1162,6 +1171,7 @@ async function processQueue() {
         req.onerror = () => res([]);
     });
 
+    const MAX_RETRIES = 3;
     let processed = 0;
     for (const key of allKeys) {
         const getTx = db.transaction("recordings", "readonly");
@@ -1171,9 +1181,10 @@ async function processQueue() {
             req.onerror = () => res(null);
         });
         if (!record) continue;
-        // Support both old format (bare blob) and new format ({blob, diarize})
+        // Support old format (bare blob), {blob, diarize}, and {blob, diarize, retries}
         const blob = record instanceof Blob ? record : record.blob;
         const diarize = record instanceof Blob ? false : !!record.diarize;
+        const retries = record instanceof Blob ? 0 : (record.retries || 0);
         if (!blob) continue;
         try {
             const formData = new FormData();
@@ -1181,7 +1192,20 @@ async function processQueue() {
             if (diarize) formData.append("diarize", "true");
             const resp = await fetch("/api/transcribe", { method: "POST", body: formData });
             if (!resp.ok) {
-                console.warn(`Queue item ${key}: server returned ${resp.status}, skipping for now`);
+                const newRetries = retries + 1;
+                if (newRetries >= MAX_RETRIES) {
+                    // Max retries reached — remove permanently
+                    const delTx = db.transaction("recordings", "readwrite");
+                    delTx.objectStore("recordings").delete(key);
+                    await new Promise((res) => { delTx.oncomplete = res; });
+                    showToast(`Opname verwijderd na ${MAX_RETRIES} mislukte pogingen`);
+                } else {
+                    // Increment retry counter
+                    const updTx = db.transaction("recordings", "readwrite");
+                    updTx.objectStore("recordings").put({ blob, diarize, retries: newRetries }, key);
+                    await new Promise((res) => { updTx.oncomplete = res; });
+                    showToast(`Wachtrij-item mislukt (poging ${newRetries}/${MAX_RETRIES})`);
+                }
                 continue;
             }
             const data = await resp.json();
@@ -1198,7 +1222,8 @@ async function processQueue() {
             processed++;
         } catch (err) {
             console.warn("Queue processing failed (offline?):", err.message);
-            break; // stop on network errors, retry later
+            if (!navigator.onLine) break; // truly offline — stop and retry later
+            continue; // other errors — try remaining items
         }
     }
     isProcessingQueue = false;
@@ -2017,11 +2042,20 @@ setInterval(async () => {
     if (count > 0 && navigator.onLine) processQueue();
 }, 30000);
 
-// Click on queue badge to manually retry
+// Click on queue text to manually retry
 queueInfo.style.cursor = "pointer";
 queueInfo.title = "Klik om wachtrij opnieuw te verwerken";
-queueInfo.addEventListener("click", () => {
+queueInfo.addEventListener("click", (e) => {
+    if (e.target.id === "queue-clear") return; // handled separately
     if (!isProcessingQueue) processQueue();
+});
+
+// Clear queue button
+document.getElementById("queue-clear").addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (confirm("Wachtrij wissen? Alle opnames in de wachtrij worden verwijderd.")) {
+        clearQueue();
+    }
 });
 
 // ── Settings modal ──
