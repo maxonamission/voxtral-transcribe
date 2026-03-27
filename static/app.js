@@ -9,6 +9,7 @@ let useDiarize = JSON.parse(localStorage.getItem("voxtral-diarize") || "false");
 let useDualDelay = JSON.parse(localStorage.getItem("voxtral-dual-delay") || "false");
 let activeInsert = null; // span where incoming text is inserted
 let isMidSentenceInsert = false; // true when inserting inside a sentence (not after . ! ?)
+let isListOrHeadingInsert = false; // true when inserting after a list/heading marker
 let analyserNode = null;
 let micLevelAnimId = null;
 let smoothLevel = 0; // smoothed mic level (0–1)
@@ -269,8 +270,8 @@ function capitalizeAfterSentenceEnd(node) {
 function finalizeInsertPoint() {
     if (activeInsert) {
         if (activeInsert.textContent) {
-            // Mid-sentence: strip trailing punctuation added by the API
-            if (isMidSentenceInsert) {
+            // Mid-sentence and list/heading: strip trailing punctuation added by the API
+            if (isMidSentenceInsert || isListOrHeadingInsert) {
                 activeInsert.textContent = activeInsert.textContent.replace(/[.!?]+\s*$/, "");
             }
             // Auto-space: add trailing space if needed before next text
@@ -278,13 +279,14 @@ function finalizeInsertPoint() {
                 activeInsert.textContent += " ";
             }
             // Auto-capitalize: uppercase first letter of next text after . ! ?
-            if (!isMidSentenceInsert) {
+            if (!isMidSentenceInsert && !isListOrHeadingInsert) {
                 capitalizeAfterSentenceEnd(activeInsert);
             }
         }
         activeInsert.classList.remove("partial", "replacing");
         activeInsert = null;
         isMidSentenceInsert = false;
+        isListOrHeadingInsert = false;
     }
     replaceHint.classList.add("hidden");
 }
@@ -834,6 +836,7 @@ function processCompletedSentences() {
     }
 
     isMidSentenceInsert = false; // after a sentence boundary, next text starts fresh
+    isListOrHeadingInsert = false;
 
     if (stopRequested) {
         // Clear activeInsert so stopRecording doesn't leave command text behind
@@ -880,6 +883,7 @@ function executeCommand(cmd) {
     }
 
     isMidSentenceInsert = false;
+    isListOrHeadingInsert = false;
     replaceHint.classList.add("hidden");
     showToast(cmd.toast);
 }
@@ -979,14 +983,38 @@ function deleteLastBlock(type) {
     }
 }
 
-function isAfterSentenceEnd(node) {
+/**
+ * Detect the insertion context based on preceding text.
+ * Returns: "sentence-start", "list-or-heading", or "mid-sentence".
+ */
+function detectInsertContext(node) {
     const before = getTextBefore(node);
-    if (!before) return true; // start of transcript = treat as sentence start
+    if (!before) return "sentence-start"; // start of transcript
     const trimmed = before.trimEnd();
-    if (!trimmed) return true;
+    if (!trimmed) return "sentence-start";
+
+    // Check if preceding text ends with a list/heading marker line.
+    // Voice commands insert "\n\n# ", "\n- ", "\n- [ ] ", "\n1. " etc.
+    // After these markers we want uppercase but no trailing period.
+    const lastLine = trimmed.split("\n").pop() || "";
+    if (/^(?:[-*]\s*(?:\[.\]\s*)?|#{1,6}\s|>+\s|\d+[.)]\s)$/.test(lastLine.trim() + " ")) {
+        return "list-or-heading";
+    }
+
     const last = trimmed[trimmed.length - 1];
-    // Also treat markdown markers (#, -, \n) as sentence starts (after voice command inserts)
-    return last === "." || last === "!" || last === "?" || last === "#" || last === "\n" || last === "-";
+    if (last === "." || last === "!" || last === "?" || last === "\n") {
+        return "sentence-start";
+    }
+    // # and - at end of line means a voice command just inserted a marker
+    if (last === "#" || last === "-") {
+        return "list-or-heading";
+    }
+    return "mid-sentence";
+}
+
+// Backwards-compatible wrapper used in existing code
+function isAfterSentenceEnd(node) {
+    return detectInsertContext(node) !== "mid-sentence";
 }
 
 function lowercaseFirstLetter(text) {
@@ -1019,9 +1047,11 @@ function feedText(text) {
         }
     }
 
-    // On first real text: determine if this is a mid-sentence or new-sentence insertion
+    // On first real text: determine insertion context
     if (target.textContent.replace(/ /g, "") === "") {
-        isMidSentenceInsert = !isAfterSentenceEnd(target);
+        const context = detectInsertContext(target);
+        isMidSentenceInsert = context === "mid-sentence";
+        isListOrHeadingInsert = context === "list-or-heading";
         if (isMidSentenceInsert) {
             text = lowercaseFirstLetter(text);
         }
@@ -1751,6 +1781,7 @@ function processDualSlowCommands() {
     }
 
     isMidSentenceInsert = false;
+    isListOrHeadingInsert = false;
 
     // Trim accumulators: remove the processed portion, keep remainder
     dualSlowText = remainder;
