@@ -2109,6 +2109,186 @@ btnCopyCmd.addEventListener("click", () => {
     });
 });
 
+// Inline copy buttons in setup wizard
+document.querySelectorAll(".btn-copy-inline").forEach(btn => {
+    btn.addEventListener("click", () => {
+        const cmd = btn.getAttribute("data-cmd");
+        navigator.clipboard.writeText(cmd).then(() => {
+            btn.textContent = "\u2713";
+            setTimeout(() => { btn.innerHTML = "&#128203;"; }, 1500);
+        });
+    });
+});
+
+// ── Setup wizard & server controls ──
+const setupWizard = document.getElementById("local-setup-wizard");
+const serverControls = document.getElementById("local-server-controls");
+const btnStartVllm = document.getElementById("btn-start-vllm");
+const btnStopVllm = document.getElementById("btn-stop-vllm");
+const vllmServerStatus = document.getElementById("vllm-server-status");
+const btnRecheckSetup = document.getElementById("btn-recheck-setup");
+let vllmHealthPollId = null;
+
+async function checkLocalSetup() {
+    try {
+        const resp = await fetch("/api/local-setup");
+        const data = await resp.json();
+
+        if (data.platform === "linux" || (data.wsl === "installed" && data.vllm === "installed")) {
+            // Everything ready — show server controls, hide wizard
+            setupWizard.classList.add("hidden");
+            serverControls.classList.remove("hidden");
+        } else {
+            // Show setup wizard with appropriate steps
+            setupWizard.classList.remove("hidden");
+            serverControls.classList.remove("hidden"); // Still show manual option
+
+            const iconWsl = document.getElementById("setup-icon-wsl");
+            const iconVllm = document.getElementById("setup-icon-vllm");
+            const iconGpu = document.getElementById("setup-icon-gpu");
+
+            if (data.wsl === "installed") {
+                iconWsl.textContent = "\u2713";
+                iconWsl.classList.add("done");
+            } else {
+                iconWsl.textContent = "1";
+                iconWsl.classList.remove("done");
+            }
+
+            if (data.vllm === "installed") {
+                iconVllm.textContent = "\u2713";
+                iconVllm.classList.add("done");
+                iconGpu.textContent = "\u2713";
+                iconGpu.classList.add("done");
+            } else if (data.venv) {
+                iconVllm.textContent = "2";
+                iconVllm.classList.remove("done");
+            }
+        }
+        return data;
+    } catch {
+        // Server may not support local-setup (e.g. running on Linux)
+        setupWizard.classList.add("hidden");
+        serverControls.classList.remove("hidden");
+        return null;
+    }
+}
+
+if (btnRecheckSetup) {
+    btnRecheckSetup.addEventListener("click", async () => {
+        btnRecheckSetup.textContent = "Controleren...";
+        await checkLocalSetup();
+        btnRecheckSetup.textContent = "Opnieuw controleren";
+    });
+}
+
+// Start vLLM server
+btnStartVllm.addEventListener("click", async () => {
+    btnStartVllm.disabled = true;
+    btnStartVllm.textContent = "Starten...";
+    vllmServerStatus.textContent = "Model wordt geladen...";
+    vllmServerStatus.className = "local-server-status status-starting";
+
+    try {
+        const resp = await fetch("/api/local-start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ max_model_len: parseInt(inputMaxModelLen.value) }),
+        });
+        const data = await resp.json();
+
+        if (data.status === "already_running") {
+            vllmServerStatus.textContent = "Server draait al";
+            vllmServerStatus.className = "local-server-status status-running";
+            btnStartVllm.classList.add("hidden");
+            btnStopVllm.classList.remove("hidden");
+            btnStartVllm.disabled = false;
+            btnStartVllm.textContent = "Start server";
+            return;
+        }
+
+        if (data.status === "error") {
+            vllmServerStatus.textContent = data.message;
+            vllmServerStatus.className = "local-server-status status-error";
+            btnStartVllm.disabled = false;
+            btnStartVllm.textContent = "Start server";
+            return;
+        }
+
+        // Poll for health until server is ready
+        btnStartVllm.classList.add("hidden");
+        btnStopVllm.classList.remove("hidden");
+        startHealthPoll();
+    } catch (err) {
+        vllmServerStatus.textContent = "Fout: " + err.message;
+        vllmServerStatus.className = "local-server-status status-error";
+        btnStartVllm.disabled = false;
+        btnStartVllm.textContent = "Start server";
+    }
+});
+
+// Stop vLLM server
+btnStopVllm.addEventListener("click", async () => {
+    btnStopVllm.disabled = true;
+    stopHealthPoll();
+    try {
+        await fetch("/api/local-stop", { method: "POST" });
+    } catch {}
+    vllmServerStatus.textContent = "Gestopt";
+    vllmServerStatus.className = "local-server-status";
+    btnStopVllm.classList.add("hidden");
+    btnStopVllm.disabled = false;
+    btnStartVllm.classList.remove("hidden");
+    btnStartVllm.disabled = false;
+    btnStartVllm.textContent = "Start server";
+});
+
+// Health polling — check every 3s until vLLM server responds
+function startHealthPoll() {
+    stopHealthPoll();
+    let attempts = 0;
+    vllmHealthPollId = setInterval(async () => {
+        attempts++;
+        try {
+            const resp = await fetch("/api/local-health");
+            const data = await resp.json();
+            if (data.status === "ok") {
+                vllmServerStatus.textContent = "Server draait";
+                vllmServerStatus.className = "local-server-status status-running";
+                stopHealthPoll();
+                return;
+            }
+        } catch {}
+
+        // Update status with loading animation
+        const dots = ".".repeat((attempts % 3) + 1);
+        vllmServerStatus.textContent = `Model laden${dots} (${attempts * 3}s)`;
+        vllmServerStatus.className = "local-server-status status-starting";
+
+        // Check if process died
+        try {
+            const statusResp = await fetch("/api/local-status");
+            const statusData = await statusResp.json();
+            if (statusData.managed && !statusData.running) {
+                vllmServerStatus.textContent = statusData.error || "Server onverwacht gestopt";
+                vllmServerStatus.className = "local-server-status status-error";
+                stopHealthPoll();
+                btnStopVllm.classList.add("hidden");
+                btnStartVllm.classList.remove("hidden");
+                btnStartVllm.disabled = false;
+                btnStartVllm.textContent = "Start server";
+            }
+        } catch {}
+    }, 3000);
+}
+
+function stopHealthPoll() {
+    if (vllmHealthPollId) {
+        clearInterval(vllmHealthPollId);
+        vllmHealthPollId = null;
+    }
+}
+
 async function loadMicrophones() {
     try {
         // Request permission first (needed to get device labels)
@@ -2220,6 +2400,19 @@ function openSettings() {
     selectBackend.value = activeBackend;
     inputLocalUrl.value = localServerUrl;
     localVllmSettings.classList.toggle("hidden", activeBackend !== "local-vllm");
+    // Run setup check if local backend is selected
+    if (activeBackend === "local-vllm") {
+        checkLocalSetup();
+        // Also check if server is already running
+        fetch("/api/local-health").then(r => r.json()).then(data => {
+            if (data.status === "ok") {
+                vllmServerStatus.textContent = "Server draait";
+                vllmServerStatus.className = "local-server-status status-running";
+                btnStartVllm.classList.add("hidden");
+                btnStopVllm.classList.remove("hidden");
+            }
+        }).catch(() => {});
+    }
     // Load correction settings
     toggleDualDelay.checked = useDualDelay;
     toggleAutocorrect.checked = autoCorrect;

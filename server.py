@@ -372,6 +372,213 @@ async def local_health():
         )
 
 
+# ── Local vLLM server management (Windows/WSL) ──
+
+_vllm_process: "asyncio.subprocess.Process | None" = None
+
+
+def _is_windows() -> bool:
+    return sys.platform == "win32"
+
+
+@app.get("/api/local-setup")
+async def local_setup():
+    """Detect WSL and vLLM installation status (Windows only).
+
+    Returns a status object describing what's installed and what's missing,
+    so the frontend can show appropriate setup instructions.
+    """
+    if not _is_windows():
+        return {
+            "platform": "linux",
+            "wsl": "not_needed",
+            "vllm": "unknown",
+            "message": "Je draait al op Linux — WSL is niet nodig.",
+        }
+
+    result = {
+        "platform": "windows",
+        "wsl": "not_installed",
+        "vllm": "not_installed",
+        "venv": False,
+        "model_downloaded": False,
+    }
+
+    # Check WSL
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "wsl", "--status",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+        if proc.returncode == 0:
+            result["wsl"] = "installed"
+        else:
+            return result  # WSL not installed — can't check further
+    except (FileNotFoundError, asyncio.TimeoutError):
+        return result
+
+    # Check if venv exists
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "wsl", "bash", "-c", "test -f ~/vllm-env/bin/activate && echo yes || echo no",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+        result["venv"] = stdout.decode().strip() == "yes"
+    except (FileNotFoundError, asyncio.TimeoutError):
+        pass
+
+    # Check if vllm is installed in the venv
+    if result["venv"]:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "wsl", "bash", "-c",
+                "source ~/vllm-env/bin/activate && python -c 'import vllm; print(vllm.__version__)' 2>/dev/null",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+            version = stdout.decode().strip()
+            if version and proc.returncode == 0:
+                result["vllm"] = "installed"
+                result["vllm_version"] = version
+        except (FileNotFoundError, asyncio.TimeoutError):
+            pass
+
+    # Check if model is already downloaded (look in HuggingFace cache)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "wsl", "bash", "-c",
+            "ls -d ~/.cache/huggingface/hub/models--mistralai--Voxtral-Mini-4B-Realtime-2602 2>/dev/null && echo found || echo missing",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+        result["model_downloaded"] = "found" in stdout.decode()
+    except (FileNotFoundError, asyncio.TimeoutError):
+        pass
+
+    return result
+
+
+@app.post("/api/local-start")
+async def local_start(body: dict = None):
+    """Start the vLLM server inside WSL (Windows) or directly (Linux).
+
+    The server process runs in the background. Use /api/local-health to
+    check when it's ready. Use /api/local-stop to shut it down.
+    """
+    global _vllm_process
+
+    if _vllm_process is not None and _vllm_process.returncode is None:
+        return {"status": "already_running", "message": "vLLM server draait al"}
+
+    body = body or {}
+    max_model_len = int(body.get("max_model_len", 8000))
+    # Sanitize to prevent command injection
+    if max_model_len < 1000 or max_model_len > 200000:
+        max_model_len = 8000
+
+    model = "mistralai/Voxtral-Mini-4B-Realtime-2602"
+
+    if _is_windows():
+        # Launch via WSL
+        cmd = (
+            f"source ~/vllm-env/bin/activate && "
+            f"vllm serve {model} "
+            f"--enforce-eager "
+            f"--max-model-len {max_model_len} "
+            f"--host 0.0.0.0 --port 8000"
+        )
+        try:
+            _vllm_process = await asyncio.create_subprocess_exec(
+                "wsl", "bash", "-c", cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError:
+            return JSONResponse(
+                {"status": "error", "message": "WSL niet gevonden. Installeer WSL eerst."},
+                status_code=400,
+            )
+    else:
+        # Direct Linux launch
+        venv_activate = os.path.expanduser("~/vllm-env/bin/activate")
+        if os.path.exists(venv_activate):
+            cmd = f"source {venv_activate} && "
+        else:
+            cmd = ""
+        cmd += (
+            f"vllm serve {model} "
+            f"--enforce-eager "
+            f"--max-model-len {max_model_len} "
+            f"--host 0.0.0.0 --port 8000"
+        )
+        _vllm_process = await asyncio.create_subprocess_shell(
+            cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+    logger.info(f"vLLM server starting (PID: {_vllm_process.pid}, max_model_len={max_model_len})")
+    return {
+        "status": "starting",
+        "pid": _vllm_process.pid,
+        "max_model_len": max_model_len,
+        "message": "vLLM server wordt gestart. Model wordt geladen...",
+    }
+
+
+@app.post("/api/local-stop")
+async def local_stop():
+    """Stop the vLLM server process."""
+    global _vllm_process
+
+    if _vllm_process is None or _vllm_process.returncode is not None:
+        _vllm_process = None
+        return {"status": "not_running", "message": "vLLM server draait niet"}
+
+    logger.info(f"Stopping vLLM server (PID: {_vllm_process.pid})")
+    try:
+        _vllm_process.terminate()
+        try:
+            await asyncio.wait_for(_vllm_process.wait(), timeout=10)
+        except asyncio.TimeoutError:
+            _vllm_process.kill()
+            await _vllm_process.wait()
+    except ProcessLookupError:
+        pass  # Already exited
+
+    _vllm_process = None
+    return {"status": "stopped", "message": "vLLM server gestopt"}
+
+
+@app.get("/api/local-status")
+async def local_server_status():
+    """Check if the managed vLLM process is still running."""
+    global _vllm_process
+
+    if _vllm_process is None:
+        return {"running": False, "managed": False}
+
+    if _vllm_process.returncode is not None:
+        # Process exited — try to capture why
+        stderr_snippet = ""
+        if _vllm_process.stderr:
+            try:
+                raw = await asyncio.wait_for(_vllm_process.stderr.read(2000), timeout=1)
+                stderr_snippet = raw.decode(errors="replace").strip()[-500:]
+            except (asyncio.TimeoutError, Exception):
+                pass
+        _vllm_process = None
+        return {"running": False, "managed": True, "exit_code": _vllm_process.returncode if _vllm_process else -1, "error": stderr_snippet}
+
+    return {"running": True, "managed": True, "pid": _vllm_process.pid}
+
+
 # ── vLLM WebSocket proxy ──
 
 async def _vllm_realtime_proxy(
