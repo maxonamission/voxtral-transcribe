@@ -826,6 +826,7 @@ function processCompletedSentences() {
             if (cmd.action === "deleteLastLine") deleteLastBlock("line");
             if (cmd.action === "undo") restoreUndo();
             if (cmd.action === "numberedItem") insertNumberedItem();
+            if (cmd.action === "bulletPoint") insertContextBullet();
             showToast(cmd.toast);
         } else {
             // Finalize as regular text (white, not gray)
@@ -1774,6 +1775,7 @@ function processDualSlowCommands() {
             if (cmd.action === "deleteLastLine") deleteLastBlock("line");
             if (cmd.action === "undo") restoreUndo();
             if (cmd.action === "numberedItem") insertNumberedItem();
+            if (cmd.action === "bulletPoint") insertContextBullet();
             showToast(cmd.toast);
         } else {
             // Regular text — finalize into transcript
@@ -2034,6 +2036,12 @@ btnCorrect.addEventListener("click", async () => {
 async function autoCorrectAfterStop() {
     console.debug(`[autocorrect] autoCorrect=${autoCorrect}, called after stop`);
     if (!autoCorrect) return;
+
+    // Skip auto-correct if transcript contains diarized speaker labels
+    if (transcript.querySelector(".speaker-label")) {
+        console.debug("[autocorrect] skipped — diarized output with speaker labels");
+        return;
+    }
 
     const text = transcript.innerText.trim();
     if (!text || text === "Druk op opnemen om te beginnen...") return;
