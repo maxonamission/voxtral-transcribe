@@ -101,30 +101,79 @@
             <p class="modal-hint">Kies tussen Mistral API (standaard) of een lokale vLLM server</p>
 
             <div id="local-vllm-settings" class="hidden">
-                <label class="modal-label modal-label-spaced" for="input-local-url">Lokale server URL</label>
-                <div class="modal-key-row">
-                    <input type="text" id="input-local-url" class="modal-input" placeholder="http://localhost:8000" value="http://localhost:8000">
-                    <button id="btn-test-local" class="btn btn-small" title="Test verbinding">&#9889;</button>
+                <!-- Setup wizard (shown when WSL/vLLM not ready) -->
+                <div id="local-setup-wizard" class="local-setup-wizard hidden">
+                    <div class="setup-step" id="setup-step-wsl">
+                        <span class="setup-icon" id="setup-icon-wsl">1</span>
+                        <div class="setup-content">
+                            <strong>WSL2 installeren</strong>
+                            <p>Open PowerShell als Administrator en voer uit:</p>
+                            <div class="local-cmd-box">
+                                <code>wsl --install</code>
+                                <button class="btn btn-small btn-copy-inline" data-cmd="wsl --install" title="Kopieer">&#128203;</button>
+                            </div>
+                            <p class="modal-hint">Start je PC opnieuw op na installatie. Bij de eerste keer WSL openen maak je een Linux-gebruikersnaam en wachtwoord aan.</p>
+                        </div>
+                    </div>
+                    <div class="setup-step" id="setup-step-vllm">
+                        <span class="setup-icon" id="setup-icon-vllm">2</span>
+                        <div class="setup-content">
+                            <strong>vLLM installeren</strong>
+                            <p>Open WSL (typ <code>wsl</code> in een terminal) en voer uit:</p>
+                            <div class="local-cmd-box">
+                                <code>curl -LsSf https://astral.sh/uv/install.sh | sh && source ~/.bashrc && uv venv ~/vllm-env --python 3.12 && source ~/vllm-env/bin/activate && uv pip install "vllm[audio]"</code>
+                                <button class="btn btn-small btn-copy-inline" data-cmd='curl -LsSf https://astral.sh/uv/install.sh | sh && source ~/.bashrc && uv venv ~/vllm-env --python 3.12 && source ~/vllm-env/bin/activate && uv pip install "vllm[audio]"' title="Kopieer">&#128203;</button>
+                            </div>
+                            <p class="modal-hint">Dit installeert uv (package manager) en vLLM in een Python-omgeving. Duurt circa 5 minuten.</p>
+                        </div>
+                    </div>
+                    <div class="setup-step" id="setup-step-gpu">
+                        <span class="setup-icon" id="setup-icon-gpu">3</span>
+                        <div class="setup-content">
+                            <strong>GPU-check</strong>
+                            <p>Controleer of je GPU zichtbaar is in WSL:</p>
+                            <div class="local-cmd-box">
+                                <code>nvidia-smi</code>
+                                <button class="btn btn-small btn-copy-inline" data-cmd="nvidia-smi" title="Kopieer">&#128203;</button>
+                            </div>
+                            <p class="modal-hint">Als dit geen output geeft, installeer dan de <a href="https://developer.nvidia.com/cuda/wsl" target="_blank">NVIDIA CUDA drivers voor WSL</a>.</p>
+                        </div>
+                    </div>
+                    <button id="btn-recheck-setup" class="btn btn-small" style="margin-top: 0.75rem">Opnieuw controleren</button>
                 </div>
-                <p id="local-status" class="modal-hint"></p>
 
-                <label class="modal-label modal-label-spaced" for="input-max-model-len">Max model length</label>
-                <select id="input-max-model-len" class="modal-input modal-select">
-                    <option value="4000">4.000 (~5 min, ~12 GB VRAM)</option>
-                    <option value="8000" selected>8.000 (~10 min, ~14 GB VRAM)</option>
-                    <option value="16000">16.000 (~20 min, ~16 GB VRAM)</option>
-                    <option value="32000">32.000 (~40 min, ~20 GB VRAM)</option>
-                    <option value="45000">45.000 (~1 uur, ~24 GB VRAM)</option>
-                    <option value="131072">131.072 (~3 uur, ~35 GB VRAM)</option>
-                </select>
-                <p class="modal-hint">Bepaalt hoeveel audio-context in het GPU-geheugen past. Lager = minder VRAM nodig.</p>
+                <!-- Server controls (shown when WSL/vLLM ready) -->
+                <div id="local-server-controls">
+                    <label class="modal-label modal-label-spaced" for="input-local-url">Lokale server URL</label>
+                    <div class="modal-key-row">
+                        <input type="text" id="input-local-url" class="modal-input" placeholder="http://localhost:8000" value="http://localhost:8000">
+                        <button id="btn-test-local" class="btn btn-small" title="Test verbinding">&#9889;</button>
+                    </div>
+                    <p id="local-status" class="modal-hint"></p>
 
-                <label class="modal-label modal-label-spaced">Startcommando</label>
-                <div class="local-cmd-box">
-                    <code id="vllm-start-cmd">vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 --enforce-eager --max-model-len 8000</code>
-                    <button id="btn-copy-cmd" class="btn btn-small" title="Kopieer commando">&#128203;</button>
+                    <label class="modal-label modal-label-spaced" for="input-max-model-len">Max model length</label>
+                    <select id="input-max-model-len" class="modal-input modal-select">
+                        <option value="4000">4.000 (~5 min, ~12 GB VRAM)</option>
+                        <option value="8000" selected>8.000 (~10 min, ~14 GB VRAM)</option>
+                        <option value="16000">16.000 (~20 min, ~16 GB VRAM)</option>
+                        <option value="32000">32.000 (~40 min, ~20 GB VRAM)</option>
+                        <option value="45000">45.000 (~1 uur, ~24 GB VRAM)</option>
+                        <option value="131072">131.072 (~3 uur, ~35 GB VRAM)</option>
+                    </select>
+                    <p class="modal-hint">Bepaalt hoeveel audio-context in het GPU-geheugen past. Lager = minder VRAM nodig.</p>
+
+                    <label class="modal-label modal-label-spaced">Server</label>
+                    <div class="local-server-row">
+                        <button id="btn-start-vllm" class="btn btn-primary btn-small">Start server</button>
+                        <button id="btn-stop-vllm" class="btn btn-small btn-danger hidden">Stop server</button>
+                        <span id="vllm-server-status" class="local-server-status"></span>
+                    </div>
+                    <p class="modal-hint">Het model (~9 GB) wordt automatisch gedownload bij de eerste start. Of start handmatig in een terminal:</p>
+                    <div class="local-cmd-box">
+                        <code id="vllm-start-cmd">vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 --enforce-eager --max-model-len 8000</code>
+                        <button id="btn-copy-cmd" class="btn btn-small" title="Kopieer commando">&#128203;</button>
+                    </div>
                 </div>
-                <p class="modal-hint">Start dit commando in een terminal voordat je opneemt. Het model (~9 GB) wordt automatisch gedownload bij eerste gebruik.</p>
             </div>
 
             <label class="modal-label modal-label-spaced">Dual-delay (experimenteel)</label>

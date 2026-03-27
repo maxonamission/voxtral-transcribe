@@ -742,6 +742,97 @@ footer {
     user-select: all;
 }
 
+/* Setup wizard */
+.local-setup-wizard {
+    margin-top: 0.75rem;
+}
+
+.setup-step {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.setup-step:last-of-type {
+    border-bottom: none;
+}
+
+.setup-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    color: #888;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.setup-icon.done {
+    background: rgba(74, 222, 128, 0.2);
+    color: #4ade80;
+}
+
+.setup-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.setup-content strong {
+    font-size: 0.85rem;
+}
+
+.setup-content p {
+    font-size: 0.8rem;
+    color: #888;
+    margin-top: 0.3rem;
+}
+
+.setup-content .local-cmd-box {
+    margin-top: 0.4rem;
+    margin-bottom: 0;
+}
+
+/* Server control row */
+.local-server-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+.local-server-status {
+    font-size: 0.8rem;
+    color: #888;
+}
+
+.local-server-status.status-running {
+    color: #4ade80;
+}
+
+.local-server-status.status-starting {
+    color: #facc15;
+}
+
+.local-server-status.status-error {
+    color: #f44336;
+}
+
+.btn-danger {
+    background: rgba(244, 67, 54, 0.15);
+    color: #f44336;
+    border-color: rgba(244, 67, 54, 0.3);
+}
+
+.btn-danger:hover {
+    background: rgba(244, 67, 54, 0.25);
+}
+
 /* Responsive */
 @media (max-width: 600px) {
     .container {
