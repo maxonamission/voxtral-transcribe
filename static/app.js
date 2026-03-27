@@ -820,6 +820,7 @@ function processCompletedSentences() {
             if (cmd.action === "deleteLastLine") deleteLastBlock("line");
             if (cmd.action === "undo") restoreUndo();
             if (cmd.action === "numberedItem") insertNumberedItem();
+            if (cmd.action === "bulletPoint") insertContextBullet();
             showToast(cmd.toast);
         } else {
             // Finalize as regular text (white, not gray)
@@ -1740,6 +1741,7 @@ function processDualSlowCommands() {
             if (cmd.action === "deleteLastLine") deleteLastBlock("line");
             if (cmd.action === "undo") restoreUndo();
             if (cmd.action === "numberedItem") insertNumberedItem();
+            if (cmd.action === "bulletPoint") insertContextBullet();
             showToast(cmd.toast);
         } else {
             // Regular text — finalize into transcript
