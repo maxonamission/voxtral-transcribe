@@ -328,6 +328,7 @@ async def transcribe_batch(file: UploadFile, diarize: bool = Form(False)):
         )
         if diarize:
             kwargs["diarize"] = True
+            kwargs["timestamp_granularities"] = ["segment"]
 
         result = client.audio.transcriptions.complete(**kwargs)
 
