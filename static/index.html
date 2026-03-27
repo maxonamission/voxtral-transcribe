@@ -24,6 +24,7 @@
                     <span class="toggle-slider"></span>
                 </label>
                 <span id="status-text">Realtime</span>
+                <span id="backend-badge" class="backend-badge hidden" title="Transcriptie-backend">cloud</span>
                 <div id="mic-level" class="mic-level hidden">
                     <div id="mic-level-bar" class="mic-level-bar"></div>
                 </div>
@@ -91,6 +92,40 @@
             </div>
             <p id="settings-status" class="modal-status"></p>
             <p class="modal-hint">Maak een key aan op <a href="https://console.mistral.ai/api-keys" target="_blank">console.mistral.ai</a></p>
+
+            <label class="modal-label modal-label-spaced">Transcriptie-backend</label>
+            <select id="select-backend" class="modal-input modal-select">
+                <option value="mistral-api">Mistral API (cloud)</option>
+                <option value="local-vllm">Lokaal vLLM model (experimenteel)</option>
+            </select>
+            <p class="modal-hint">Kies tussen Mistral API (standaard) of een lokale vLLM server</p>
+
+            <div id="local-vllm-settings" class="hidden">
+                <label class="modal-label modal-label-spaced" for="input-local-url">Lokale server URL</label>
+                <div class="modal-key-row">
+                    <input type="text" id="input-local-url" class="modal-input" placeholder="http://localhost:8000" value="http://localhost:8000">
+                    <button id="btn-test-local" class="btn btn-small" title="Test verbinding">&#9889;</button>
+                </div>
+                <p id="local-status" class="modal-hint"></p>
+
+                <label class="modal-label modal-label-spaced" for="input-max-model-len">Max model length</label>
+                <select id="input-max-model-len" class="modal-input modal-select">
+                    <option value="4000">4.000 (~5 min, ~12 GB VRAM)</option>
+                    <option value="8000" selected>8.000 (~10 min, ~14 GB VRAM)</option>
+                    <option value="16000">16.000 (~20 min, ~16 GB VRAM)</option>
+                    <option value="32000">32.000 (~40 min, ~20 GB VRAM)</option>
+                    <option value="45000">45.000 (~1 uur, ~24 GB VRAM)</option>
+                    <option value="131072">131.072 (~3 uur, ~35 GB VRAM)</option>
+                </select>
+                <p class="modal-hint">Bepaalt hoeveel audio-context in het GPU-geheugen past. Lager = minder VRAM nodig.</p>
+
+                <label class="modal-label modal-label-spaced">Startcommando</label>
+                <div class="local-cmd-box">
+                    <code id="vllm-start-cmd">vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 --enforce-eager --max-model-len 8000</code>
+                    <button id="btn-copy-cmd" class="btn btn-small" title="Kopieer commando">&#128203;</button>
+                </div>
+                <p class="modal-hint">Start dit commando in een terminal voordat je opneemt. Het model (~9 GB) wordt automatisch gedownload bij eerste gebruik.</p>
+            </div>
 
             <label class="modal-label modal-label-spaced">Dual-delay (experimenteel)</label>
             <label class="toggle-row">

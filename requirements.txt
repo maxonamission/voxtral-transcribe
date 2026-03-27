@@ -5,3 +5,4 @@ python-dotenv
 python-multipart
 pystray
 Pillow
+websockets>=13.0
