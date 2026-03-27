@@ -1192,19 +1192,22 @@ async function processQueue() {
             if (diarize) formData.append("diarize", "true");
             const resp = await fetch("/api/transcribe", { method: "POST", body: formData });
             if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                const errMsg = err.error || `Status ${resp.status}`;
+                console.error(`Queue item ${key} failed:`, errMsg);
                 const newRetries = retries + 1;
                 if (newRetries >= MAX_RETRIES) {
                     // Max retries reached — remove permanently
                     const delTx = db.transaction("recordings", "readwrite");
                     delTx.objectStore("recordings").delete(key);
                     await new Promise((res) => { delTx.oncomplete = res; });
-                    showToast(`Opname verwijderd na ${MAX_RETRIES} mislukte pogingen`);
+                    showToast(`Opname verwijderd na ${MAX_RETRIES} pogingen: ${errMsg}`, 4000);
                 } else {
                     // Increment retry counter
                     const updTx = db.transaction("recordings", "readwrite");
                     updTx.objectStore("recordings").put({ blob, diarize, retries: newRetries }, key);
                     await new Promise((res) => { updTx.oncomplete = res; });
-                    showToast(`Wachtrij-item mislukt (poging ${newRetries}/${MAX_RETRIES})`);
+                    showToast(`Wachtrij-item mislukt (${newRetries}/${MAX_RETRIES}): ${errMsg}`, 4000);
                 }
                 continue;
             }
@@ -1836,9 +1839,15 @@ async function startOffline() {
                         checkForCommand();
                     }
                 } else {
+                    const err = await resp.json().catch(() => ({}));
+                    const msg = err.error || `Server error ${resp.status}`;
+                    console.error("Transcriptie mislukt:", msg);
+                    showToast(`Transcriptie mislukt: ${msg}`, 4000);
                     await saveToQueue(blob, useDiarize);
                 }
-            } catch {
+            } catch (e) {
+                console.error("Transcriptie mislukt:", e.message);
+                showToast(`Transcriptie mislukt: ${e.message}`, 4000);
                 await saveToQueue(blob, useDiarize);
             }
             updateModeUI();
@@ -2024,10 +2033,10 @@ btnClear.addEventListener("click", () => {
 });
 
 // ── Toast ──
-function showToast(message) {
+function showToast(message, durationMs = 1500) {
     toast.textContent = message;
     toast.classList.remove("hidden");
-    setTimeout(() => toast.classList.add("hidden"), 1500);
+    setTimeout(() => toast.classList.add("hidden"), durationMs);
 }
 
 // ── Queue: auto-retry when back online + periodic + click to retry ──
