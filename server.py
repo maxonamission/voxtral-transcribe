@@ -336,7 +336,7 @@ async def transcribe_batch(file: UploadFile, diarize: bool = Form(False)):
             segments = []
             current_speaker = None
             for seg in result.segments:
-                speaker = getattr(seg, "speaker", None)
+                speaker = getattr(seg, "speaker_id", None) or getattr(seg, "speaker", None)
                 text = seg.text.strip() if hasattr(seg, "text") else ""
                 if not text:
                     continue
