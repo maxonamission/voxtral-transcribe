@@ -1,0 +1,18 @@
+{
+	"compilerOptions": {
+		"baseUrl": ".",
+		"module": "ESNext",
+		"target": "ES6",
+		"noImplicitAny": true,
+		"moduleResolution": "node",
+		"isolatedModules": true,
+		"strictNullChecks": true,
+		"resolveJsonModule": true,
+		"allowSyntheticDefaultImports": true,
+		"declaration": true,
+		"outDir": "dist",
+		"lib": ["ES6", "ES7"]
+	},
+	"include": ["src/**/*.ts"],
+	"exclude": ["src/__tests__/**"]
+}
