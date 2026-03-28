@@ -25,3 +25,10 @@ export {
 	stripLlmCommentary,
 	isLikelyHallucination,
 } from "./correction";
+
+export {
+	type MatchableCommand,
+	type LanguageProvider,
+	type MatchResult,
+	findMatch,
+} from "./command-matcher";

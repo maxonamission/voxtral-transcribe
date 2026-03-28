@@ -16,7 +16,6 @@ import {
 } from "./phonetics";
 import type { CustomCommand } from "./types";
 import {
-	levenshtein,
 	normalizeCommand,
 	type InsertionContext,
 	detectContext,
@@ -24,6 +23,8 @@ import {
 	shouldLowercase,
 	lowercaseFirstLetter,
 	stripTrailingPunctuation,
+	findMatch,
+	type LanguageProvider,
 } from "./shared";
 
 /**
@@ -570,171 +571,30 @@ export interface CommandMatch {
 }
 
 /**
- * Build a cache of all known command phrases (normalized) for compound splitting.
+ * LanguageProvider that bridges the plugin's lang.ts / phonetics.ts
+ * into the shared command-matcher interface.
  */
-function getAllCommandPhrases(): string[] {
-	const phrases: string[] = [];
-	for (const cmd of getAllCommands()) {
-		for (const pattern of getPatternsForAnyCommand(cmd.id, activeLang)) {
-			phrases.push(normalizeCommand(pattern));
-		}
-	}
-	return phrases;
-}
-
-/**
- * Extract the trailing N words from text.
- */
-function trailingWords(text: string, n: number): string {
-	const words = text.trimEnd().split(/\s+/);
-	return words.slice(-n).join(" ");
-}
+const pluginLangProvider: LanguageProvider = {
+	getPatterns: getPatternsForAnyCommand,
+	getMishearings: (lang: string) => getMishearings(lang),
+	phoneticNormalize: (text: string, lang: string) => phoneticNormalize(text, lang),
+	stripArticles: (text: string, lang: string) => stripArticles(text, lang),
+	stripTrailingFillers: (text: string, lang: string) => stripTrailingFillers(text, lang),
+	trySplitCompound: (text: string, knownPhrases: string[]) => trySplitCompound(text, knownPhrases),
+};
 
 /**
  * Check if the given text ends with a voice command.
- * Returns the match (command + preceding text) or null.
- *
- * Matching pipeline (in order):
- * 1. Exact match (current text ends with a known pattern)
- * 2. Match after stripping trailing filler words ("alsjeblieft", "please")
- * 3. Phonetic match (phonetically normalized text matches phonetically normalized pattern)
- * 4. Compound-word match (concatenated words like "nieuwealinea")
- * 5. Fuzzy match (Levenshtein ≤ 2, standalone sentences only)
+ * Delegates to the shared 5-pass matching algorithm (findMatch) and
+ * maps the result back to a CommandDef.
  */
 export function matchCommand(rawText: string): CommandMatch | null {
-	const normalized = fixMishearings(normalizeCommand(rawText));
-
 	const allCmds = getAllCommands();
-
-	// Pass 1: exact match (full or suffix)
-	for (const cmd of allCmds) {
-		const patterns = getPatternsForAnyCommand(cmd.id, activeLang);
-		for (const pattern of patterns) {
-			const normPattern = normalizeCommand(pattern);
-			if (normalized.endsWith(normPattern)) {
-				const patternWordCount = pattern.split(/\s+/).length;
-				const rawWords = rawText.trimEnd().split(/\s+/);
-				const textBefore = rawWords
-					.slice(0, -patternWordCount)
-					.join(" ")
-					.trimEnd();
-				return { command: cmd, textBefore };
-			}
-		}
-	}
-
-	// Pass 2: match after stripping articles + trailing fillers
-	const strippedFillers = stripTrailingFillers(normalized, activeLang);
-	if (strippedFillers !== normalized) {
-		for (const cmd of allCmds) {
-			const patterns = getPatternsForAnyCommand(cmd.id, activeLang);
-			for (const pattern of patterns) {
-				const normPattern = normalizeCommand(pattern);
-				if (strippedFillers.endsWith(normPattern)) {
-					const patternWordCount = pattern.split(/\s+/).length;
-					const rawWords = rawText.trimEnd().split(/\s+/);
-					// Account for the filler words that were stripped
-					const fillerWordCount = normalized.split(/\s+/).length - strippedFillers.split(/\s+/).length;
-					const textBefore = rawWords
-						.slice(0, -(patternWordCount + fillerWordCount))
-						.join(" ")
-						.trimEnd();
-					return { command: cmd, textBefore };
-				}
-			}
-		}
-	}
-
-	// Pass 2b: strip leading articles from the trailing portion
-	for (const cmd of allCmds) {
-		const patterns = getPatternsForAnyCommand(cmd.id, activeLang);
-		for (const pattern of patterns) {
-			const normPattern = normalizeCommand(pattern);
-			const patternWordCount = normPattern.split(/\s+/).length;
-			// Take one extra word to check for article
-			const tail = trailingWords(normalized, patternWordCount + 1);
-			const stripped = stripArticles(tail, activeLang);
-			if (stripped === normPattern) {
-				const tailWordCount = tail.split(/\s+/).length;
-				const rawWords = rawText.trimEnd().split(/\s+/);
-				const textBefore = rawWords
-					.slice(0, -tailWordCount)
-					.join(" ")
-					.trimEnd();
-				return { command: cmd, textBefore };
-			}
-		}
-	}
-
-	// Pass 3: phonetic match — apply phonetic normalization to both sides
-	const phoneticText = phoneticNormalize(normalized, activeLang);
-	for (const cmd of allCmds) {
-		const patterns = getPatternsForAnyCommand(cmd.id, activeLang);
-		for (const pattern of patterns) {
-			const phoneticPattern = phoneticNormalize(normalizeCommand(pattern), activeLang);
-			if (phoneticPattern !== normalizeCommand(pattern) || phoneticText !== normalized) {
-				// Only use phonetic matching if it actually changes something
-				if (phoneticText.endsWith(phoneticPattern)) {
-					const patternWordCount = pattern.split(/\s+/).length;
-					const rawWords = rawText.trimEnd().split(/\s+/);
-					const textBefore = rawWords
-						.slice(0, -patternWordCount)
-						.join(" ")
-						.trimEnd();
-					return { command: cmd, textBefore };
-				}
-			}
-		}
-	}
-
-	// Pass 4: compound-word splitting ("nieuwealinea" → "nieuwe alinea")
-	const lastWord = normalized.split(/\s+/).pop() ?? "";
-	if (lastWord.length >= 4 && !lastWord.includes(" ")) {
-		const allPhrases = getAllCommandPhrases();
-		const split = trySplitCompound(lastWord, allPhrases);
-		if (split !== lastWord) {
-			// Re-run exact matching on the split version
-			const words = normalized.split(/\s+/);
-			words[words.length - 1] = split;
-			const resplit = words.join(" ");
-			for (const cmd of allCmds) {
-				const patterns = getPatternsForAnyCommand(cmd.id, activeLang);
-				for (const pattern of patterns) {
-					const normPattern = normalizeCommand(pattern);
-					if (resplit.endsWith(normPattern)) {
-						const rawWords = rawText.trimEnd().split(/\s+/);
-						// The compound word was one raw word
-						const textBefore = rawWords
-							.slice(0, -1)
-							.join(" ")
-							.trimEnd();
-						return { command: cmd, textBefore };
-					}
-				}
-			}
-		}
-	}
-
-	// Pass 5: fuzzy match for standalone sentences only (Levenshtein ≤ 2)
-	// This catches conjugation errors like "beeindigde opname" ≈ "beeindig de opname"
-	// Guard: require both text and pattern to be at least 6 chars, and similar
-	// in length, to avoid false positives on short words (e.g. "dit" ≈ "vet").
-	let bestMatch: CommandMatch | null = null;
-	let bestDist = 3; // threshold: must be strictly less than this
-	for (const cmd of allCmds) {
-		const patterns = getPatternsForAnyCommand(cmd.id, activeLang);
-		for (const pattern of patterns) {
-			const normPattern = normalizeCommand(pattern);
-			if (normalized.length < 6 || normPattern.length < 6) continue;
-			if (Math.abs(normalized.length - normPattern.length) > 3) continue;
-			const dist = levenshtein(normalized, normPattern);
-			if (dist > 0 && dist < bestDist) {
-				bestDist = dist;
-				bestMatch = { command: cmd, textBefore: "" };
-			}
-		}
-	}
-	return bestMatch;
+	const result = findMatch(rawText, allCmds, activeLang, pluginLangProvider);
+	if (!result) return null;
+	const command = allCmds.find((c) => c.id === result.commandId);
+	if (!command) return null;
+	return { command, textBefore: result.textBefore };
 }
 
 /**
