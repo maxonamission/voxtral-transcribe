@@ -1,0 +1,12 @@
+{
+	"name": "voxtral-transcribe",
+	"version": "0.1.0",
+	"private": true,
+	"scripts": {
+		"build:webapp": "node static/esbuild.config.mjs",
+		"dev:webapp": "node static/esbuild.config.mjs --watch"
+	},
+	"devDependencies": {
+		"esbuild": "^0.24.0"
+	}
+}
