@@ -13,7 +13,7 @@
     "deleteLastParagraph": ["verwijder laatste alinea", "verwijder laatste paragraaf", "wis laatste alinea"],
     "deleteLastLine": ["verwijder laatste regel", "verwijder laatste zin", "wis laatste regel", "wist laatste regel"],
     "undo": ["herstel", "ongedaan maken"],
-    "stopRecording": ["beeindig opname", "beeindig de opname", "stop opname", "stop de opname"],
+    "stopRecording": ["beeindig opname", "beeindig de opname", "stop opname", "stopopname", "stop de opname"],
     "colon": ["dubbele punt", "double punt", "dubbelepunt"],
     "wikilink": ["wikilink", "wiki link", "link"],
     "boldOpen": ["vet openen", "dikgedrukt openen", "vet open"],

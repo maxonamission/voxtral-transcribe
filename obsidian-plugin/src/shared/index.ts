@@ -32,3 +32,21 @@ export {
 	type MatchResult,
 	findMatch,
 } from "./command-matcher";
+
+export {
+	SUPPORTED_LANGUAGES,
+	type LangCode,
+	LANGUAGE_NAMES,
+	PHONETIC_RULES,
+	MISHEARINGS,
+	ARTICLES,
+	TRAILING_FILLERS,
+	PATTERNS,
+	LABELS,
+	phoneticNormalize,
+	stripArticles,
+	stripTrailingFillers,
+	trySplitCompound,
+	getMishearings,
+	getPatternsForCommand,
+} from "./lang-data";

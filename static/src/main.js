@@ -1,13 +1,19 @@
 // ── Shared imports ──
 import {
     normalizeCommand,
-    levenshtein,
     lowercaseFirstLetter,
     detectContext,
     shouldStripTrailingPunctuation,
     shouldLowercase,
-    stripTrailingPunctuation as sharedStripTrailingPunctuation,
     findMatch,
+    phoneticNormalize,
+    stripArticles,
+    stripTrailingFillers,
+    trySplitCompound,
+    getMishearings,
+    getPatternsForCommand,
+    SUPPORTED_LANGUAGES,
+    LANGUAGE_NAMES,
 } from "../../obsidian-plugin/src/shared/index.ts";
 
 // ── State ──
@@ -297,129 +303,9 @@ function finalizeInsertPoint() {
     replaceHint.classList.add("hidden");
 }
 
-// ── Voice commands — language-driven ──
-
-const LANG_PATTERNS = {
-    nl: {
-        newParagraph: ["nieuwe alinea", "nieuw alinea", "nieuwe paragraaf", "nieuwe linie"],
-        newLine: ["nieuwe regel", "nieuwe lijn", "volgende regel"],
-        heading1: ["kop een", "kop 1"],
-        heading2: ["kop twee", "kop 2"],
-        heading3: ["kop drie", "kop 3"],
-        bulletPoint: ["nieuw punt", "nieuw lijstitem", "lijst punt", "nieuw item", "nieuwe item", "volgend item", "volgend punt"],
-        todoItem: ["nieuw to-do item", "nieuw todo item", "nieuw todo", "nieuwe taak"],
-        numberedItem: ["nieuw genummerd item", "nieuw genummerd punt", "genummerd punt", "genummerd item", "volgend nummer", "nummer punt"],
-        stopRecording: ["beeindig opname", "beeindig de opname", "stop opname", "stopopname", "stop de opname"],
-        deleteLastParagraph: ["verwijder laatste alinea", "verwijder laatste paragraaf", "wis laatste alinea"],
-        deleteLastLine: ["verwijder laatste regel", "verwijder laatste zin", "wis laatste regel", "wist laatste regel"],
-        undo: ["herstel", "ongedaan maken"],
-        colon: ["dubbele punt", "double punt", "dubbelepunt"],
-    },
-    en: {
-        newParagraph: ["new paragraph"],
-        newLine: ["new line", "next line"],
-        heading1: ["heading one", "heading 1"],
-        heading2: ["heading two", "heading 2"],
-        heading3: ["heading three", "heading 3"],
-        bulletPoint: ["new item", "next item", "bullet", "bullet point", "new bullet"],
-        todoItem: ["new todo", "new to-do", "todo item", "to-do item"],
-        numberedItem: ["numbered item", "new numbered item", "next number"],
-        stopRecording: ["stop recording"],
-        deleteLastParagraph: ["delete last paragraph"],
-        deleteLastLine: ["delete last line", "delete last sentence"],
-        undo: ["undo"],
-        colon: ["colon"],
-    },
-    fr: {
-        newParagraph: ["nouveau paragraphe", "nouvelle section", "nouveau alinea"],
-        newLine: ["nouvelle ligne", "a la ligne", "retour a la ligne"],
-        heading1: ["titre un", "titre 1"],
-        heading2: ["titre deux", "titre 2"],
-        heading3: ["titre trois", "titre 3"],
-        bulletPoint: ["nouveau point", "nouvelle puce", "point suivant", "nouvel element"],
-        todoItem: ["nouvelle tache", "nouveau todo", "nouveau to-do"],
-        numberedItem: ["point numero", "element numero", "nouveau numero"],
-        stopRecording: ["arreter enregistrement", "arreter l enregistrement", "stop enregistrement"],
-        deleteLastParagraph: ["supprimer dernier paragraphe", "effacer dernier paragraphe"],
-        deleteLastLine: ["supprimer derniere ligne", "effacer derniere ligne"],
-        undo: ["annuler"],
-        colon: ["deux points"],
-    },
-    de: {
-        newParagraph: ["neuer absatz", "neuer paragraph"],
-        newLine: ["neue zeile", "nachste zeile"],
-        heading1: ["uberschrift eins", "uberschrift 1"],
-        heading2: ["uberschrift zwei", "uberschrift 2"],
-        heading3: ["uberschrift drei", "uberschrift 3"],
-        bulletPoint: ["neuer punkt", "neuer aufzahlungspunkt", "nachster punkt", "neues element"],
-        todoItem: ["neue aufgabe", "neues todo", "neues to-do"],
-        numberedItem: ["nummerierter punkt", "neuer nummerierter punkt", "nachste nummer"],
-        stopRecording: ["aufnahme beenden", "aufnahme stoppen"],
-        deleteLastParagraph: ["letzten absatz loschen", "absatz loschen"],
-        deleteLastLine: ["letzte zeile loschen", "letzten satz loschen"],
-        undo: ["ruckgangig", "ruckgangig machen"],
-        colon: ["doppelpunkt"],
-    },
-    es: {
-        newParagraph: ["nuevo parrafo", "nueva seccion"],
-        newLine: ["nueva linea", "siguiente linea"],
-        heading1: ["titulo uno", "titulo 1"],
-        heading2: ["titulo dos", "titulo 2"],
-        heading3: ["titulo tres", "titulo 3"],
-        bulletPoint: ["nuevo punto", "nueva vineta", "siguiente punto", "nuevo elemento"],
-        todoItem: ["nueva tarea", "nuevo todo", "nuevo to-do"],
-        numberedItem: ["punto numerado", "nuevo numero", "siguiente numero"],
-        stopRecording: ["parar grabacion", "detener grabacion"],
-        deleteLastParagraph: ["borrar ultimo parrafo", "eliminar ultimo parrafo"],
-        deleteLastLine: ["borrar ultima linea", "eliminar ultima linea"],
-        undo: ["deshacer"],
-        colon: ["dos puntos"],
-    },
-    pt: {
-        newParagraph: ["novo paragrafo", "nova secao"],
-        newLine: ["nova linha", "proxima linha"],
-        heading1: ["titulo um", "titulo 1"],
-        heading2: ["titulo dois", "titulo 2"],
-        heading3: ["titulo tres", "titulo 3"],
-        bulletPoint: ["novo ponto", "novo item", "proximo ponto", "novo elemento"],
-        todoItem: ["nova tarefa", "novo todo", "novo to-do"],
-        numberedItem: ["ponto numerado", "novo numero", "proximo numero"],
-        stopRecording: ["parar gravacao", "encerrar gravacao"],
-        deleteLastParagraph: ["apagar ultimo paragrafo", "excluir ultimo paragrafo"],
-        deleteLastLine: ["apagar ultima linha", "excluir ultima linha"],
-        undo: ["desfazer"],
-        colon: ["dois pontos"],
-    },
-    it: {
-        newParagraph: ["nuovo paragrafo", "nuova sezione", "nuovo capoverso"],
-        newLine: ["nuova riga", "a capo", "riga successiva"],
-        heading1: ["titolo uno", "titolo 1"],
-        heading2: ["titolo due", "titolo 2"],
-        heading3: ["titolo tre", "titolo 3"],
-        bulletPoint: ["nuovo punto", "nuovo elemento", "punto successivo", "nuovo elenco"],
-        todoItem: ["nuovo compito", "nuova attivita", "nuovo todo"],
-        numberedItem: ["punto numerato", "nuovo numero", "numero successivo"],
-        stopRecording: ["ferma registrazione", "interrompi registrazione", "stop registrazione"],
-        deleteLastParagraph: ["cancella ultimo paragrafo", "elimina ultimo paragrafo"],
-        deleteLastLine: ["cancella ultima riga", "elimina ultima riga"],
-        undo: ["annulla"],
-        colon: ["due punti"],
-    },
-};
-
-const LANG_MISHEARINGS = {
-    nl: [
-        [/\bniveau\b/g, "nieuwe"],
-        [/\bniva\b/g, "nieuwe"],
-        [/\bnieuw alinea\b/g, "nieuwe alinea"],
-        [/\bnieuw regel\b/g, "nieuwe regel"],
-        [/\blinea\b/g, "alinea"],
-        [/\blinie\b/g, "alinea"],
-        [/\bbeeindigde\b/g, "beeindig de"],
-    ],
-    fr: [[/\bnouveau ligne\b/g, "nouvelle ligne"], [/\bnouvelle paragraphe\b/g, "nouveau paragraphe"]],
-    de: [[/\bneue absatz\b/g, "neuer absatz"], [/\bneues zeile\b/g, "neue zeile"]],
-};
+// ── Voice commands ──
+// Language patterns and mishearings now loaded from shared JSON files
+// (previously ~120 lines of hardcoded LANG_PATTERNS + LANG_MISHEARINGS)
 
 // Command definitions: id → {insert/action, punctuation, toast}
 const COMMAND_DEFS = [
@@ -438,21 +324,12 @@ const COMMAND_DEFS = [
     { id: "colon", insert: ": ", punctuation: true, toast: ":" },
 ];
 
-/** Build VOICE_COMMANDS from COMMAND_DEFS + active language patterns + EN fallback */
+/** Build VOICE_COMMANDS from COMMAND_DEFS + shared language data (JSON) */
 function buildVoiceCommands(lang) {
-    const langData = LANG_PATTERNS[lang] || {};
-    const enData = lang === "en" ? {} : (LANG_PATTERNS.en || {});
-    return COMMAND_DEFS.map(def => {
-        const langP = langData[def.id] || [];
-        const enP = enData[def.id] || [];
-        // Merge: active language first, then English fallback, deduplicated
-        const seen = new Set();
-        const patterns = [];
-        for (const p of [...langP, ...enP]) {
-            if (!seen.has(p)) { seen.add(p); patterns.push(p); }
-        }
-        return { ...def, patterns };
-    });
+    return COMMAND_DEFS.map(def => ({
+        ...def,
+        patterns: getPatternsForCommand(def.id, lang),
+    }));
 }
 
 let VOICE_COMMANDS = buildVoiceCommands(activeLang);
@@ -465,112 +342,18 @@ function stripTrailingPunctuation(str) {
     return str.replace(/[,;.!?]+\s*$/, "");
 }
 
-// ── Phonetic / language data (used by shared command matcher via provider) ──
+// ── Language data now loaded from shared JSON files ──
+// (previously ~120 lines of hardcoded PHONETIC_RULES, LANG_ARTICLES,
+// LANG_TRAILING_FILLERS — now single source of truth in languages/*.json)
 
-const PHONETIC_RULES = {
-    nl: [
-        [/ij/g, "ei"], [/au/g, "ou"], [/dt\b/g, "t"], [/\bsch/g, "sg"],
-        [/ck/g, "k"], [/ph/g, "f"], [/th/g, "t"],
-        [/ie/g, "i"], [/oe/g, "u"], [/ee/g, "e"], [/oo/g, "o"], [/uu/g, "u"], [/aa/g, "a"],
-    ],
-    en: [
-        [/ph/g, "f"], [/th/g, "t"], [/ck/g, "k"], [/ght/g, "t"],
-        [/wh/g, "w"], [/kn/g, "n"], [/wr/g, "r"],
-        [/tion/g, "shun"], [/sion/g, "shun"],
-    ],
-    fr: [
-        [/eau/g, "o"], [/aux/g, "o"], [/ai/g, "e"], [/ei/g, "e"],
-        [/ph/g, "f"], [/qu/g, "k"], [/gn/g, "ny"],
-        [/oi/g, "wa"], [/ou/g, "u"], [/an/g, "on"], [/en/g, "on"],
-    ],
-    de: [
-        [/sch/g, "sh"], [/ei/g, "ai"], [/ie/g, "i"], [/ck/g, "k"],
-        [/ph/g, "f"], [/th/g, "t"], [/v/g, "f"], [/tz/g, "ts"], [/dt\b/g, "t"],
-        [/aa/g, "a"], [/ee/g, "e"], [/oo/g, "o"],
-    ],
-    es: [
-        [/ll/g, "y"], [/v/g, "b"], [/ce/g, "se"], [/ci/g, "si"],
-        [/qu/g, "k"], [/h/g, ""],
-    ],
-    pt: [
-        [/lh/g, "ly"], [/nh/g, "ny"], [/ch/g, "sh"],
-        [/qu/g, "k"], [/ção/g, "saun"], [/ss/g, "s"],
-    ],
-    it: [
-        [/gn/g, "ny"], [/ch/g, "k"], [/gh/g, "g"],
-        [/sc(?=[ei])/g, "sh"], [/zz/g, "ts"],
-    ],
-};
-
-const LANG_ARTICLES = {
-    nl: ["een", "de", "het", "die", "dat", "deze"],
-    en: ["a", "an", "the"],
-    fr: ["un", "une", "le", "la", "les", "l", "du", "des"],
-    de: ["ein", "eine", "einen", "einem", "einer", "der", "die", "das", "den", "dem", "des"],
-    es: ["un", "una", "el", "la", "los", "las"],
-    pt: ["um", "uma", "o", "a", "os", "as"],
-    it: ["un", "uno", "una", "il", "lo", "la", "i", "gli", "le"],
-};
-
-const LANG_TRAILING_FILLERS = {
-    nl: ["alsjeblieft", "graag", "even", "maar", "eens", "dan", "nu", "hoor"],
-    en: ["please", "now", "then", "thanks"],
-    fr: ["s il vous plait", "s il te plait", "merci"],
-    de: ["bitte", "mal", "jetzt", "dann"],
-    es: ["por favor", "ahora", "gracias"],
-    pt: ["por favor", "agora", "obrigado"],
-    it: ["per favore", "ora", "adesso", "grazie"],
-};
-
-/** LanguageProvider adapter for the webapp's hardcoded language data. */
+/** LanguageProvider adapter: delegates to shared lang-data functions. */
 const webappLangProvider = {
-    getPatterns(commandId, lang) {
-        const cmd = VOICE_COMMANDS.find(c => c.id === commandId);
-        return cmd ? cmd.patterns : [];
-    },
-    getMishearings(lang) {
-        return LANG_MISHEARINGS[lang] || [];
-    },
-    phoneticNormalize(text, lang) {
-        const rules = PHONETIC_RULES[lang];
-        if (!rules) return text;
-        let result = text;
-        for (const [pattern, replacement] of rules) {
-            result = result.replace(pattern, replacement);
-        }
-        return result;
-    },
-    stripArticles(text, lang) {
-        const articles = LANG_ARTICLES[lang];
-        if (!articles || articles.length === 0) return text;
-        const words = text.split(/\s+/);
-        let stripped = 0;
-        while (stripped < Math.min(2, words.length - 1)) {
-            if (articles.includes(words[stripped])) stripped++;
-            else break;
-        }
-        return stripped > 0 ? words.slice(stripped).join(" ") : text;
-    },
-    stripTrailingFillers(text, lang) {
-        const fillers = LANG_TRAILING_FILLERS[lang];
-        if (!fillers || fillers.length === 0) return text;
-        let result = text;
-        for (const filler of fillers.sort((a, b) => b.length - a.length)) {
-            if (result.endsWith(" " + filler)) {
-                result = result.slice(0, -(filler.length + 1)).trimEnd();
-            }
-        }
-        return result;
-    },
-    trySplitCompound(text, knownPhrases) {
-        if (text.includes(" ") || text.length < 4) return text;
-        for (const phrase of knownPhrases) {
-            const words = phrase.split(/\s+/);
-            if (words.length < 2) continue;
-            if (text === words.join("")) return phrase;
-        }
-        return text;
-    },
+    getPatterns: getPatternsForCommand,
+    getMishearings,
+    phoneticNormalize,
+    stripArticles,
+    stripTrailingFillers,
+    trySplitCompound,
 };
 
 /**

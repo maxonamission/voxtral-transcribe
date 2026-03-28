@@ -158,6 +158,1020 @@
     return bestMatch;
   }
 
+  // obsidian-plugin/src/languages/nl.json
+  var nl_default = {
+    code: "nl",
+    name: "Nederlands",
+    patterns: {
+      newParagraph: ["nieuwe alinea", "nieuw alinea", "nieuwe paragraaf", "nieuw paragraaf", "nieuwe linie"],
+      newLine: ["nieuwe regel", "nieuwe lijn", "volgende regel"],
+      heading1: ["kop een", "kop 1"],
+      heading2: ["kop twee", "kop 2"],
+      heading3: ["kop drie", "kop 3"],
+      bulletPoint: ["nieuw punt", "nieuw lijstpunt", "nieuw lijstitem", "lijst punt", "nieuw bullet", "nieuw item", "nieuwe item", "volgend item", "volgend punt"],
+      todoItem: ["nieuw to do item", "nieuw todo item", "nieuw todo", "nieuwe to do", "nieuwe todo", "nieuw taak", "nieuwe taak"],
+      numberedItem: ["nieuw genummerd item", "nieuw genummerd punt", "genummerd punt", "genummerd item", "volgend nummer", "nummer punt"],
+      deleteLastParagraph: ["verwijder laatste alinea", "verwijder laatste paragraaf", "wis laatste alinea"],
+      deleteLastLine: ["verwijder laatste regel", "verwijder laatste zin", "wis laatste regel", "wist laatste regel"],
+      undo: ["herstel", "ongedaan maken"],
+      stopRecording: ["beeindig opname", "beeindig de opname", "stop opname", "stopopname", "stop de opname"],
+      colon: ["dubbele punt", "double punt", "dubbelepunt"],
+      wikilink: ["wikilink", "wiki link", "link"],
+      boldOpen: ["vet openen", "dikgedrukt openen", "vet open"],
+      boldClose: ["vet sluiten", "dikgedrukt sluiten", "vet dicht"],
+      italicOpen: ["cursief openen", "schuingedrukt openen", "cursief open"],
+      italicClose: ["cursief sluiten", "schuingedrukt sluiten", "cursief dicht"],
+      inlineCodeOpen: ["code openen", "code open"],
+      inlineCodeClose: ["code sluiten", "code dicht"],
+      tagOpen: ["tag openen", "label openen", "tag open"],
+      tagClose: ["tag sluiten", "label sluiten", "tag dicht"],
+      codeBlockOpen: ["codeblok openen", "code blok openen", "codeblok open"],
+      codeBlockClose: ["codeblok sluiten", "code blok sluiten", "codeblok dicht"]
+    },
+    labels: {
+      newParagraph: "Nieuwe alinea",
+      newLine: "Nieuwe regel",
+      heading1: "Kop 1",
+      heading2: "Kop 2",
+      heading3: "Kop 3",
+      bulletPoint: "Lijstpunt",
+      todoItem: "To-do item",
+      numberedItem: "Genummerd punt",
+      deleteLastParagraph: "Verwijder laatste alinea",
+      deleteLastLine: "Verwijder laatste regel",
+      undo: "Ongedaan maken",
+      stopRecording: "Stop opname",
+      colon: "Dubbele punt",
+      wikilink: "Wikilink [[\u2026]]",
+      boldOpen: "Vet openen **",
+      boldClose: "Vet sluiten **",
+      italicOpen: "Cursief openen *",
+      italicClose: "Cursief sluiten *",
+      inlineCodeOpen: "Code openen `",
+      inlineCodeClose: "Code sluiten `",
+      tagOpen: "Tag openen #",
+      tagClose: "Tag sluiten",
+      codeBlockOpen: "Codeblok openen ```",
+      codeBlockClose: "Codeblok sluiten ```"
+    },
+    mishearings: [
+      { pattern: "\\bniveau\\b", flags: "g", replacement: "nieuwe" },
+      { pattern: "\\bniva\\b", flags: "g", replacement: "nieuwe" },
+      { pattern: "\\bnieuw alinea\\b", flags: "g", replacement: "nieuwe alinea" },
+      { pattern: "\\bnieuw regel\\b", flags: "g", replacement: "nieuwe regel" },
+      { pattern: "\\bnieuw punt\\b", flags: "g", replacement: "nieuw punt" },
+      { pattern: "\\blinea\\b", flags: "g", replacement: "alinea" },
+      { pattern: "\\blinie\\b", flags: "g", replacement: "alinea" },
+      { pattern: "\\bbeeindigde\\b", flags: "g", replacement: "beeindig de" }
+    ],
+    phonetics: [
+      { pattern: "ij", flags: "g", replacement: "ei" },
+      { pattern: "au", flags: "g", replacement: "ou" },
+      { pattern: "dt\\b", flags: "g", replacement: "t" },
+      { pattern: "\\bsch", flags: "g", replacement: "sg" },
+      { pattern: "ck", flags: "g", replacement: "k" },
+      { pattern: "ph", flags: "g", replacement: "f" },
+      { pattern: "th", flags: "g", replacement: "t" },
+      { pattern: "ie", flags: "g", replacement: "i" },
+      { pattern: "oe", flags: "g", replacement: "u" },
+      { pattern: "ee", flags: "g", replacement: "e" },
+      { pattern: "oo", flags: "g", replacement: "o" },
+      { pattern: "uu", flags: "g", replacement: "u" },
+      { pattern: "aa", flags: "g", replacement: "a" }
+    ],
+    articles: ["een", "de", "het", "die", "dat", "deze"],
+    fillers: ["alsjeblieft", "graag", "even", "maar", "eens", "dan", "nu", "hoor"]
+  };
+
+  // obsidian-plugin/src/languages/en.json
+  var en_default = {
+    code: "en",
+    name: "English",
+    patterns: {
+      newParagraph: ["new paragraph"],
+      newLine: ["new line", "next line"],
+      heading1: ["heading one", "heading 1"],
+      heading2: ["heading two", "heading 2"],
+      heading3: ["heading three", "heading 3"],
+      bulletPoint: ["new item", "next item", "bullet", "bullet point", "new bullet"],
+      todoItem: ["new todo", "new to do", "todo item", "to do item"],
+      numberedItem: ["numbered item", "new numbered item", "next number"],
+      deleteLastParagraph: ["delete last paragraph"],
+      deleteLastLine: ["delete last line", "delete last sentence"],
+      undo: ["undo"],
+      stopRecording: ["stop recording"],
+      colon: ["colon"],
+      wikilink: ["wiki link", "wikilink", "link"],
+      boldOpen: ["open bold", "bold open", "start bold"],
+      boldClose: ["close bold", "bold close", "end bold"],
+      italicOpen: ["open italic", "italic open", "start italic"],
+      italicClose: ["close italic", "italic close", "end italic"],
+      inlineCodeOpen: ["open code", "code open", "start code"],
+      inlineCodeClose: ["close code", "code close", "end code"],
+      tagOpen: ["open tag", "tag open", "start tag"],
+      tagClose: ["close tag", "tag close", "end tag"],
+      codeBlockOpen: ["open code block", "code block open", "start code block"],
+      codeBlockClose: ["close code block", "code block close", "end code block"]
+    },
+    labels: {
+      newParagraph: "New paragraph",
+      newLine: "New line",
+      heading1: "Heading 1",
+      heading2: "Heading 2",
+      heading3: "Heading 3",
+      bulletPoint: "Bullet point",
+      todoItem: "To-do item",
+      numberedItem: "Numbered item",
+      deleteLastParagraph: "Delete last paragraph",
+      deleteLastLine: "Delete last line",
+      undo: "Undo",
+      stopRecording: "Stop recording",
+      colon: "Colon",
+      wikilink: "Wikilink [[\u2026]]",
+      boldOpen: "Open bold **",
+      boldClose: "Close bold **",
+      italicOpen: "Open italic *",
+      italicClose: "Close italic *",
+      inlineCodeOpen: "Open code `",
+      inlineCodeClose: "Close code `",
+      tagOpen: "Open tag #",
+      tagClose: "Close tag",
+      codeBlockOpen: "Open code block ```",
+      codeBlockClose: "Close code block ```"
+    },
+    mishearings: [],
+    phonetics: [
+      { pattern: "ph", flags: "g", replacement: "f" },
+      { pattern: "th", flags: "g", replacement: "t" },
+      { pattern: "ck", flags: "g", replacement: "k" },
+      { pattern: "ght", flags: "g", replacement: "t" },
+      { pattern: "wh", flags: "g", replacement: "w" },
+      { pattern: "kn", flags: "g", replacement: "n" },
+      { pattern: "wr", flags: "g", replacement: "r" },
+      { pattern: "tion", flags: "g", replacement: "shun" },
+      { pattern: "sion", flags: "g", replacement: "shun" },
+      { pattern: "([aeiou])ll", flags: "g", replacement: "$1l" },
+      { pattern: "([aeiou])dd", flags: "g", replacement: "$1d" },
+      { pattern: "([aeiou])tt", flags: "g", replacement: "$1t" }
+    ],
+    articles: ["a", "an", "the"],
+    fillers: ["please", "now", "then", "thanks"]
+  };
+
+  // obsidian-plugin/src/languages/fr.json
+  var fr_default = {
+    code: "fr",
+    name: "Fran\xE7ais",
+    patterns: {
+      newParagraph: ["nouveau paragraphe", "nouvelle section", "nouveau alinea"],
+      newLine: ["nouvelle ligne", "a la ligne", "retour a la ligne"],
+      heading1: ["titre un", "titre 1"],
+      heading2: ["titre deux", "titre 2"],
+      heading3: ["titre trois", "titre 3"],
+      bulletPoint: ["nouveau point", "nouvelle puce", "point suivant", "nouvel element", "nouvel item"],
+      todoItem: ["nouvelle tache", "nouveau todo", "nouveau to do"],
+      numberedItem: ["point numero", "element numero", "nouveau numero"],
+      deleteLastParagraph: ["supprimer dernier paragraphe", "effacer dernier paragraphe"],
+      deleteLastLine: ["supprimer derniere ligne", "effacer derniere ligne", "supprimer derniere phrase"],
+      undo: ["annuler"],
+      stopRecording: ["arreter enregistrement", "arreter l enregistrement", "stop enregistrement"],
+      colon: ["deux points"],
+      wikilink: ["wiki lien", "lien wiki"],
+      boldOpen: ["ouvrir gras", "gras ouvrir"],
+      boldClose: ["fermer gras", "gras fermer"],
+      italicOpen: ["ouvrir italique", "italique ouvrir"],
+      italicClose: ["fermer italique", "italique fermer"],
+      inlineCodeOpen: ["ouvrir code", "code ouvrir"],
+      inlineCodeClose: ["fermer code", "code fermer"],
+      tagOpen: ["ouvrir etiquette", "ouvrir tag"],
+      tagClose: ["fermer etiquette", "fermer tag"],
+      codeBlockOpen: ["ouvrir bloc de code"],
+      codeBlockClose: ["fermer bloc de code"]
+    },
+    labels: {
+      newParagraph: "Nouveau paragraphe",
+      newLine: "Nouvelle ligne",
+      heading1: "Titre 1",
+      heading2: "Titre 2",
+      heading3: "Titre 3",
+      bulletPoint: "Puce",
+      todoItem: "T\xE2che",
+      numberedItem: "Point num\xE9rot\xE9",
+      deleteLastParagraph: "Supprimer dernier paragraphe",
+      deleteLastLine: "Supprimer derni\xE8re ligne",
+      undo: "Annuler",
+      stopRecording: "Arr\xEAter l'enregistrement",
+      colon: "Deux-points",
+      wikilink: "Wikilink [[\u2026]]",
+      boldOpen: "Ouvrir gras **",
+      boldClose: "Fermer gras **",
+      italicOpen: "Ouvrir italique *",
+      italicClose: "Fermer italique *",
+      inlineCodeOpen: "Ouvrir code `",
+      inlineCodeClose: "Fermer code `",
+      tagOpen: "Ouvrir \xE9tiquette #",
+      tagClose: "Fermer \xE9tiquette",
+      codeBlockOpen: "Ouvrir bloc de code ```",
+      codeBlockClose: "Fermer bloc de code ```"
+    },
+    mishearings: [
+      { pattern: "\\bnouveau ligne\\b", flags: "g", replacement: "nouvelle ligne" },
+      { pattern: "\\bnouvelle paragraphe\\b", flags: "g", replacement: "nouveau paragraphe" }
+    ],
+    phonetics: [
+      { pattern: "eau", flags: "g", replacement: "o" },
+      { pattern: "aux", flags: "g", replacement: "o" },
+      { pattern: "ai", flags: "g", replacement: "e" },
+      { pattern: "ei", flags: "g", replacement: "e" },
+      { pattern: "ph", flags: "g", replacement: "f" },
+      { pattern: "qu", flags: "g", replacement: "k" },
+      { pattern: "gn", flags: "g", replacement: "ny" },
+      { pattern: "oi", flags: "g", replacement: "wa" },
+      { pattern: "ou", flags: "g", replacement: "u" },
+      { pattern: "an", flags: "g", replacement: "on" },
+      { pattern: "en", flags: "g", replacement: "on" }
+    ],
+    articles: ["un", "une", "le", "la", "les", "l", "du", "des"],
+    fillers: ["s il vous plait", "s il te plait", "merci"]
+  };
+
+  // obsidian-plugin/src/languages/de.json
+  var de_default = {
+    code: "de",
+    name: "Deutsch",
+    patterns: {
+      newParagraph: ["neuer absatz", "neuer paragraph"],
+      newLine: ["neue zeile", "nachste zeile"],
+      heading1: ["uberschrift eins", "uberschrift 1"],
+      heading2: ["uberschrift zwei", "uberschrift 2"],
+      heading3: ["uberschrift drei", "uberschrift 3"],
+      bulletPoint: ["neuer punkt", "neuer aufzahlungspunkt", "nachster punkt", "neues element"],
+      todoItem: ["neue aufgabe", "neues todo", "neues to do"],
+      numberedItem: ["nummerierter punkt", "neuer nummerierter punkt", "nachste nummer"],
+      deleteLastParagraph: ["letzten absatz loschen", "absatz loschen"],
+      deleteLastLine: ["letzte zeile loschen", "letzten satz loschen"],
+      undo: ["ruckgangig", "ruckgangig machen"],
+      stopRecording: ["aufnahme beenden", "aufnahme stoppen"],
+      colon: ["doppelpunkt"],
+      wikilink: ["wikilink", "wiki link"],
+      boldOpen: ["fett offnen", "fett auf"],
+      boldClose: ["fett schliessen", "fett zu"],
+      italicOpen: ["kursiv offnen", "kursiv auf"],
+      italicClose: ["kursiv schliessen", "kursiv zu"],
+      inlineCodeOpen: ["code offnen", "code auf"],
+      inlineCodeClose: ["code schliessen", "code zu"],
+      tagOpen: ["tag offnen", "tag auf"],
+      tagClose: ["tag schliessen", "tag zu"],
+      codeBlockOpen: ["codeblock offnen", "code block offnen"],
+      codeBlockClose: ["codeblock schliessen", "code block schliessen"]
+    },
+    labels: {
+      newParagraph: "Neuer Absatz",
+      newLine: "Neue Zeile",
+      heading1: "\xDCberschrift 1",
+      heading2: "\xDCberschrift 2",
+      heading3: "\xDCberschrift 3",
+      bulletPoint: "Aufz\xE4hlungspunkt",
+      todoItem: "Aufgabe",
+      numberedItem: "Nummerierter Punkt",
+      deleteLastParagraph: "Letzten Absatz l\xF6schen",
+      deleteLastLine: "Letzte Zeile l\xF6schen",
+      undo: "R\xFCckg\xE4ngig",
+      stopRecording: "Aufnahme beenden",
+      colon: "Doppelpunkt",
+      wikilink: "Wikilink [[\u2026]]",
+      boldOpen: "Fett \xF6ffnen **",
+      boldClose: "Fett schlie\xDFen **",
+      italicOpen: "Kursiv \xF6ffnen *",
+      italicClose: "Kursiv schlie\xDFen *",
+      inlineCodeOpen: "Code \xF6ffnen `",
+      inlineCodeClose: "Code schlie\xDFen `",
+      tagOpen: "Tag \xF6ffnen #",
+      tagClose: "Tag schlie\xDFen",
+      codeBlockOpen: "Codeblock \xF6ffnen ```",
+      codeBlockClose: "Codeblock schlie\xDFen ```"
+    },
+    mishearings: [
+      { pattern: "\\bneue absatz\\b", flags: "g", replacement: "neuer absatz" },
+      { pattern: "\\bneues zeile\\b", flags: "g", replacement: "neue zeile" }
+    ],
+    phonetics: [
+      { pattern: "sch", flags: "g", replacement: "sh" },
+      { pattern: "ei", flags: "g", replacement: "ai" },
+      { pattern: "ie", flags: "g", replacement: "i" },
+      { pattern: "ck", flags: "g", replacement: "k" },
+      { pattern: "ph", flags: "g", replacement: "f" },
+      { pattern: "th", flags: "g", replacement: "t" },
+      { pattern: "v", flags: "g", replacement: "f" },
+      { pattern: "tz", flags: "g", replacement: "ts" },
+      { pattern: "dt\\b", flags: "g", replacement: "t" },
+      { pattern: "aa", flags: "g", replacement: "a" },
+      { pattern: "ee", flags: "g", replacement: "e" },
+      { pattern: "oo", flags: "g", replacement: "o" }
+    ],
+    articles: ["ein", "eine", "einen", "einem", "einer", "der", "die", "das", "den", "dem", "des"],
+    fillers: ["bitte", "mal", "jetzt", "dann"]
+  };
+
+  // obsidian-plugin/src/languages/es.json
+  var es_default = {
+    code: "es",
+    name: "Espa\xF1ol",
+    patterns: {
+      newParagraph: ["nuevo parrafo", "nueva seccion"],
+      newLine: ["nueva linea", "siguiente linea"],
+      heading1: ["titulo uno", "titulo 1"],
+      heading2: ["titulo dos", "titulo 2"],
+      heading3: ["titulo tres", "titulo 3"],
+      bulletPoint: ["nuevo punto", "nueva vineta", "siguiente punto", "nuevo elemento"],
+      todoItem: ["nueva tarea", "nuevo todo", "nuevo to do"],
+      numberedItem: ["punto numerado", "nuevo numero", "siguiente numero"],
+      deleteLastParagraph: ["borrar ultimo parrafo", "eliminar ultimo parrafo"],
+      deleteLastLine: ["borrar ultima linea", "eliminar ultima linea", "borrar ultima frase"],
+      undo: ["deshacer"],
+      stopRecording: ["parar grabacion", "detener grabacion"],
+      colon: ["dos puntos"],
+      wikilink: ["wikilink", "enlace wiki"],
+      boldOpen: ["abrir negrita", "negrita abrir"],
+      boldClose: ["cerrar negrita", "negrita cerrar"],
+      italicOpen: ["abrir cursiva", "cursiva abrir"],
+      italicClose: ["cerrar cursiva", "cursiva cerrar"],
+      inlineCodeOpen: ["abrir codigo", "codigo abrir"],
+      inlineCodeClose: ["cerrar codigo", "codigo cerrar"],
+      tagOpen: ["abrir etiqueta", "abrir tag"],
+      tagClose: ["cerrar etiqueta", "cerrar tag"],
+      codeBlockOpen: ["abrir bloque de codigo"],
+      codeBlockClose: ["cerrar bloque de codigo"]
+    },
+    labels: {
+      newParagraph: "Nuevo p\xE1rrafo",
+      newLine: "Nueva l\xEDnea",
+      heading1: "T\xEDtulo 1",
+      heading2: "T\xEDtulo 2",
+      heading3: "T\xEDtulo 3",
+      bulletPoint: "Vi\xF1eta",
+      todoItem: "Tarea",
+      numberedItem: "Punto numerado",
+      deleteLastParagraph: "Borrar \xFAltimo p\xE1rrafo",
+      deleteLastLine: "Borrar \xFAltima l\xEDnea",
+      undo: "Deshacer",
+      stopRecording: "Parar grabaci\xF3n",
+      colon: "Dos puntos",
+      wikilink: "Wikilink [[\u2026]]",
+      boldOpen: "Abrir negrita **",
+      boldClose: "Cerrar negrita **",
+      italicOpen: "Abrir cursiva *",
+      italicClose: "Cerrar cursiva *",
+      inlineCodeOpen: "Abrir c\xF3digo `",
+      inlineCodeClose: "Cerrar c\xF3digo `",
+      tagOpen: "Abrir etiqueta #",
+      tagClose: "Cerrar etiqueta",
+      codeBlockOpen: "Abrir bloque de c\xF3digo ```",
+      codeBlockClose: "Cerrar bloque de c\xF3digo ```"
+    },
+    mishearings: [],
+    phonetics: [
+      { pattern: "ll", flags: "g", replacement: "y" },
+      { pattern: "v", flags: "g", replacement: "b" },
+      { pattern: "ce", flags: "g", replacement: "se" },
+      { pattern: "ci", flags: "g", replacement: "si" },
+      { pattern: "qu", flags: "g", replacement: "k" },
+      { pattern: "gu(?=[ei])", flags: "g", replacement: "g" },
+      { pattern: "h", flags: "g", replacement: "" }
+    ],
+    articles: ["un", "una", "el", "la", "los", "las", "unos", "unas"],
+    fillers: ["por favor", "ahora", "gracias"]
+  };
+
+  // obsidian-plugin/src/languages/pt.json
+  var pt_default = {
+    code: "pt",
+    name: "Portugu\xEAs",
+    patterns: {
+      newParagraph: ["novo paragrafo", "nova secao"],
+      newLine: ["nova linha", "proxima linha"],
+      heading1: ["titulo um", "titulo 1"],
+      heading2: ["titulo dois", "titulo 2"],
+      heading3: ["titulo tres", "titulo 3"],
+      bulletPoint: ["novo ponto", "novo item", "proximo ponto", "novo elemento"],
+      todoItem: ["nova tarefa", "novo todo", "novo to do"],
+      numberedItem: ["ponto numerado", "novo numero", "proximo numero"],
+      deleteLastParagraph: ["apagar ultimo paragrafo", "excluir ultimo paragrafo"],
+      deleteLastLine: ["apagar ultima linha", "excluir ultima linha", "apagar ultima frase"],
+      undo: ["desfazer"],
+      stopRecording: ["parar gravacao", "encerrar gravacao"],
+      colon: ["dois pontos"],
+      wikilink: ["wikilink", "link wiki"],
+      boldOpen: ["abrir negrito", "negrito abrir"],
+      boldClose: ["fechar negrito", "negrito fechar"],
+      italicOpen: ["abrir italico", "italico abrir"],
+      italicClose: ["fechar italico", "italico fechar"],
+      inlineCodeOpen: ["abrir codigo", "codigo abrir"],
+      inlineCodeClose: ["fechar codigo", "codigo fechar"],
+      tagOpen: ["abrir etiqueta", "abrir tag"],
+      tagClose: ["fechar etiqueta", "fechar tag"],
+      codeBlockOpen: ["abrir bloco de codigo"],
+      codeBlockClose: ["fechar bloco de codigo"]
+    },
+    labels: {
+      newParagraph: "Novo par\xE1grafo",
+      newLine: "Nova linha",
+      heading1: "T\xEDtulo 1",
+      heading2: "T\xEDtulo 2",
+      heading3: "T\xEDtulo 3",
+      bulletPoint: "Ponto",
+      todoItem: "Tarefa",
+      numberedItem: "Ponto numerado",
+      deleteLastParagraph: "Apagar \xFAltimo par\xE1grafo",
+      deleteLastLine: "Apagar \xFAltima linha",
+      undo: "Desfazer",
+      stopRecording: "Parar grava\xE7\xE3o",
+      colon: "Dois pontos",
+      wikilink: "Wikilink [[\u2026]]",
+      boldOpen: "Abrir negrito **",
+      boldClose: "Fechar negrito **",
+      italicOpen: "Abrir it\xE1lico *",
+      italicClose: "Fechar it\xE1lico *",
+      inlineCodeOpen: "Abrir c\xF3digo `",
+      inlineCodeClose: "Fechar c\xF3digo `",
+      tagOpen: "Abrir etiqueta #",
+      tagClose: "Fechar etiqueta",
+      codeBlockOpen: "Abrir bloco de c\xF3digo ```",
+      codeBlockClose: "Fechar bloco de c\xF3digo ```"
+    },
+    mishearings: [],
+    phonetics: [
+      { pattern: "lh", flags: "g", replacement: "ly" },
+      { pattern: "nh", flags: "g", replacement: "ny" },
+      { pattern: "ch", flags: "g", replacement: "sh" },
+      { pattern: "qu", flags: "g", replacement: "k" },
+      { pattern: "\xE7\xE3o", flags: "g", replacement: "saun" },
+      { pattern: "ss", flags: "g", replacement: "s" }
+    ],
+    articles: ["um", "uma", "o", "a", "os", "as", "uns", "umas"],
+    fillers: ["por favor", "agora", "obrigado"]
+  };
+
+  // obsidian-plugin/src/languages/it.json
+  var it_default = {
+    code: "it",
+    name: "Italiano",
+    patterns: {
+      newParagraph: ["nuovo paragrafo", "nuova sezione", "nuovo capoverso"],
+      newLine: ["nuova riga", "a capo", "riga successiva"],
+      heading1: ["titolo uno", "titolo 1"],
+      heading2: ["titolo due", "titolo 2"],
+      heading3: ["titolo tre", "titolo 3"],
+      bulletPoint: ["nuovo punto", "nuovo elemento", "punto successivo", "nuovo elenco"],
+      todoItem: ["nuovo compito", "nuova attivita", "nuovo todo", "nuovo to do"],
+      numberedItem: ["punto numerato", "nuovo numero", "numero successivo"],
+      deleteLastParagraph: ["cancella ultimo paragrafo", "elimina ultimo paragrafo"],
+      deleteLastLine: ["cancella ultima riga", "elimina ultima riga", "cancella ultima frase"],
+      undo: ["annulla"],
+      stopRecording: ["ferma registrazione", "interrompi registrazione", "stop registrazione"],
+      colon: ["due punti"],
+      wikilink: ["wikilink", "link wiki"],
+      boldOpen: ["apri grassetto", "grassetto apri"],
+      boldClose: ["chiudi grassetto", "grassetto chiudi"],
+      italicOpen: ["apri corsivo", "corsivo apri"],
+      italicClose: ["chiudi corsivo", "corsivo chiudi"],
+      inlineCodeOpen: ["apri codice", "codice apri"],
+      inlineCodeClose: ["chiudi codice", "codice chiudi"],
+      tagOpen: ["apri tag", "apri etichetta"],
+      tagClose: ["chiudi tag", "chiudi etichetta"],
+      codeBlockOpen: ["apri blocco di codice"],
+      codeBlockClose: ["chiudi blocco di codice"]
+    },
+    labels: {
+      newParagraph: "Nuovo paragrafo",
+      newLine: "Nuova riga",
+      heading1: "Titolo 1",
+      heading2: "Titolo 2",
+      heading3: "Titolo 3",
+      bulletPoint: "Punto elenco",
+      todoItem: "Attivit\xE0",
+      numberedItem: "Punto numerato",
+      deleteLastParagraph: "Cancella ultimo paragrafo",
+      deleteLastLine: "Cancella ultima riga",
+      undo: "Annulla",
+      stopRecording: "Ferma registrazione",
+      colon: "Due punti",
+      wikilink: "Wikilink [[\u2026]]",
+      boldOpen: "Apri grassetto **",
+      boldClose: "Chiudi grassetto **",
+      italicOpen: "Apri corsivo *",
+      italicClose: "Chiudi corsivo *",
+      inlineCodeOpen: "Apri codice `",
+      inlineCodeClose: "Chiudi codice `",
+      tagOpen: "Apri tag #",
+      tagClose: "Chiudi tag",
+      codeBlockOpen: "Apri blocco di codice ```",
+      codeBlockClose: "Chiudi blocco di codice ```"
+    },
+    mishearings: [],
+    phonetics: [
+      { pattern: "gn", flags: "g", replacement: "ny" },
+      { pattern: "gl(?=[i])", flags: "g", replacement: "ly" },
+      { pattern: "ch", flags: "g", replacement: "k" },
+      { pattern: "gh", flags: "g", replacement: "g" },
+      { pattern: "sc(?=[ei])", flags: "g", replacement: "sh" },
+      { pattern: "zz", flags: "g", replacement: "ts" },
+      { pattern: "cc(?=[ei])", flags: "g", replacement: "ch" }
+    ],
+    articles: ["un", "uno", "una", "il", "lo", "la", "i", "gli", "le"],
+    fillers: ["per favore", "ora", "adesso", "grazie"]
+  };
+
+  // obsidian-plugin/src/languages/ru.json
+  var ru_default = {
+    code: "ru",
+    name: "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
+    patterns: {
+      newParagraph: ["\u043D\u043E\u0432\u044B\u0439 \u0430\u0431\u0437\u0430\u0446", "\u043D\u043E\u0432\u044B\u0439 \u043F\u0430\u0440\u0430\u0433\u0440\u0430\u0444"],
+      newLine: ["\u043D\u043E\u0432\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430", "\u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430"],
+      heading1: ["\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A \u043E\u0434\u0438\u043D", "\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A 1"],
+      heading2: ["\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A \u0434\u0432\u0430", "\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A 2"],
+      heading3: ["\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A \u0442\u0440\u0438", "\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A 3"],
+      bulletPoint: ["\u043D\u043E\u0432\u044B\u0439 \u043F\u0443\u043D\u043A\u0442", "\u043D\u043E\u0432\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442", "\u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0439 \u043F\u0443\u043D\u043A\u0442"],
+      todoItem: ["\u043D\u043E\u0432\u0430\u044F \u0437\u0430\u0434\u0430\u0447\u0430", "\u043D\u043E\u0432\u043E\u0435 \u0437\u0430\u0434\u0430\u043D\u0438\u0435"],
+      numberedItem: ["\u043D\u0443\u043C\u0435\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u043F\u0443\u043D\u043A\u0442", "\u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0439 \u043D\u043E\u043C\u0435\u0440"],
+      deleteLastParagraph: ["\u0443\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0439 \u0430\u0431\u0437\u0430\u0446"],
+      deleteLastLine: ["\u0443\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u044E\u044E \u0441\u0442\u0440\u043E\u043A\u0443", "\u0443\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0435\u0435 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435"],
+      undo: ["\u043E\u0442\u043C\u0435\u043D\u0438\u0442\u044C", "\u043E\u0442\u043C\u0435\u043D\u0430"],
+      stopRecording: ["\u043E\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u0437\u0430\u043F\u0438\u0441\u044C", "\u0441\u0442\u043E\u043F \u0437\u0430\u043F\u0438\u0441\u044C"],
+      colon: ["\u0434\u0432\u043E\u0435\u0442\u043E\u0447\u0438\u0435"],
+      wikilink: ["\u0432\u0438\u043A\u0438 \u0441\u0441\u044B\u043B\u043A\u0430", "\u0432\u0438\u043A\u0438 \u043B\u0438\u043D\u043A"],
+      boldOpen: ["\u043E\u0442\u043A\u0440\u044B\u0442\u044C \u0436\u0438\u0440\u043D\u044B\u0439", "\u0436\u0438\u0440\u043D\u044B\u0439 \u043E\u0442\u043A\u0440\u044B\u0442\u044C"],
+      boldClose: ["\u0437\u0430\u043A\u0440\u044B\u0442\u044C \u0436\u0438\u0440\u043D\u044B\u0439", "\u0436\u0438\u0440\u043D\u044B\u0439 \u0437\u0430\u043A\u0440\u044B\u0442\u044C"],
+      italicOpen: ["\u043E\u0442\u043A\u0440\u044B\u0442\u044C \u043A\u0443\u0440\u0441\u0438\u0432", "\u043A\u0443\u0440\u0441\u0438\u0432 \u043E\u0442\u043A\u0440\u044B\u0442\u044C"],
+      italicClose: ["\u0437\u0430\u043A\u0440\u044B\u0442\u044C \u043A\u0443\u0440\u0441\u0438\u0432", "\u043A\u0443\u0440\u0441\u0438\u0432 \u0437\u0430\u043A\u0440\u044B\u0442\u044C"],
+      inlineCodeOpen: ["\u043E\u0442\u043A\u0440\u044B\u0442\u044C \u043A\u043E\u0434", "\u043A\u043E\u0434 \u043E\u0442\u043A\u0440\u044B\u0442\u044C"],
+      inlineCodeClose: ["\u0437\u0430\u043A\u0440\u044B\u0442\u044C \u043A\u043E\u0434", "\u043A\u043E\u0434 \u0437\u0430\u043A\u0440\u044B\u0442\u044C"],
+      tagOpen: ["\u043E\u0442\u043A\u0440\u044B\u0442\u044C \u0442\u0435\u0433", "\u0442\u0435\u0433 \u043E\u0442\u043A\u0440\u044B\u0442\u044C"],
+      tagClose: ["\u0437\u0430\u043A\u0440\u044B\u0442\u044C \u0442\u0435\u0433", "\u0442\u0435\u0433 \u0437\u0430\u043A\u0440\u044B\u0442\u044C"],
+      codeBlockOpen: ["\u043E\u0442\u043A\u0440\u044B\u0442\u044C \u0431\u043B\u043E\u043A \u043A\u043E\u0434\u0430"],
+      codeBlockClose: ["\u0437\u0430\u043A\u0440\u044B\u0442\u044C \u0431\u043B\u043E\u043A \u043A\u043E\u0434\u0430"]
+    },
+    labels: {
+      newParagraph: "\u041D\u043E\u0432\u044B\u0439 \u0430\u0431\u0437\u0430\u0446",
+      newLine: "\u041D\u043E\u0432\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430",
+      heading1: "\u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A 1",
+      heading2: "\u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A 2",
+      heading3: "\u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A 3",
+      bulletPoint: "\u041D\u043E\u0432\u044B\u0439 \u043F\u0443\u043D\u043A\u0442",
+      todoItem: "\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u0434\u0430\u0447\u0430",
+      numberedItem: "\u041D\u0443\u043C\u0435\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u043F\u0443\u043D\u043A\u0442",
+      deleteLastParagraph: "\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0439 \u0430\u0431\u0437\u0430\u0446",
+      deleteLastLine: "\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u044E\u044E \u0441\u0442\u0440\u043E\u043A\u0443",
+      undo: "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C",
+      stopRecording: "\u041E\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u0437\u0430\u043F\u0438\u0441\u044C",
+      colon: "\u0414\u0432\u043E\u0435\u0442\u043E\u0447\u0438\u0435",
+      wikilink: "\u0412\u0438\u043A\u0438-\u0441\u0441\u044B\u043B\u043A\u0430 [[\u2026]]",
+      boldOpen: "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0436\u0438\u0440\u043D\u044B\u0439 **",
+      boldClose: "\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0436\u0438\u0440\u043D\u044B\u0439 **",
+      italicOpen: "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043A\u0443\u0440\u0441\u0438\u0432 *",
+      italicClose: "\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043A\u0443\u0440\u0441\u0438\u0432 *",
+      inlineCodeOpen: "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043A\u043E\u0434 `",
+      inlineCodeClose: "\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043A\u043E\u0434 `",
+      tagOpen: "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0442\u0435\u0433 #",
+      tagClose: "\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0442\u0435\u0433",
+      codeBlockOpen: "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0431\u043B\u043E\u043A \u043A\u043E\u0434\u0430 ```",
+      codeBlockClose: "\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u0431\u043B\u043E\u043A \u043A\u043E\u0434\u0430 ```"
+    },
+    mishearings: [],
+    phonetics: [],
+    articles: [],
+    fillers: []
+  };
+
+  // obsidian-plugin/src/languages/zh.json
+  var zh_default = {
+    code: "zh",
+    name: "\u4E2D\u6587",
+    patterns: {
+      newParagraph: ["\u65B0\u6BB5\u843D", "\u65B0\u7684\u6BB5\u843D"],
+      newLine: ["\u6362\u884C", "\u65B0\u884C", "\u4E0B\u4E00\u884C"],
+      heading1: ["\u6807\u9898\u4E00", "\u6807\u98981", "\u4E00\u7EA7\u6807\u9898"],
+      heading2: ["\u6807\u9898\u4E8C", "\u6807\u98982", "\u4E8C\u7EA7\u6807\u9898"],
+      heading3: ["\u6807\u9898\u4E09", "\u6807\u98983", "\u4E09\u7EA7\u6807\u9898"],
+      bulletPoint: ["\u65B0\u9879\u76EE", "\u5217\u8868\u9879", "\u65B0\u7684\u9879\u76EE"],
+      todoItem: ["\u65B0\u4EFB\u52A1", "\u65B0\u5F85\u529E", "\u5F85\u529E\u4E8B\u9879"],
+      numberedItem: ["\u7F16\u53F7\u9879", "\u65B0\u7F16\u53F7", "\u4E0B\u4E00\u4E2A\u7F16\u53F7"],
+      deleteLastParagraph: ["\u5220\u9664\u4E0A\u4E00\u6BB5", "\u5220\u9664\u6700\u540E\u4E00\u6BB5"],
+      deleteLastLine: ["\u5220\u9664\u4E0A\u4E00\u884C", "\u5220\u9664\u4E0A\u4E00\u53E5"],
+      undo: ["\u64A4\u9500", "\u64A4\u56DE"],
+      stopRecording: ["\u505C\u6B62\u5F55\u97F3", "\u7ED3\u675F\u5F55\u97F3"],
+      colon: ["\u5192\u53F7"],
+      wikilink: ["\u7EF4\u57FA\u94FE\u63A5", "\u94FE\u63A5"],
+      boldOpen: ["\u5F00\u59CB\u52A0\u7C97", "\u52A0\u7C97\u5F00\u59CB", "\u6253\u5F00\u7C97\u4F53"],
+      boldClose: ["\u7ED3\u675F\u52A0\u7C97", "\u52A0\u7C97\u7ED3\u675F", "\u5173\u95ED\u7C97\u4F53"],
+      italicOpen: ["\u5F00\u59CB\u659C\u4F53", "\u659C\u4F53\u5F00\u59CB", "\u6253\u5F00\u659C\u4F53"],
+      italicClose: ["\u7ED3\u675F\u659C\u4F53", "\u659C\u4F53\u7ED3\u675F", "\u5173\u95ED\u659C\u4F53"],
+      inlineCodeOpen: ["\u5F00\u59CB\u4EE3\u7801", "\u4EE3\u7801\u5F00\u59CB", "\u6253\u5F00\u4EE3\u7801"],
+      inlineCodeClose: ["\u7ED3\u675F\u4EE3\u7801", "\u4EE3\u7801\u7ED3\u675F", "\u5173\u95ED\u4EE3\u7801"],
+      tagOpen: ["\u5F00\u59CB\u6807\u7B7E", "\u6253\u5F00\u6807\u7B7E"],
+      tagClose: ["\u7ED3\u675F\u6807\u7B7E", "\u5173\u95ED\u6807\u7B7E"],
+      codeBlockOpen: ["\u5F00\u59CB\u4EE3\u7801\u5757", "\u6253\u5F00\u4EE3\u7801\u5757"],
+      codeBlockClose: ["\u7ED3\u675F\u4EE3\u7801\u5757", "\u5173\u95ED\u4EE3\u7801\u5757"]
+    },
+    labels: {
+      newParagraph: "\u65B0\u6BB5\u843D",
+      newLine: "\u6362\u884C",
+      heading1: "\u6807\u9898 1",
+      heading2: "\u6807\u9898 2",
+      heading3: "\u6807\u9898 3",
+      bulletPoint: "\u5217\u8868\u9879",
+      todoItem: "\u5F85\u529E\u4E8B\u9879",
+      numberedItem: "\u7F16\u53F7\u9879",
+      deleteLastParagraph: "\u5220\u9664\u4E0A\u4E00\u6BB5",
+      deleteLastLine: "\u5220\u9664\u4E0A\u4E00\u884C",
+      undo: "\u64A4\u9500",
+      stopRecording: "\u505C\u6B62\u5F55\u97F3",
+      colon: "\u5192\u53F7",
+      wikilink: "\u7EF4\u57FA\u94FE\u63A5 [[\u2026]]",
+      boldOpen: "\u5F00\u59CB\u52A0\u7C97 **",
+      boldClose: "\u7ED3\u675F\u52A0\u7C97 **",
+      italicOpen: "\u5F00\u59CB\u659C\u4F53 *",
+      italicClose: "\u7ED3\u675F\u659C\u4F53 *",
+      inlineCodeOpen: "\u5F00\u59CB\u4EE3\u7801 `",
+      inlineCodeClose: "\u7ED3\u675F\u4EE3\u7801 `",
+      tagOpen: "\u5F00\u59CB\u6807\u7B7E #",
+      tagClose: "\u7ED3\u675F\u6807\u7B7E",
+      codeBlockOpen: "\u5F00\u59CB\u4EE3\u7801\u5757 ```",
+      codeBlockClose: "\u7ED3\u675F\u4EE3\u7801\u5757 ```"
+    },
+    mishearings: [],
+    phonetics: [],
+    articles: [],
+    fillers: []
+  };
+
+  // obsidian-plugin/src/languages/hi.json
+  var hi_default = {
+    code: "hi",
+    name: "\u0939\u093F\u0928\u094D\u0926\u0940",
+    patterns: {
+      newParagraph: ["\u0928\u092F\u093E \u092A\u0948\u0930\u093E\u0917\u094D\u0930\u093E\u092B", "\u0928\u092F\u093E \u0905\u0928\u0941\u091A\u094D\u091B\u0947\u0926"],
+      newLine: ["\u0928\u0908 \u0932\u093E\u0907\u0928", "\u0905\u0917\u0932\u0940 \u0932\u093E\u0907\u0928"],
+      heading1: ["\u0936\u0940\u0930\u094D\u0937\u0915 \u090F\u0915", "\u0936\u0940\u0930\u094D\u0937\u0915 1", "\u0939\u0947\u0921\u093F\u0902\u0917 1"],
+      heading2: ["\u0936\u0940\u0930\u094D\u0937\u0915 \u0926\u094B", "\u0936\u0940\u0930\u094D\u0937\u0915 2", "\u0939\u0947\u0921\u093F\u0902\u0917 2"],
+      heading3: ["\u0936\u0940\u0930\u094D\u0937\u0915 \u0924\u0940\u0928", "\u0936\u0940\u0930\u094D\u0937\u0915 3", "\u0939\u0947\u0921\u093F\u0902\u0917 3"],
+      bulletPoint: ["\u0928\u092F\u093E \u092C\u093F\u0902\u0926\u0941", "\u0928\u092F\u093E \u092A\u0949\u0907\u0902\u091F", "\u0905\u0917\u0932\u093E \u092A\u0949\u0907\u0902\u091F"],
+      todoItem: ["\u0928\u092F\u093E \u0915\u093E\u0930\u094D\u092F", "\u0928\u092F\u093E \u091F\u0942\u0921\u0942"],
+      numberedItem: ["\u0915\u094D\u0930\u092E\u093E\u0902\u0915\u093F\u0924 \u092C\u093F\u0902\u0926\u0941", "\u0905\u0917\u0932\u093E \u0928\u0902\u092C\u0930"],
+      deleteLastParagraph: ["\u092A\u093F\u091B\u0932\u093E \u092A\u0948\u0930\u093E\u0917\u094D\u0930\u093E\u092B \u0939\u091F\u093E\u0913"],
+      deleteLastLine: ["\u092A\u093F\u091B\u0932\u0940 \u0932\u093E\u0907\u0928 \u0939\u091F\u093E\u0913", "\u0905\u0902\u0924\u093F\u092E \u0932\u093E\u0907\u0928 \u0939\u091F\u093E\u0913"],
+      undo: ["\u092A\u0942\u0930\u094D\u0935\u0935\u0924", "\u0905\u0928\u0921\u0942"],
+      stopRecording: ["\u0930\u093F\u0915\u0949\u0930\u094D\u0921\u093F\u0902\u0917 \u092C\u0902\u0926 \u0915\u0930\u094B", "\u0930\u093F\u0915\u0949\u0930\u094D\u0921\u093F\u0902\u0917 \u0930\u094B\u0915\u094B"],
+      colon: ["\u0915\u094B\u0932\u0928"],
+      wikilink: ["\u0935\u093F\u0915\u093F \u0932\u093F\u0902\u0915", "\u0932\u093F\u0902\u0915"],
+      boldOpen: ["\u092C\u094B\u0932\u094D\u0921 \u0916\u094B\u0932\u094B", "\u092E\u094B\u091F\u093E \u0916\u094B\u0932\u094B"],
+      boldClose: ["\u092C\u094B\u0932\u094D\u0921 \u092C\u0902\u0926 \u0915\u0930\u094B", "\u092E\u094B\u091F\u093E \u092C\u0902\u0926 \u0915\u0930\u094B"],
+      italicOpen: ["\u0907\u091F\u0948\u0932\u093F\u0915 \u0916\u094B\u0932\u094B", "\u0924\u093F\u0930\u091B\u093E \u0916\u094B\u0932\u094B"],
+      italicClose: ["\u0907\u091F\u0948\u0932\u093F\u0915 \u092C\u0902\u0926 \u0915\u0930\u094B", "\u0924\u093F\u0930\u091B\u093E \u092C\u0902\u0926 \u0915\u0930\u094B"],
+      inlineCodeOpen: ["\u0915\u094B\u0921 \u0916\u094B\u0932\u094B"],
+      inlineCodeClose: ["\u0915\u094B\u0921 \u092C\u0902\u0926 \u0915\u0930\u094B"],
+      tagOpen: ["\u091F\u0948\u0917 \u0916\u094B\u0932\u094B"],
+      tagClose: ["\u091F\u0948\u0917 \u092C\u0902\u0926 \u0915\u0930\u094B"],
+      codeBlockOpen: ["\u0915\u094B\u0921 \u092C\u094D\u0932\u0949\u0915 \u0916\u094B\u0932\u094B"],
+      codeBlockClose: ["\u0915\u094B\u0921 \u092C\u094D\u0932\u0949\u0915 \u092C\u0902\u0926 \u0915\u0930\u094B"]
+    },
+    labels: {
+      newParagraph: "\u0928\u092F\u093E \u092A\u0948\u0930\u093E\u0917\u094D\u0930\u093E\u092B",
+      newLine: "\u0928\u0908 \u0932\u093E\u0907\u0928",
+      heading1: "\u0936\u0940\u0930\u094D\u0937\u0915 1",
+      heading2: "\u0936\u0940\u0930\u094D\u0937\u0915 2",
+      heading3: "\u0936\u0940\u0930\u094D\u0937\u0915 3",
+      bulletPoint: "\u0928\u092F\u093E \u092C\u093F\u0902\u0926\u0941",
+      todoItem: "\u0928\u092F\u093E \u0915\u093E\u0930\u094D\u092F",
+      numberedItem: "\u0915\u094D\u0930\u092E\u093E\u0902\u0915\u093F\u0924 \u092C\u093F\u0902\u0926\u0941",
+      deleteLastParagraph: "\u092A\u093F\u091B\u0932\u093E \u092A\u0948\u0930\u093E\u0917\u094D\u0930\u093E\u092B \u0939\u091F\u093E\u0913",
+      deleteLastLine: "\u092A\u093F\u091B\u0932\u0940 \u0932\u093E\u0907\u0928 \u0939\u091F\u093E\u0913",
+      undo: "\u092A\u0942\u0930\u094D\u0935\u0935\u0924",
+      stopRecording: "\u0930\u093F\u0915\u0949\u0930\u094D\u0921\u093F\u0902\u0917 \u092C\u0902\u0926 \u0915\u0930\u094B",
+      colon: "\u0915\u094B\u0932\u0928",
+      wikilink: "\u0935\u093F\u0915\u093F \u0932\u093F\u0902\u0915 [[\u2026]]",
+      boldOpen: "\u092C\u094B\u0932\u094D\u0921 \u0916\u094B\u0932\u094B **",
+      boldClose: "\u092C\u094B\u0932\u094D\u0921 \u092C\u0902\u0926 \u0915\u0930\u094B **",
+      italicOpen: "\u0907\u091F\u0948\u0932\u093F\u0915 \u0916\u094B\u0932\u094B *",
+      italicClose: "\u0907\u091F\u0948\u0932\u093F\u0915 \u092C\u0902\u0926 \u0915\u0930\u094B *",
+      inlineCodeOpen: "\u0915\u094B\u0921 \u0916\u094B\u0932\u094B `",
+      inlineCodeClose: "\u0915\u094B\u0921 \u092C\u0902\u0926 \u0915\u0930\u094B `",
+      tagOpen: "\u091F\u0948\u0917 \u0916\u094B\u0932\u094B #",
+      tagClose: "\u091F\u0948\u0917 \u092C\u0902\u0926 \u0915\u0930\u094B",
+      codeBlockOpen: "\u0915\u094B\u0921 \u092C\u094D\u0932\u0949\u0915 \u0916\u094B\u0932\u094B ```",
+      codeBlockClose: "\u0915\u094B\u0921 \u092C\u094D\u0932\u0949\u0915 \u092C\u0902\u0926 \u0915\u0930\u094B ```"
+    },
+    mishearings: [],
+    phonetics: [],
+    articles: [],
+    fillers: []
+  };
+
+  // obsidian-plugin/src/languages/ar.json
+  var ar_default = {
+    code: "ar",
+    name: "\u0627\u0644\u0639\u0631\u0628\u064A\u0629",
+    patterns: {
+      newParagraph: ["\u0641\u0642\u0631\u0629 \u062C\u062F\u064A\u062F\u0629"],
+      newLine: ["\u0633\u0637\u0631 \u062C\u062F\u064A\u062F", "\u0627\u0644\u0633\u0637\u0631 \u0627\u0644\u062A\u0627\u0644\u064A"],
+      heading1: ["\u0639\u0646\u0648\u0627\u0646 \u0648\u0627\u062D\u062F", "\u0639\u0646\u0648\u0627\u0646 1"],
+      heading2: ["\u0639\u0646\u0648\u0627\u0646 \u0627\u062B\u0646\u064A\u0646", "\u0639\u0646\u0648\u0627\u0646 2"],
+      heading3: ["\u0639\u0646\u0648\u0627\u0646 \u062B\u0644\u0627\u062B\u0629", "\u0639\u0646\u0648\u0627\u0646 3"],
+      bulletPoint: ["\u0646\u0642\u0637\u0629 \u062C\u062F\u064A\u062F\u0629", "\u0639\u0646\u0635\u0631 \u062C\u062F\u064A\u062F"],
+      todoItem: ["\u0645\u0647\u0645\u0629 \u062C\u062F\u064A\u062F\u0629"],
+      numberedItem: ["\u0639\u0646\u0635\u0631 \u0645\u0631\u0642\u0645", "\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u062A\u0627\u0644\u064A"],
+      deleteLastParagraph: ["\u0627\u062D\u0630\u0641 \u0627\u0644\u0641\u0642\u0631\u0629 \u0627\u0644\u0623\u062E\u064A\u0631\u0629"],
+      deleteLastLine: ["\u0627\u062D\u0630\u0641 \u0627\u0644\u0633\u0637\u0631 \u0627\u0644\u0623\u062E\u064A\u0631", "\u0627\u062D\u0630\u0641 \u0627\u0644\u062C\u0645\u0644\u0629 \u0627\u0644\u0623\u062E\u064A\u0631\u0629"],
+      undo: ["\u062A\u0631\u0627\u062C\u0639"],
+      stopRecording: ["\u0623\u0648\u0642\u0641 \u0627\u0644\u062A\u0633\u062C\u064A\u0644", "\u0625\u064A\u0642\u0627\u0641 \u0627\u0644\u062A\u0633\u062C\u064A\u0644"],
+      colon: ["\u0646\u0642\u0637\u062A\u0627\u0646"],
+      wikilink: ["\u0631\u0627\u0628\u0637 \u0648\u064A\u0643\u064A", "\u0631\u0627\u0628\u0637"],
+      boldOpen: ["\u0627\u0641\u062A\u062D \u063A\u0627\u0645\u0642", "\u063A\u0627\u0645\u0642 \u0627\u0641\u062A\u062D"],
+      boldClose: ["\u0623\u063A\u0644\u0642 \u063A\u0627\u0645\u0642", "\u063A\u0627\u0645\u0642 \u0623\u063A\u0644\u0642"],
+      italicOpen: ["\u0627\u0641\u062A\u062D \u0645\u0627\u0626\u0644", "\u0645\u0627\u0626\u0644 \u0627\u0641\u062A\u062D"],
+      italicClose: ["\u0623\u063A\u0644\u0642 \u0645\u0627\u0626\u0644", "\u0645\u0627\u0626\u0644 \u0623\u063A\u0644\u0642"],
+      inlineCodeOpen: ["\u0627\u0641\u062A\u062D \u0643\u0648\u062F", "\u0643\u0648\u062F \u0627\u0641\u062A\u062D"],
+      inlineCodeClose: ["\u0623\u063A\u0644\u0642 \u0643\u0648\u062F", "\u0643\u0648\u062F \u0623\u063A\u0644\u0642"],
+      tagOpen: ["\u0627\u0641\u062A\u062D \u0648\u0633\u0645", "\u0648\u0633\u0645 \u0627\u0641\u062A\u062D"],
+      tagClose: ["\u0623\u063A\u0644\u0642 \u0648\u0633\u0645", "\u0648\u0633\u0645 \u0623\u063A\u0644\u0642"],
+      codeBlockOpen: ["\u0627\u0641\u062A\u062D \u0643\u062A\u0644\u0629 \u0643\u0648\u062F"],
+      codeBlockClose: ["\u0623\u063A\u0644\u0642 \u0643\u062A\u0644\u0629 \u0643\u0648\u062F"]
+    },
+    labels: {
+      newParagraph: "\u0641\u0642\u0631\u0629 \u062C\u062F\u064A\u062F\u0629",
+      newLine: "\u0633\u0637\u0631 \u062C\u062F\u064A\u062F",
+      heading1: "\u0639\u0646\u0648\u0627\u0646 1",
+      heading2: "\u0639\u0646\u0648\u0627\u0646 2",
+      heading3: "\u0639\u0646\u0648\u0627\u0646 3",
+      bulletPoint: "\u0646\u0642\u0637\u0629 \u062C\u062F\u064A\u062F\u0629",
+      todoItem: "\u0645\u0647\u0645\u0629 \u062C\u062F\u064A\u062F\u0629",
+      numberedItem: "\u0639\u0646\u0635\u0631 \u0645\u0631\u0642\u0645",
+      deleteLastParagraph: "\u0627\u062D\u0630\u0641 \u0627\u0644\u0641\u0642\u0631\u0629 \u0627\u0644\u0623\u062E\u064A\u0631\u0629",
+      deleteLastLine: "\u0627\u062D\u0630\u0641 \u0627\u0644\u0633\u0637\u0631 \u0627\u0644\u0623\u062E\u064A\u0631",
+      undo: "\u062A\u0631\u0627\u062C\u0639",
+      stopRecording: "\u0623\u0648\u0642\u0641 \u0627\u0644\u062A\u0633\u062C\u064A\u0644",
+      colon: "\u0646\u0642\u0637\u062A\u0627\u0646",
+      wikilink: "[[\u2026]] \u0631\u0627\u0628\u0637 \u0648\u064A\u0643\u064A",
+      boldOpen: "** \u0627\u0641\u062A\u062D \u063A\u0627\u0645\u0642",
+      boldClose: "** \u0623\u063A\u0644\u0642 \u063A\u0627\u0645\u0642",
+      italicOpen: "* \u0627\u0641\u062A\u062D \u0645\u0627\u0626\u0644",
+      italicClose: "* \u0623\u063A\u0644\u0642 \u0645\u0627\u0626\u0644",
+      inlineCodeOpen: "` \u0627\u0641\u062A\u062D \u0643\u0648\u062F",
+      inlineCodeClose: "` \u0623\u063A\u0644\u0642 \u0643\u0648\u062F",
+      tagOpen: "# \u0627\u0641\u062A\u062D \u0648\u0633\u0645",
+      tagClose: "\u0623\u063A\u0644\u0642 \u0648\u0633\u0645",
+      codeBlockOpen: "``` \u0627\u0641\u062A\u062D \u0643\u062A\u0644\u0629 \u0643\u0648\u062F",
+      codeBlockClose: "``` \u0623\u063A\u0644\u0642 \u0643\u062A\u0644\u0629 \u0643\u0648\u062F"
+    },
+    mishearings: [],
+    phonetics: [],
+    articles: ["\u0627\u0644"],
+    fillers: []
+  };
+
+  // obsidian-plugin/src/languages/ja.json
+  var ja_default = {
+    code: "ja",
+    name: "\u65E5\u672C\u8A9E",
+    patterns: {
+      newParagraph: ["\u65B0\u3057\u3044\u6BB5\u843D", "\u65B0\u6BB5\u843D"],
+      newLine: ["\u6539\u884C", "\u65B0\u3057\u3044\u884C", "\u6B21\u306E\u884C"],
+      heading1: ["\u898B\u51FA\u30571", "\u898B\u51FA\u3057\u3044\u3061"],
+      heading2: ["\u898B\u51FA\u30572", "\u898B\u51FA\u3057\u306B"],
+      heading3: ["\u898B\u51FA\u30573", "\u898B\u51FA\u3057\u3055\u3093"],
+      bulletPoint: ["\u7B87\u6761\u66F8\u304D", "\u65B0\u3057\u3044\u9805\u76EE", "\u6B21\u306E\u9805\u76EE"],
+      todoItem: ["\u65B0\u3057\u3044\u30BF\u30B9\u30AF", "\u30BF\u30B9\u30AF\u8FFD\u52A0"],
+      numberedItem: ["\u756A\u53F7\u4ED8\u304D", "\u6B21\u306E\u756A\u53F7"],
+      deleteLastParagraph: ["\u6700\u5F8C\u306E\u6BB5\u843D\u3092\u524A\u9664"],
+      deleteLastLine: ["\u6700\u5F8C\u306E\u884C\u3092\u524A\u9664", "\u6700\u5F8C\u306E\u6587\u3092\u524A\u9664"],
+      undo: ["\u5143\u306B\u623B\u3059", "\u53D6\u308A\u6D88\u3057"],
+      stopRecording: ["\u9332\u97F3\u505C\u6B62", "\u9332\u97F3\u3092\u6B62\u3081\u3066"],
+      colon: ["\u30B3\u30ED\u30F3"],
+      wikilink: ["\u30A6\u30A3\u30AD\u30EA\u30F3\u30AF", "\u30EA\u30F3\u30AF"],
+      boldOpen: ["\u592A\u5B57\u958B\u59CB", "\u30DC\u30FC\u30EB\u30C9\u958B\u59CB", "\u592A\u5B57\u958B\u304F"],
+      boldClose: ["\u592A\u5B57\u7D42\u4E86", "\u30DC\u30FC\u30EB\u30C9\u7D42\u4E86", "\u592A\u5B57\u9589\u3058\u308B"],
+      italicOpen: ["\u659C\u4F53\u958B\u59CB", "\u30A4\u30BF\u30EA\u30C3\u30AF\u958B\u59CB", "\u659C\u4F53\u958B\u304F"],
+      italicClose: ["\u659C\u4F53\u7D42\u4E86", "\u30A4\u30BF\u30EA\u30C3\u30AF\u7D42\u4E86", "\u659C\u4F53\u9589\u3058\u308B"],
+      inlineCodeOpen: ["\u30B3\u30FC\u30C9\u958B\u59CB", "\u30B3\u30FC\u30C9\u958B\u304F"],
+      inlineCodeClose: ["\u30B3\u30FC\u30C9\u7D42\u4E86", "\u30B3\u30FC\u30C9\u9589\u3058\u308B"],
+      tagOpen: ["\u30BF\u30B0\u958B\u59CB", "\u30BF\u30B0\u958B\u304F"],
+      tagClose: ["\u30BF\u30B0\u7D42\u4E86", "\u30BF\u30B0\u9589\u3058\u308B"],
+      codeBlockOpen: ["\u30B3\u30FC\u30C9\u30D6\u30ED\u30C3\u30AF\u958B\u59CB", "\u30B3\u30FC\u30C9\u30D6\u30ED\u30C3\u30AF\u958B\u304F"],
+      codeBlockClose: ["\u30B3\u30FC\u30C9\u30D6\u30ED\u30C3\u30AF\u7D42\u4E86", "\u30B3\u30FC\u30C9\u30D6\u30ED\u30C3\u30AF\u9589\u3058\u308B"]
+    },
+    labels: {
+      newParagraph: "\u65B0\u3057\u3044\u6BB5\u843D",
+      newLine: "\u6539\u884C",
+      heading1: "\u898B\u51FA\u3057 1",
+      heading2: "\u898B\u51FA\u3057 2",
+      heading3: "\u898B\u51FA\u3057 3",
+      bulletPoint: "\u7B87\u6761\u66F8\u304D",
+      todoItem: "\u65B0\u3057\u3044\u30BF\u30B9\u30AF",
+      numberedItem: "\u756A\u53F7\u4ED8\u304D",
+      deleteLastParagraph: "\u6700\u5F8C\u306E\u6BB5\u843D\u3092\u524A\u9664",
+      deleteLastLine: "\u6700\u5F8C\u306E\u884C\u3092\u524A\u9664",
+      undo: "\u5143\u306B\u623B\u3059",
+      stopRecording: "\u9332\u97F3\u505C\u6B62",
+      colon: "\u30B3\u30ED\u30F3",
+      wikilink: "\u30A6\u30A3\u30AD\u30EA\u30F3\u30AF [[\u2026]]",
+      boldOpen: "\u592A\u5B57\u958B\u59CB **",
+      boldClose: "\u592A\u5B57\u7D42\u4E86 **",
+      italicOpen: "\u659C\u4F53\u958B\u59CB *",
+      italicClose: "\u659C\u4F53\u7D42\u4E86 *",
+      inlineCodeOpen: "\u30B3\u30FC\u30C9\u958B\u59CB `",
+      inlineCodeClose: "\u30B3\u30FC\u30C9\u7D42\u4E86 `",
+      tagOpen: "\u30BF\u30B0\u958B\u59CB #",
+      tagClose: "\u30BF\u30B0\u7D42\u4E86",
+      codeBlockOpen: "\u30B3\u30FC\u30C9\u30D6\u30ED\u30C3\u30AF\u958B\u59CB ```",
+      codeBlockClose: "\u30B3\u30FC\u30C9\u30D6\u30ED\u30C3\u30AF\u7D42\u4E86 ```"
+    },
+    mishearings: [],
+    phonetics: [],
+    articles: [],
+    fillers: []
+  };
+
+  // obsidian-plugin/src/languages/ko.json
+  var ko_default = {
+    code: "ko",
+    name: "\uD55C\uAD6D\uC5B4",
+    patterns: {
+      newParagraph: ["\uC0C8 \uB2E8\uB77D", "\uC0C8 \uBB38\uB2E8"],
+      newLine: ["\uC0C8 \uC904", "\uB2E4\uC74C \uC904", "\uC904 \uBC14\uAFC8"],
+      heading1: ["\uC81C\uBAA9 1", "\uC81C\uBAA9 \uD558\uB098"],
+      heading2: ["\uC81C\uBAA9 2", "\uC81C\uBAA9 \uB458"],
+      heading3: ["\uC81C\uBAA9 3", "\uC81C\uBAA9 \uC14B"],
+      bulletPoint: ["\uC0C8 \uD56D\uBAA9", "\uB2E4\uC74C \uD56D\uBAA9", "\uAE00\uBA38\uB9AC \uAE30\uD638"],
+      todoItem: ["\uC0C8 \uD560\uC77C", "\uD560\uC77C \uCD94\uAC00"],
+      numberedItem: ["\uBC88\uD638 \uD56D\uBAA9", "\uB2E4\uC74C \uBC88\uD638"],
+      deleteLastParagraph: ["\uB9C8\uC9C0\uB9C9 \uB2E8\uB77D \uC0AD\uC81C"],
+      deleteLastLine: ["\uB9C8\uC9C0\uB9C9 \uC904 \uC0AD\uC81C", "\uB9C8\uC9C0\uB9C9 \uBB38\uC7A5 \uC0AD\uC81C"],
+      undo: ["\uC2E4\uD589 \uCDE8\uC18C", "\uB418\uB3CC\uB9AC\uAE30"],
+      stopRecording: ["\uB179\uC74C \uC911\uC9C0", "\uB179\uC74C \uBA48\uCDB0"],
+      colon: ["\uCF5C\uB860"],
+      wikilink: ["\uC704\uD0A4\uB9C1\uD06C", "\uB9C1\uD06C"],
+      boldOpen: ["\uAD75\uAC8C \uC5F4\uAE30", "\uBCFC\uB4DC \uC5F4\uAE30"],
+      boldClose: ["\uAD75\uAC8C \uB2EB\uAE30", "\uBCFC\uB4DC \uB2EB\uAE30"],
+      italicOpen: ["\uAE30\uC6B8\uC784 \uC5F4\uAE30", "\uC774\uD0E4\uB9AD \uC5F4\uAE30"],
+      italicClose: ["\uAE30\uC6B8\uC784 \uB2EB\uAE30", "\uC774\uD0E4\uB9AD \uB2EB\uAE30"],
+      inlineCodeOpen: ["\uCF54\uB4DC \uC5F4\uAE30"],
+      inlineCodeClose: ["\uCF54\uB4DC \uB2EB\uAE30"],
+      tagOpen: ["\uD0DC\uADF8 \uC5F4\uAE30"],
+      tagClose: ["\uD0DC\uADF8 \uB2EB\uAE30"],
+      codeBlockOpen: ["\uCF54\uB4DC\uBE14\uB85D \uC5F4\uAE30", "\uCF54\uB4DC \uBE14\uB85D \uC5F4\uAE30"],
+      codeBlockClose: ["\uCF54\uB4DC\uBE14\uB85D \uB2EB\uAE30", "\uCF54\uB4DC \uBE14\uB85D \uB2EB\uAE30"]
+    },
+    labels: {
+      newParagraph: "\uC0C8 \uB2E8\uB77D",
+      newLine: "\uC0C8 \uC904",
+      heading1: "\uC81C\uBAA9 1",
+      heading2: "\uC81C\uBAA9 2",
+      heading3: "\uC81C\uBAA9 3",
+      bulletPoint: "\uC0C8 \uD56D\uBAA9",
+      todoItem: "\uC0C8 \uD560\uC77C",
+      numberedItem: "\uBC88\uD638 \uD56D\uBAA9",
+      deleteLastParagraph: "\uB9C8\uC9C0\uB9C9 \uB2E8\uB77D \uC0AD\uC81C",
+      deleteLastLine: "\uB9C8\uC9C0\uB9C9 \uC904 \uC0AD\uC81C",
+      undo: "\uC2E4\uD589 \uCDE8\uC18C",
+      stopRecording: "\uB179\uC74C \uC911\uC9C0",
+      colon: "\uCF5C\uB860",
+      wikilink: "\uC704\uD0A4\uB9C1\uD06C [[\u2026]]",
+      boldOpen: "\uAD75\uAC8C \uC5F4\uAE30 **",
+      boldClose: "\uAD75\uAC8C \uB2EB\uAE30 **",
+      italicOpen: "\uAE30\uC6B8\uC784 \uC5F4\uAE30 *",
+      italicClose: "\uAE30\uC6B8\uC784 \uB2EB\uAE30 *",
+      inlineCodeOpen: "\uCF54\uB4DC \uC5F4\uAE30 `",
+      inlineCodeClose: "\uCF54\uB4DC \uB2EB\uAE30 `",
+      tagOpen: "\uD0DC\uADF8 \uC5F4\uAE30 #",
+      tagClose: "\uD0DC\uADF8 \uB2EB\uAE30",
+      codeBlockOpen: "\uCF54\uB4DC\uBE14\uB85D \uC5F4\uAE30 ```",
+      codeBlockClose: "\uCF54\uB4DC\uBE14\uB85D \uB2EB\uAE30 ```"
+    },
+    mishearings: [],
+    phonetics: [],
+    articles: [],
+    fillers: []
+  };
+
+  // obsidian-plugin/src/shared/lang-data.ts
+  var ALL_LANGS = {
+    nl: nl_default,
+    en: en_default,
+    fr: fr_default,
+    de: de_default,
+    es: es_default,
+    pt: pt_default,
+    it: it_default,
+    ru: ru_default,
+    zh: zh_default,
+    hi: hi_default,
+    ar: ar_default,
+    ja: ja_default,
+    ko: ko_default
+  };
+  var SUPPORTED_LANGUAGES = [
+    "nl",
+    "en",
+    "fr",
+    "de",
+    "es",
+    "pt",
+    "it",
+    "ru",
+    "zh",
+    "hi",
+    "ar",
+    "ja",
+    "ko"
+  ];
+  function compileRegexRules(data) {
+    return data.map(({ pattern, flags, replacement }) => [
+      new RegExp(pattern, flags),
+      replacement
+    ]);
+  }
+  var PHONETIC_RULES = Object.fromEntries(
+    SUPPORTED_LANGUAGES.filter((code) => ALL_LANGS[code].phonetics.length > 0).map((code) => [code, compileRegexRules(ALL_LANGS[code].phonetics)])
+  );
+  var MISHEARINGS = Object.fromEntries(
+    SUPPORTED_LANGUAGES.filter((code) => ALL_LANGS[code].mishearings.length > 0).map((code) => [code, compileRegexRules(ALL_LANGS[code].mishearings)])
+  );
+  var ARTICLES = Object.fromEntries(
+    SUPPORTED_LANGUAGES.map((code) => [code, ALL_LANGS[code].articles])
+  );
+  var TRAILING_FILLERS = Object.fromEntries(
+    SUPPORTED_LANGUAGES.filter((code) => ALL_LANGS[code].fillers.length > 0).map((code) => [code, ALL_LANGS[code].fillers])
+  );
+  var PATTERNS = Object.fromEntries(
+    SUPPORTED_LANGUAGES.map((code) => [code, ALL_LANGS[code].patterns])
+  );
+  var LABELS = Object.fromEntries(
+    SUPPORTED_LANGUAGES.map((code) => [code, ALL_LANGS[code].labels])
+  );
+  var LANGUAGE_NAMES = Object.fromEntries(
+    SUPPORTED_LANGUAGES.map((code) => [code, ALL_LANGS[code].name])
+  );
+  function phoneticNormalize(text, lang) {
+    const rules = PHONETIC_RULES[lang];
+    if (!rules) return text;
+    let result = text;
+    for (const [pattern, replacement] of rules) {
+      result = result.replace(pattern, replacement);
+    }
+    return result;
+  }
+  function stripArticles(text, lang) {
+    const articles = ARTICLES[lang];
+    if (!articles || articles.length === 0) return text;
+    const words = text.split(/\s+/);
+    let stripped = 0;
+    while (stripped < Math.min(2, words.length - 1)) {
+      if (articles.includes(words[stripped])) {
+        stripped++;
+      } else {
+        break;
+      }
+    }
+    return stripped > 0 ? words.slice(stripped).join(" ") : text;
+  }
+  function stripTrailingFillers(text, lang) {
+    const fillers = TRAILING_FILLERS[lang];
+    if (!fillers || fillers.length === 0) return text;
+    let result = text;
+    for (const filler of fillers.sort((a, b) => b.length - a.length)) {
+      if (result.endsWith(" " + filler)) {
+        result = result.slice(0, -(filler.length + 1)).trimEnd();
+      }
+    }
+    return result;
+  }
+  function trySplitCompound(text, knownPhrases) {
+    if (text.includes(" ") || text.length < 4) return text;
+    for (const phrase of knownPhrases) {
+      const words = phrase.split(/\s+/);
+      if (words.length < 2) continue;
+      if (text === words.join("")) return phrase;
+    }
+    return text;
+  }
+  function getMishearings(lang) {
+    return MISHEARINGS[lang] ?? [];
+  }
+  function getPatternsForCommand(commandId, lang) {
+    const langPatterns = PATTERNS[lang]?.[commandId] ?? [];
+    const enPatterns = lang === "en" ? [] : PATTERNS.en?.[commandId] ?? [];
+    const seen = /* @__PURE__ */ new Set();
+    const result = [];
+    for (const p of [...langPatterns, ...enPatterns]) {
+      if (!seen.has(p)) {
+        seen.add(p);
+        result.push(p);
+      }
+    }
+    return result;
+  }
+
   // static/src/main.js
   var isRecording = false;
   var ws = null;
@@ -400,126 +1414,6 @@
     }
     replaceHint.classList.add("hidden");
   }
-  var LANG_PATTERNS = {
-    nl: {
-      newParagraph: ["nieuwe alinea", "nieuw alinea", "nieuwe paragraaf", "nieuwe linie"],
-      newLine: ["nieuwe regel", "nieuwe lijn", "volgende regel"],
-      heading1: ["kop een", "kop 1"],
-      heading2: ["kop twee", "kop 2"],
-      heading3: ["kop drie", "kop 3"],
-      bulletPoint: ["nieuw punt", "nieuw lijstitem", "lijst punt", "nieuw item", "nieuwe item", "volgend item", "volgend punt"],
-      todoItem: ["nieuw to-do item", "nieuw todo item", "nieuw todo", "nieuwe taak"],
-      numberedItem: ["nieuw genummerd item", "nieuw genummerd punt", "genummerd punt", "genummerd item", "volgend nummer", "nummer punt"],
-      stopRecording: ["beeindig opname", "beeindig de opname", "stop opname", "stopopname", "stop de opname"],
-      deleteLastParagraph: ["verwijder laatste alinea", "verwijder laatste paragraaf", "wis laatste alinea"],
-      deleteLastLine: ["verwijder laatste regel", "verwijder laatste zin", "wis laatste regel", "wist laatste regel"],
-      undo: ["herstel", "ongedaan maken"],
-      colon: ["dubbele punt", "double punt", "dubbelepunt"]
-    },
-    en: {
-      newParagraph: ["new paragraph"],
-      newLine: ["new line", "next line"],
-      heading1: ["heading one", "heading 1"],
-      heading2: ["heading two", "heading 2"],
-      heading3: ["heading three", "heading 3"],
-      bulletPoint: ["new item", "next item", "bullet", "bullet point", "new bullet"],
-      todoItem: ["new todo", "new to-do", "todo item", "to-do item"],
-      numberedItem: ["numbered item", "new numbered item", "next number"],
-      stopRecording: ["stop recording"],
-      deleteLastParagraph: ["delete last paragraph"],
-      deleteLastLine: ["delete last line", "delete last sentence"],
-      undo: ["undo"],
-      colon: ["colon"]
-    },
-    fr: {
-      newParagraph: ["nouveau paragraphe", "nouvelle section", "nouveau alinea"],
-      newLine: ["nouvelle ligne", "a la ligne", "retour a la ligne"],
-      heading1: ["titre un", "titre 1"],
-      heading2: ["titre deux", "titre 2"],
-      heading3: ["titre trois", "titre 3"],
-      bulletPoint: ["nouveau point", "nouvelle puce", "point suivant", "nouvel element"],
-      todoItem: ["nouvelle tache", "nouveau todo", "nouveau to-do"],
-      numberedItem: ["point numero", "element numero", "nouveau numero"],
-      stopRecording: ["arreter enregistrement", "arreter l enregistrement", "stop enregistrement"],
-      deleteLastParagraph: ["supprimer dernier paragraphe", "effacer dernier paragraphe"],
-      deleteLastLine: ["supprimer derniere ligne", "effacer derniere ligne"],
-      undo: ["annuler"],
-      colon: ["deux points"]
-    },
-    de: {
-      newParagraph: ["neuer absatz", "neuer paragraph"],
-      newLine: ["neue zeile", "nachste zeile"],
-      heading1: ["uberschrift eins", "uberschrift 1"],
-      heading2: ["uberschrift zwei", "uberschrift 2"],
-      heading3: ["uberschrift drei", "uberschrift 3"],
-      bulletPoint: ["neuer punkt", "neuer aufzahlungspunkt", "nachster punkt", "neues element"],
-      todoItem: ["neue aufgabe", "neues todo", "neues to-do"],
-      numberedItem: ["nummerierter punkt", "neuer nummerierter punkt", "nachste nummer"],
-      stopRecording: ["aufnahme beenden", "aufnahme stoppen"],
-      deleteLastParagraph: ["letzten absatz loschen", "absatz loschen"],
-      deleteLastLine: ["letzte zeile loschen", "letzten satz loschen"],
-      undo: ["ruckgangig", "ruckgangig machen"],
-      colon: ["doppelpunkt"]
-    },
-    es: {
-      newParagraph: ["nuevo parrafo", "nueva seccion"],
-      newLine: ["nueva linea", "siguiente linea"],
-      heading1: ["titulo uno", "titulo 1"],
-      heading2: ["titulo dos", "titulo 2"],
-      heading3: ["titulo tres", "titulo 3"],
-      bulletPoint: ["nuevo punto", "nueva vineta", "siguiente punto", "nuevo elemento"],
-      todoItem: ["nueva tarea", "nuevo todo", "nuevo to-do"],
-      numberedItem: ["punto numerado", "nuevo numero", "siguiente numero"],
-      stopRecording: ["parar grabacion", "detener grabacion"],
-      deleteLastParagraph: ["borrar ultimo parrafo", "eliminar ultimo parrafo"],
-      deleteLastLine: ["borrar ultima linea", "eliminar ultima linea"],
-      undo: ["deshacer"],
-      colon: ["dos puntos"]
-    },
-    pt: {
-      newParagraph: ["novo paragrafo", "nova secao"],
-      newLine: ["nova linha", "proxima linha"],
-      heading1: ["titulo um", "titulo 1"],
-      heading2: ["titulo dois", "titulo 2"],
-      heading3: ["titulo tres", "titulo 3"],
-      bulletPoint: ["novo ponto", "novo item", "proximo ponto", "novo elemento"],
-      todoItem: ["nova tarefa", "novo todo", "novo to-do"],
-      numberedItem: ["ponto numerado", "novo numero", "proximo numero"],
-      stopRecording: ["parar gravacao", "encerrar gravacao"],
-      deleteLastParagraph: ["apagar ultimo paragrafo", "excluir ultimo paragrafo"],
-      deleteLastLine: ["apagar ultima linha", "excluir ultima linha"],
-      undo: ["desfazer"],
-      colon: ["dois pontos"]
-    },
-    it: {
-      newParagraph: ["nuovo paragrafo", "nuova sezione", "nuovo capoverso"],
-      newLine: ["nuova riga", "a capo", "riga successiva"],
-      heading1: ["titolo uno", "titolo 1"],
-      heading2: ["titolo due", "titolo 2"],
-      heading3: ["titolo tre", "titolo 3"],
-      bulletPoint: ["nuovo punto", "nuovo elemento", "punto successivo", "nuovo elenco"],
-      todoItem: ["nuovo compito", "nuova attivita", "nuovo todo"],
-      numberedItem: ["punto numerato", "nuovo numero", "numero successivo"],
-      stopRecording: ["ferma registrazione", "interrompi registrazione", "stop registrazione"],
-      deleteLastParagraph: ["cancella ultimo paragrafo", "elimina ultimo paragrafo"],
-      deleteLastLine: ["cancella ultima riga", "elimina ultima riga"],
-      undo: ["annulla"],
-      colon: ["due punti"]
-    }
-  };
-  var LANG_MISHEARINGS = {
-    nl: [
-      [/\bniveau\b/g, "nieuwe"],
-      [/\bniva\b/g, "nieuwe"],
-      [/\bnieuw alinea\b/g, "nieuwe alinea"],
-      [/\bnieuw regel\b/g, "nieuwe regel"],
-      [/\blinea\b/g, "alinea"],
-      [/\blinie\b/g, "alinea"],
-      [/\bbeeindigde\b/g, "beeindig de"]
-    ],
-    fr: [[/\bnouveau ligne\b/g, "nouvelle ligne"], [/\bnouvelle paragraphe\b/g, "nouveau paragraphe"]],
-    de: [[/\bneue absatz\b/g, "neuer absatz"], [/\bneues zeile\b/g, "neue zeile"]]
-  };
   var COMMAND_DEFS = [
     { id: "newParagraph", insert: "\n\n", toast: "\xB6" },
     { id: "newLine", insert: "\n", toast: "\u21B5" },
@@ -536,170 +1430,22 @@
     { id: "colon", insert: ": ", punctuation: true, toast: ":" }
   ];
   function buildVoiceCommands(lang) {
-    const langData = LANG_PATTERNS[lang] || {};
-    const enData = lang === "en" ? {} : LANG_PATTERNS.en || {};
-    return COMMAND_DEFS.map((def) => {
-      const langP = langData[def.id] || [];
-      const enP = enData[def.id] || [];
-      const seen = /* @__PURE__ */ new Set();
-      const patterns = [];
-      for (const p of [...langP, ...enP]) {
-        if (!seen.has(p)) {
-          seen.add(p);
-          patterns.push(p);
-        }
-      }
-      return { ...def, patterns };
-    });
+    return COMMAND_DEFS.map((def) => ({
+      ...def,
+      patterns: getPatternsForCommand(def.id, lang)
+    }));
   }
   var VOICE_COMMANDS = buildVoiceCommands(activeLang);
   function stripTrailingPunctuation2(str) {
     return str.replace(/[,;.!?]+\s*$/, "");
   }
-  var PHONETIC_RULES = {
-    nl: [
-      [/ij/g, "ei"],
-      [/au/g, "ou"],
-      [/dt\b/g, "t"],
-      [/\bsch/g, "sg"],
-      [/ck/g, "k"],
-      [/ph/g, "f"],
-      [/th/g, "t"],
-      [/ie/g, "i"],
-      [/oe/g, "u"],
-      [/ee/g, "e"],
-      [/oo/g, "o"],
-      [/uu/g, "u"],
-      [/aa/g, "a"]
-    ],
-    en: [
-      [/ph/g, "f"],
-      [/th/g, "t"],
-      [/ck/g, "k"],
-      [/ght/g, "t"],
-      [/wh/g, "w"],
-      [/kn/g, "n"],
-      [/wr/g, "r"],
-      [/tion/g, "shun"],
-      [/sion/g, "shun"]
-    ],
-    fr: [
-      [/eau/g, "o"],
-      [/aux/g, "o"],
-      [/ai/g, "e"],
-      [/ei/g, "e"],
-      [/ph/g, "f"],
-      [/qu/g, "k"],
-      [/gn/g, "ny"],
-      [/oi/g, "wa"],
-      [/ou/g, "u"],
-      [/an/g, "on"],
-      [/en/g, "on"]
-    ],
-    de: [
-      [/sch/g, "sh"],
-      [/ei/g, "ai"],
-      [/ie/g, "i"],
-      [/ck/g, "k"],
-      [/ph/g, "f"],
-      [/th/g, "t"],
-      [/v/g, "f"],
-      [/tz/g, "ts"],
-      [/dt\b/g, "t"],
-      [/aa/g, "a"],
-      [/ee/g, "e"],
-      [/oo/g, "o"]
-    ],
-    es: [
-      [/ll/g, "y"],
-      [/v/g, "b"],
-      [/ce/g, "se"],
-      [/ci/g, "si"],
-      [/qu/g, "k"],
-      [/h/g, ""]
-    ],
-    pt: [
-      [/lh/g, "ly"],
-      [/nh/g, "ny"],
-      [/ch/g, "sh"],
-      [/qu/g, "k"],
-      [/ção/g, "saun"],
-      [/ss/g, "s"]
-    ],
-    it: [
-      [/gn/g, "ny"],
-      [/ch/g, "k"],
-      [/gh/g, "g"],
-      [/sc(?=[ei])/g, "sh"],
-      [/zz/g, "ts"]
-    ]
-  };
-  var LANG_ARTICLES = {
-    nl: ["een", "de", "het", "die", "dat", "deze"],
-    en: ["a", "an", "the"],
-    fr: ["un", "une", "le", "la", "les", "l", "du", "des"],
-    de: ["ein", "eine", "einen", "einem", "einer", "der", "die", "das", "den", "dem", "des"],
-    es: ["un", "una", "el", "la", "los", "las"],
-    pt: ["um", "uma", "o", "a", "os", "as"],
-    it: ["un", "uno", "una", "il", "lo", "la", "i", "gli", "le"]
-  };
-  var LANG_TRAILING_FILLERS = {
-    nl: ["alsjeblieft", "graag", "even", "maar", "eens", "dan", "nu", "hoor"],
-    en: ["please", "now", "then", "thanks"],
-    fr: ["s il vous plait", "s il te plait", "merci"],
-    de: ["bitte", "mal", "jetzt", "dann"],
-    es: ["por favor", "ahora", "gracias"],
-    pt: ["por favor", "agora", "obrigado"],
-    it: ["per favore", "ora", "adesso", "grazie"]
-  };
   var webappLangProvider = {
-    getPatterns(commandId, lang) {
-      const cmd = VOICE_COMMANDS.find((c) => c.id === commandId);
-      return cmd ? cmd.patterns : [];
-    },
-    getMishearings(lang) {
-      return LANG_MISHEARINGS[lang] || [];
-    },
-    phoneticNormalize(text, lang) {
-      const rules = PHONETIC_RULES[lang];
-      if (!rules) return text;
-      let result = text;
-      for (const [pattern, replacement] of rules) {
-        result = result.replace(pattern, replacement);
-      }
-      return result;
-    },
-    stripArticles(text, lang) {
-      const articles = LANG_ARTICLES[lang];
-      if (!articles || articles.length === 0) return text;
-      const words = text.split(/\s+/);
-      let stripped = 0;
-      while (stripped < Math.min(2, words.length - 1)) {
-        if (articles.includes(words[stripped])) stripped++;
-        else break;
-      }
-      return stripped > 0 ? words.slice(stripped).join(" ") : text;
-    },
-    stripTrailingFillers(text, lang) {
-      const fillers = LANG_TRAILING_FILLERS[lang];
-      if (!fillers || fillers.length === 0) return text;
-      let result = text;
-      for (const filler of fillers.sort((a, b) => b.length - a.length)) {
-        if (result.endsWith(" " + filler)) {
-          result = result.slice(0, -(filler.length + 1)).trimEnd();
-        }
-      }
-      return result;
-    },
-    trySplitCompound(text, knownPhrases) {
-      if (text.includes(" ") || text.length < 4) return text;
-      for (const phrase of knownPhrases) {
-        const words = phrase.split(/\s+/);
-        if (words.length < 2) continue;
-        if (text === words.join("")) return phrase;
-      }
-      return text;
-    }
+    getPatterns: getPatternsForCommand,
+    getMishearings,
+    phoneticNormalize,
+    stripArticles,
+    stripTrailingFillers,
+    trySplitCompound
   };
   function findCommand(rawText) {
     const result = findMatch(rawText, VOICE_COMMANDS, activeLang, webappLangProvider);
