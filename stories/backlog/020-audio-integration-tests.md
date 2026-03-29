@@ -11,6 +11,16 @@ Current tests validate the text matching pipeline (normalized string → command
 
 This story adds a test suite with real audio recordings that validates the full pipeline: audio file → Voxtral API → transcribed text → command matching → expected result.
 
+## Recording guide
+
+A recording guide is auto-generated from the language JSON files:
+- **Guide:** `tests/audio-integration/RECORDING-GUIDE.md`
+- **Generator:** `node scripts/generate-recording-guide.mjs > tests/audio-integration/RECORDING-GUIDE.md`
+
+The guide includes recording instructions (equipment, environment, format, naming conventions) and a per-language table of every command with its trigger phrases and priority level.
+
+**Keep the guide up to date:** regenerate after any changes to `obsidian-plugin/src/languages/*.json`.
+
 ## Proposed structure
 
 ```
