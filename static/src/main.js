@@ -14,6 +14,7 @@ import {
 } from "./voice-commands.js";
 import { correctText } from "./correction.js";
 import { saveToQueue, getQueueCount, processQueue } from "./queue.js";
+import { floatTo16BitPCM, downsample } from "./audio.js";
 
 // ── State ──
 let isRecording = false;
@@ -870,27 +871,7 @@ function stopMicLevel() {
     micLevelLabel.textContent = "";
 }
 
-// ── Audio: PCM s16le 16kHz mono ──
-function floatTo16BitPCM(float32Array) {
-    const buffer = new ArrayBuffer(float32Array.length * 2);
-    const view = new DataView(buffer);
-    for (let i = 0; i < float32Array.length; i++) {
-        let s = Math.max(-1, Math.min(1, float32Array[i]));
-        view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-    }
-    return new Uint8Array(buffer);
-}
-
-function downsample(buffer, fromRate, toRate) {
-    if (fromRate === toRate) return buffer;
-    const ratio = fromRate / toRate;
-    const newLength = Math.round(buffer.length / ratio);
-    const result = new Float32Array(newLength);
-    for (let i = 0; i < newLength; i++) {
-        result[i] = buffer[Math.round(i * ratio)];
-    }
-    return result;
-}
+// Audio: floatTo16BitPCM and downsample imported from audio.js
 
 // ── Mic helper: try selected device, fallback to default ──
 async function acquireMic(extraConstraints = {}) {
