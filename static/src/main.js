@@ -3,18 +3,15 @@ import {
     normalizeCommand,
     lowercaseFirstLetter,
     detectContext,
-    shouldStripTrailingPunctuation,
-    shouldLowercase,
-    findMatch,
-    phoneticNormalize,
-    stripArticles,
-    stripTrailingFillers,
-    trySplitCompound,
-    getMishearings,
-    getPatternsForCommand,
     SUPPORTED_LANGUAGES,
     LANGUAGE_NAMES,
 } from "../../obsidian-plugin/src/shared/index.ts";
+import {
+    COMMAND_DEFS,
+    buildVoiceCommands,
+    findCommand,
+    stripCommandPunctuation,
+} from "./voice-commands.js";
 
 // ── State ──
 let isRecording = false;
@@ -307,72 +304,14 @@ function finalizeInsertPoint() {
 // Language patterns and mishearings now loaded from shared JSON files
 // (previously ~120 lines of hardcoded LANG_PATTERNS + LANG_MISHEARINGS)
 
-// Command definitions: id → {insert/action, punctuation, toast}
-const COMMAND_DEFS = [
-    { id: "newParagraph", insert: "\n\n", toast: "¶" },
-    { id: "newLine", insert: "\n", toast: "↵" },
-    { id: "heading1", insert: "\n\n# ", toast: "# H1" },
-    { id: "heading2", insert: "\n\n## ", toast: "## H2" },
-    { id: "heading3", insert: "\n\n### ", toast: "### H3" },
-    { id: "bulletPoint", action: "bulletPoint", toast: "•" },
-    { id: "todoItem", insert: "\n- [ ] ", toast: "☐" },
-    { id: "numberedItem", action: "numberedItem", toast: "1." },
-    { id: "stopRecording", action: "stopRecording", toast: "⏹ Stop" },
-    { id: "deleteLastParagraph", action: "deleteLastParagraph", toast: "🗑" },
-    { id: "deleteLastLine", action: "deleteLastLine", toast: "🗑" },
-    { id: "undo", action: "undo", toast: "↩" },
-    { id: "colon", insert: ": ", punctuation: true, toast: ":" },
-];
-
-/** Build VOICE_COMMANDS from COMMAND_DEFS + shared language data (JSON) */
-function buildVoiceCommands(lang) {
-    return COMMAND_DEFS.map(def => ({
-        ...def,
-        patterns: getPatternsForCommand(def.id, lang),
-    }));
-}
-
+// Voice commands now imported from voice-commands.js module
 let VOICE_COMMANDS = buildVoiceCommands(activeLang);
-
-// Remove trailing punctuation before inserting a new punctuation mark.
-// E.g. "oké," + ": " → "oké: " (not "oké,: ")
-// Note: this strips commas/semicolons too (different from shared stripTrailingPunctuation
-// which only strips .!? for sentence-end context). Both are needed.
-function stripTrailingPunctuation(str) {
-    return str.replace(/[,;.!?]+\s*$/, "");
-}
-
-// ── Language data now loaded from shared JSON files ──
-// (previously ~120 lines of hardcoded PHONETIC_RULES, LANG_ARTICLES,
-// LANG_TRAILING_FILLERS — now single source of truth in languages/*.json)
-
-/** LanguageProvider adapter: delegates to shared lang-data functions. */
-const webappLangProvider = {
-    getPatterns: getPatternsForCommand,
-    getMishearings,
-    phoneticNormalize,
-    stripArticles,
-    stripTrailingFillers,
-    trySplitCompound,
-};
-
-/**
- * Find a voice command in text. Delegates to the shared 5-pass algorithm
- * and maps the result back to the webapp's command structure.
- */
-function findCommand(rawText) {
-    const result = findMatch(rawText, VOICE_COMMANDS, activeLang, webappLangProvider);
-    if (!result) return null;
-    const cmd = VOICE_COMMANDS.find(c => c.id === result.commandId);
-    if (!cmd) return null;
-    return { cmd, textBefore: result.textBefore };
-}
 
 function checkForCommand() {
     if (!activeInsert || !activeInsert.textContent) return false;
     const raw = activeInsert.textContent.replace(/[.!?]/g, "");
     if (!raw.trim()) return false;
-    const result = findCommand(raw);
+    const result = findCommand(raw, VOICE_COMMANDS, activeLang);
     if (result) {
         // Insert any text that came before the command
         if (result.textBefore) {
@@ -380,7 +319,7 @@ function checkForCommand() {
             if (result.cmd.punctuation) {
                 // Punctuation attaches directly to preceding text
                 // Strip trailing punctuation to avoid ",:" or ".:" combos
-                span.textContent = stripTrailingPunctuation(result.textBefore) + result.cmd.insert;
+                span.textContent = stripCommandPunctuation(result.textBefore) + result.cmd.insert;
                 activeInsert.parentNode.insertBefore(span, activeInsert);
                 activeInsert.textContent = "";
                 showToast(result.cmd.toast);
@@ -415,7 +354,7 @@ function processCompletedSentences() {
     const actions = parts.map(part => {
         const trimmedPart = part.trim();
         const textOnly = trimmedPart.replace(/[.!?]+$/, "").trim();
-        const result = findCommand(textOnly);
+        const result = findCommand(textOnly, VOICE_COMMANDS, activeLang);
         // Log hex codes for debugging hyphen issues
         const hexCodes = [...textOnly].map(c => c.charCodeAt(0) > 127 ? `U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}` : c).join("");
         console.debug(`[voice] "${textOnly}" [${hexCodes}] → ${result ? "CMD: " + result.cmd.toast : "text"}`);
@@ -453,7 +392,7 @@ function processCompletedSentences() {
                 if (cmd.punctuation) {
                     // Punctuation attaches directly (no space before)
                     // Strip trailing punctuation to avoid ",:" or ".:" combos
-                    prefixSpan.textContent = stripTrailingPunctuation(textBefore) + cmd.insert;
+                    prefixSpan.textContent = stripCommandPunctuation(textBefore) + cmd.insert;
                     activeInsert.parentNode.insertBefore(prefixSpan, activeInsert);
                     showToast(cmd.toast);
                     continue;
@@ -466,7 +405,7 @@ function processCompletedSentences() {
                 if (cmd.punctuation) {
                     const prev = activeInsert.previousSibling;
                     if (prev && prev.textContent) {
-                        prev.textContent = stripTrailingPunctuation(prev.textContent);
+                        prev.textContent = stripCommandPunctuation(prev.textContent);
                     }
                 }
                 const span = document.createElement("span");
@@ -509,7 +448,7 @@ function executeCommand(cmd) {
             if (cmd.punctuation) {
                 const prev = activeInsert.previousSibling;
                 if (prev && prev.textContent) {
-                    prev.textContent = stripTrailingPunctuation(prev.textContent);
+                    prev.textContent = stripCommandPunctuation(prev.textContent);
                 }
             }
             activeInsert.textContent = cmd.insert;
@@ -1306,7 +1245,7 @@ function processDualSlowCommands() {
     const actions = parts.map(part => {
         const trimmedPart = part.trim();
         const textOnly = trimmedPart.replace(/[.!?]+$/, "").trim();
-        const result = findCommand(textOnly);
+        const result = findCommand(textOnly, VOICE_COMMANDS, activeLang);
         console.debug(`[dual-voice] "${textOnly}" → ${result ? "CMD: " + result.cmd.toast : "text"}`);
         return { trimmedPart, result };
     });
@@ -1337,7 +1276,7 @@ function processDualSlowCommands() {
             if (textBefore) {
                 const prefixSpan = document.createElement("span");
                 if (cmd.punctuation) {
-                    prefixSpan.textContent = stripTrailingPunctuation(textBefore) + cmd.insert;
+                    prefixSpan.textContent = stripCommandPunctuation(textBefore) + cmd.insert;
                     activeInsert.parentNode.insertBefore(prefixSpan, activeInsert);
                     showToast(cmd.toast);
                     continue;
@@ -1349,7 +1288,7 @@ function processDualSlowCommands() {
                 if (cmd.punctuation) {
                     const prev = activeInsert.previousSibling;
                     if (prev && prev.textContent) {
-                        prev.textContent = stripTrailingPunctuation(prev.textContent);
+                        prev.textContent = stripCommandPunctuation(prev.textContent);
                     }
                 }
                 const span = document.createElement("span");

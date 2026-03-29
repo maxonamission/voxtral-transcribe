@@ -1172,6 +1172,47 @@
     return result;
   }
 
+  // static/src/voice-commands.js
+  var COMMAND_DEFS = [
+    { id: "newParagraph", insert: "\n\n", toast: "\xB6" },
+    { id: "newLine", insert: "\n", toast: "\u21B5" },
+    { id: "heading1", insert: "\n\n# ", toast: "# H1" },
+    { id: "heading2", insert: "\n\n## ", toast: "## H2" },
+    { id: "heading3", insert: "\n\n### ", toast: "### H3" },
+    { id: "bulletPoint", action: "bulletPoint", toast: "\u2022" },
+    { id: "todoItem", insert: "\n- [ ] ", toast: "\u2610" },
+    { id: "numberedItem", action: "numberedItem", toast: "1." },
+    { id: "stopRecording", action: "stopRecording", toast: "\u23F9 Stop" },
+    { id: "deleteLastParagraph", action: "deleteLastParagraph", toast: "\u{1F5D1}" },
+    { id: "deleteLastLine", action: "deleteLastLine", toast: "\u{1F5D1}" },
+    { id: "undo", action: "undo", toast: "\u21A9" },
+    { id: "colon", insert: ": ", punctuation: true, toast: ":" }
+  ];
+  var webappLangProvider = {
+    getPatterns: getPatternsForCommand,
+    getMishearings,
+    phoneticNormalize,
+    stripArticles,
+    stripTrailingFillers,
+    trySplitCompound
+  };
+  function buildVoiceCommands(lang) {
+    return COMMAND_DEFS.map((def) => ({
+      ...def,
+      patterns: getPatternsForCommand(def.id, lang)
+    }));
+  }
+  function findCommand(rawText, voiceCommands, lang) {
+    const result = findMatch(rawText, voiceCommands, lang, webappLangProvider);
+    if (!result) return null;
+    const cmd = voiceCommands.find((c) => c.id === result.commandId);
+    if (!cmd) return null;
+    return { cmd, textBefore: result.textBefore };
+  }
+  function stripCommandPunctuation(str) {
+    return str.replace(/[,;.!?]+\s*$/, "");
+  }
+
   // static/src/main.js
   var isRecording = false;
   var ws = null;
@@ -1414,56 +1455,17 @@
     }
     replaceHint.classList.add("hidden");
   }
-  var COMMAND_DEFS = [
-    { id: "newParagraph", insert: "\n\n", toast: "\xB6" },
-    { id: "newLine", insert: "\n", toast: "\u21B5" },
-    { id: "heading1", insert: "\n\n# ", toast: "# H1" },
-    { id: "heading2", insert: "\n\n## ", toast: "## H2" },
-    { id: "heading3", insert: "\n\n### ", toast: "### H3" },
-    { id: "bulletPoint", action: "bulletPoint", toast: "\u2022" },
-    { id: "todoItem", insert: "\n- [ ] ", toast: "\u2610" },
-    { id: "numberedItem", action: "numberedItem", toast: "1." },
-    { id: "stopRecording", action: "stopRecording", toast: "\u23F9 Stop" },
-    { id: "deleteLastParagraph", action: "deleteLastParagraph", toast: "\u{1F5D1}" },
-    { id: "deleteLastLine", action: "deleteLastLine", toast: "\u{1F5D1}" },
-    { id: "undo", action: "undo", toast: "\u21A9" },
-    { id: "colon", insert: ": ", punctuation: true, toast: ":" }
-  ];
-  function buildVoiceCommands(lang) {
-    return COMMAND_DEFS.map((def) => ({
-      ...def,
-      patterns: getPatternsForCommand(def.id, lang)
-    }));
-  }
   var VOICE_COMMANDS = buildVoiceCommands(activeLang);
-  function stripTrailingPunctuation2(str) {
-    return str.replace(/[,;.!?]+\s*$/, "");
-  }
-  var webappLangProvider = {
-    getPatterns: getPatternsForCommand,
-    getMishearings,
-    phoneticNormalize,
-    stripArticles,
-    stripTrailingFillers,
-    trySplitCompound
-  };
-  function findCommand(rawText) {
-    const result = findMatch(rawText, VOICE_COMMANDS, activeLang, webappLangProvider);
-    if (!result) return null;
-    const cmd = VOICE_COMMANDS.find((c) => c.id === result.commandId);
-    if (!cmd) return null;
-    return { cmd, textBefore: result.textBefore };
-  }
   function checkForCommand() {
     if (!activeInsert || !activeInsert.textContent) return false;
     const raw = activeInsert.textContent.replace(/[.!?]/g, "");
     if (!raw.trim()) return false;
-    const result = findCommand(raw);
+    const result = findCommand(raw, VOICE_COMMANDS, activeLang);
     if (result) {
       if (result.textBefore) {
         const span = document.createElement("span");
         if (result.cmd.punctuation) {
-          span.textContent = stripTrailingPunctuation2(result.textBefore) + result.cmd.insert;
+          span.textContent = stripCommandPunctuation(result.textBefore) + result.cmd.insert;
           activeInsert.parentNode.insertBefore(span, activeInsert);
           activeInsert.textContent = "";
           showToast(result.cmd.toast);
@@ -1487,7 +1489,7 @@
     const actions = parts.map((part) => {
       const trimmedPart = part.trim();
       const textOnly = trimmedPart.replace(/[.!?]+$/, "").trim();
-      const result = findCommand(textOnly);
+      const result = findCommand(textOnly, VOICE_COMMANDS, activeLang);
       const hexCodes = [...textOnly].map((c) => c.charCodeAt(0) > 127 ? `U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}` : c).join("");
       console.debug(`[voice] "${textOnly}" [${hexCodes}] \u2192 ${result ? "CMD: " + result.cmd.toast : "text"}`);
       return { trimmedPart, result };
@@ -1508,7 +1510,7 @@
         if (textBefore) {
           const prefixSpan = document.createElement("span");
           if (cmd.punctuation) {
-            prefixSpan.textContent = stripTrailingPunctuation2(textBefore) + cmd.insert;
+            prefixSpan.textContent = stripCommandPunctuation(textBefore) + cmd.insert;
             activeInsert.parentNode.insertBefore(prefixSpan, activeInsert);
             showToast(cmd.toast);
             continue;
@@ -1520,7 +1522,7 @@
           if (cmd.punctuation) {
             const prev = activeInsert.previousSibling;
             if (prev && prev.textContent) {
-              prev.textContent = stripTrailingPunctuation2(prev.textContent);
+              prev.textContent = stripCommandPunctuation(prev.textContent);
             }
           }
           const span = document.createElement("span");
@@ -1560,7 +1562,7 @@
         if (cmd.punctuation) {
           const prev = activeInsert.previousSibling;
           if (prev && prev.textContent) {
-            prev.textContent = stripTrailingPunctuation2(prev.textContent);
+            prev.textContent = stripCommandPunctuation(prev.textContent);
           }
         }
         activeInsert.textContent = cmd.insert;
@@ -2203,7 +2205,7 @@ ${nextNum}. `;
     const actions = parts.map((part) => {
       const trimmedPart = part.trim();
       const textOnly = trimmedPart.replace(/[.!?]+$/, "").trim();
-      const result = findCommand(textOnly);
+      const result = findCommand(textOnly, VOICE_COMMANDS, activeLang);
       console.debug(`[dual-voice] "${textOnly}" \u2192 ${result ? "CMD: " + result.cmd.toast : "text"}`);
       return { trimmedPart, result };
     });
@@ -2223,7 +2225,7 @@ ${nextNum}. `;
         if (textBefore) {
           const prefixSpan = document.createElement("span");
           if (cmd.punctuation) {
-            prefixSpan.textContent = stripTrailingPunctuation2(textBefore) + cmd.insert;
+            prefixSpan.textContent = stripCommandPunctuation(textBefore) + cmd.insert;
             activeInsert.parentNode.insertBefore(prefixSpan, activeInsert);
             showToast(cmd.toast);
             continue;
@@ -2235,7 +2237,7 @@ ${nextNum}. `;
           if (cmd.punctuation) {
             const prev = activeInsert.previousSibling;
             if (prev && prev.textContent) {
-              prev.textContent = stripTrailingPunctuation2(prev.textContent);
+              prev.textContent = stripCommandPunctuation(prev.textContent);
             }
           }
           const span = document.createElement("span");

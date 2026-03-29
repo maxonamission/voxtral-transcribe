@@ -4,9 +4,13 @@
 	"private": true,
 	"scripts": {
 		"build:webapp": "node static/esbuild.config.mjs",
-		"dev:webapp": "node static/esbuild.config.mjs --watch"
+		"dev:webapp": "node static/esbuild.config.mjs --watch",
+		"test:webapp": "vitest run --config static/vitest.config.mjs",
+		"test:webapp:watch": "vitest --config static/vitest.config.mjs"
 	},
 	"devDependencies": {
-		"esbuild": "^0.24.0"
+		"esbuild": "^0.24.0",
+		"jsdom": "^29.0.1",
+		"vitest": "^4.1.2"
 	}
 }
