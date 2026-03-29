@@ -11,9 +11,37 @@ Current tests validate the text matching pipeline (normalized string → command
 
 This story adds a test suite with real audio recordings that validates the full pipeline: audio file → Voxtral API → transcribed text → command matching → expected result.
 
-## Recording guide
+## Audio generation
 
-A recording guide is auto-generated from the language JSON files:
+Test audio samples can be generated using ElevenLabs TTS:
+- **Script:** `node scripts/generate-test-audio.mjs`
+- **API key:** `export ELEVENLABS_API_KEY=your-key`
+- **Model:** `eleven_multilingual_v2` (29 languages, all 13 Voxtral languages covered)
+
+```bash
+# Preview what will be generated
+node scripts/generate-test-audio.mjs --dry-run
+
+# Generate for specific languages
+node scripts/generate-test-audio.mjs --lang nl,en
+
+# Generate all 13 languages (~300 samples)
+node scripts/generate-test-audio.mjs
+```
+
+The script:
+- Reads all language JSON files for trigger phrases
+- Generates MP3 for the primary trigger phrase of each command
+- Skips files that already exist (incremental)
+- Generates high-priority commands first (stays within free tier if limited)
+- Writes a `manifest.json` with expected results per sample
+- Rate-limits to 500ms between requests
+
+**Two-tier approach:**
+- **Tier 1 (TTS):** ElevenLabs-generated audio for all 13 languages — smoke tests and regression detection
+- **Tier 2 (Human):** Real recordings for NL + EN — edge cases, accents, background noise
+
+## Recording guide (for human recordings)
 - **Guide:** `tests/audio-integration/RECORDING-GUIDE.md`
 - **Generator:** `node scripts/generate-recording-guide.mjs > tests/audio-integration/RECORDING-GUIDE.md`
 
