@@ -12,6 +12,8 @@ import {
     findCommand,
     stripCommandPunctuation,
 } from "./voice-commands.js";
+import { correctText } from "./correction.js";
+import { saveToQueue, getQueueCount, processQueue } from "./queue.js";
 
 // ── State ──
 let isRecording = false;
@@ -712,89 +714,26 @@ transcript.addEventListener("mouseup", () => {
     }, 10);
 });
 
-// ── IndexedDB for offline queue ──
-function openDB() {
-    return new Promise((resolve, reject) => {
-        const req = indexedDB.open("voxtral-queue", 1);
-        req.onupgradeneeded = () => {
-            req.result.createObjectStore("recordings", { autoIncrement: true });
-        };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
-}
-
-async function saveToQueue(blob) {
-    const db = await openDB();
-    const tx = db.transaction("recordings", "readwrite");
-    tx.objectStore("recordings").add(blob);
-    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
-    updateQueueBadge();
-}
-
-async function getQueueCount() {
-    const db = await openDB();
-    const tx = db.transaction("recordings", "readonly");
-    const store = tx.objectStore("recordings");
-    return new Promise((res) => {
-        const req = store.count();
-        req.onsuccess = () => res(req.result);
-        req.onerror = () => res(0);
-    });
-}
+// ── Queue (imported from queue.js) ──
+// saveToQueue, getQueueCount, processQueue imported at top
 
 let isProcessingQueue = false;
 
-async function processQueue() {
+async function saveToQueueAndUpdate(blob) {
+    await saveToQueue(blob);
+    await updateQueueBadge();
+}
+
+async function processQueueAndUpdate() {
     if (isProcessingQueue) return;
     const count = await getQueueCount();
     if (count === 0) return;
     isProcessingQueue = true;
     showToast(`Wachtrij verwerken (${count})...`);
-
-    const db = await openDB();
-    const tx = db.transaction("recordings", "readonly");
-    const store = tx.objectStore("recordings");
-    const allKeys = await new Promise((res) => {
-        const req = store.getAllKeys();
-        req.onsuccess = () => res(req.result);
-        req.onerror = () => res([]);
-    });
-
-    let processed = 0;
-    for (const key of allKeys) {
-        const getTx = db.transaction("recordings", "readonly");
-        const blob = await new Promise((res) => {
-            const req = getTx.objectStore("recordings").get(key);
-            req.onsuccess = () => res(req.result);
-            req.onerror = () => res(null);
-        });
-        if (!blob) continue;
-        try {
-            const formData = new FormData();
-            formData.append("file", blob, "recording.webm");
-            const resp = await fetch("/api/transcribe", { method: "POST", body: formData });
-            if (!resp.ok) {
-                console.warn(`Queue item ${key}: server returned ${resp.status}, skipping for now`);
-                continue;
-            }
-            const data = await resp.json();
-            if (data.text) appendFinalText(data.text + " ");
-            // Delete successfully processed item
-            const delTx = db.transaction("recordings", "readwrite");
-            delTx.objectStore("recordings").delete(key);
-            await new Promise((res) => { delTx.oncomplete = res; });
-            processed++;
-        } catch (err) {
-            console.warn("Queue processing failed (offline?):", err.message);
-            break; // stop on network errors, retry later
-        }
-    }
+    const { processed } = await processQueue((text) => appendFinalText(text));
     isProcessingQueue = false;
-    updateQueueBadge();
-    if (processed > 0) {
-        showToast(`${processed} opname(s) verwerkt`);
-    }
+    await updateQueueBadge();
+    if (processed > 0) showToast(`${processed} opname(s) verwerkt`);
 }
 
 async function updateQueueBadge() {
@@ -1400,10 +1339,10 @@ async function startOffline() {
                         checkForCommand();
                     }
                 } else {
-                    await saveToQueue(blob);
+                    await saveToQueueAndUpdate(blob);
                 }
             } catch {
-                await saveToQueue(blob);
+                await saveToQueueAndUpdate(blob);
             }
             updateModeUI();
         }
@@ -1504,23 +1443,6 @@ btnCopy.addEventListener("click", copyTranscript);
 // ── Text correction ──
 const btnCorrect = document.getElementById("btn-correct");
 
-async function correctText(text) {
-    const resp = await fetch("/api/correct", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, system_prompt: systemPrompt }),
-    });
-    const raw = await resp.text();
-    let data;
-    try {
-        data = JSON.parse(raw);
-    } catch {
-        throw new Error(`Server fout (${resp.status}): ${raw.substring(0, 120)}`);
-    }
-    if (!resp.ok) throw new Error(data.error || `Server fout ${resp.status}`);
-    return data.corrected;
-}
-
 // Manual: correct entire transcript
 btnCorrect.addEventListener("click", async () => {
     const text = transcript.innerText.trim();
@@ -1531,7 +1453,7 @@ btnCorrect.addEventListener("click", async () => {
     btnCorrect.disabled = true;
 
     try {
-        const corrected = await correctText(text);
+        const corrected = await correctText(text, systemPrompt);
         if (corrected && corrected !== text) {
             transcript.innerHTML = "";
             const span = document.createElement("span");
@@ -1562,7 +1484,7 @@ async function autoCorrectAfterStop() {
     btnCorrect.disabled = true;
 
     try {
-        const corrected = await correctText(text);
+        const corrected = await correctText(text, systemPrompt);
         if (corrected && corrected.trim() !== text) {
             transcript.innerHTML = "";
             const span = document.createElement("span");
@@ -1597,20 +1519,20 @@ function showToast(message) {
 // ── Queue: auto-retry when back online + periodic + click to retry ──
 window.addEventListener("online", () => {
     console.log("Back online — processing queue");
-    processQueue();
+    processQueueAndUpdate();
 });
 
 // Retry queue every 30 seconds if there are items
 setInterval(async () => {
     const count = await getQueueCount();
-    if (count > 0 && navigator.onLine) processQueue();
+    if (count > 0 && navigator.onLine) processQueueAndUpdate();
 }, 30000);
 
 // Click on queue badge to manually retry
 queueInfo.style.cursor = "pointer";
 queueInfo.title = "Klik om wachtrij opnieuw te verwerken";
 queueInfo.addEventListener("click", () => {
-    if (!isProcessingQueue) processQueue();
+    if (!isProcessingQueue) processQueueAndUpdate();
 });
 
 // ── Settings modal ──
@@ -2058,7 +1980,7 @@ updateBmcLink();
 updateModeUI();
 updateQueueBadge();
 updateShortcutDisplays();
-processQueue();
+processQueueAndUpdate();
 
 // Register service worker for PWA install
 if ("serviceWorker" in navigator) {
