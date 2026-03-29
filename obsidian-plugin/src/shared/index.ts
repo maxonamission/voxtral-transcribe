@@ -36,6 +36,7 @@ export {
 export {
 	SUPPORTED_LANGUAGES,
 	type LangCode,
+	type CommandId,
 	LANGUAGE_NAMES,
 	PHONETIC_RULES,
 	MISHEARINGS,
@@ -49,4 +50,5 @@ export {
 	trySplitCompound,
 	getMishearings,
 	getPatternsForCommand,
+	getLabel,
 } from "./lang-data";

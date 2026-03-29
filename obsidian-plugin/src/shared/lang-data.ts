@@ -56,6 +56,33 @@ export const SUPPORTED_LANGUAGES = [
 
 export type LangCode = (typeof SUPPORTED_LANGUAGES)[number];
 
+/** Command IDs — used as keys in language pattern data */
+export type CommandId =
+	| "newParagraph"
+	| "newLine"
+	| "heading1"
+	| "heading2"
+	| "heading3"
+	| "bulletPoint"
+	| "todoItem"
+	| "numberedItem"
+	| "deleteLastParagraph"
+	| "deleteLastLine"
+	| "undo"
+	| "stopRecording"
+	| "colon"
+	| "wikilink"
+	| "boldOpen"
+	| "boldClose"
+	| "italicOpen"
+	| "italicClose"
+	| "inlineCodeOpen"
+	| "inlineCodeClose"
+	| "tagOpen"
+	| "tagClose"
+	| "codeBlockOpen"
+	| "codeBlockClose";
+
 // ── Compiled data ──
 
 function compileRegexRules(
@@ -188,4 +215,11 @@ export function getPatternsForCommand(
 		}
 	}
 	return result;
+}
+
+/**
+ * Get the localized label for a command, falling back to English.
+ */
+export function getLabel(commandId: string, lang: string): string {
+	return LABELS[lang as LangCode]?.[commandId] ?? LABELS.en?.[commandId] ?? commandId;
 }
