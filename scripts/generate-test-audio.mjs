@@ -18,11 +18,13 @@
  *   node scripts/generate-test-audio.mjs                  # all languages
  *   node scripts/generate-test-audio.mjs --lang nl,en     # specific languages
  *   node scripts/generate-test-audio.mjs --dry-run        # show what would be generated
+ *   node scripts/generate-test-audio.mjs --background     # also mix with background noise (requires ffmpeg)
  */
 
 import { readFileSync, readdirSync, mkdirSync, writeFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { execSync } from "child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const langDir = join(__dirname, "..", "obsidian-plugin", "src", "languages");
@@ -32,8 +34,14 @@ const outputDir = join(__dirname, "..", "tests", "audio-integration", "samples")
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
+const withBackground = args.includes("--background");
 const langFilter = args.find(a => a.startsWith("--lang="))?.split("=")[1]?.split(",")
     || (args.includes("--lang") ? args[args.indexOf("--lang") + 1]?.split(",") : null);
+
+// ── Background noise files ──
+// Place background audio files in tests/audio-integration/backgrounds/
+// The script mixes each voice sample with each background at -15dB.
+const backgroundDir = join(__dirname, "..", "tests", "audio-integration", "backgrounds");
 
 // ── ElevenLabs voice IDs per language ──
 // Using ElevenLabs' default/recommended voices.
@@ -185,20 +193,110 @@ for (const item of plan) {
 
 console.log(`\nDone: ${generated} generated, ${skipped} skipped (exist), ${failed} failed`);
 
+// ── Mix with background noise ──
+
+let mixed = 0;
+
+if (withBackground && existsSync(backgroundDir)) {
+    // Check ffmpeg is available
+    try {
+        execSync("ffmpeg -version", { stdio: "ignore" });
+    } catch {
+        console.error("\nError: ffmpeg is required for --background mixing.");
+        console.error("  Install with: apt install ffmpeg / brew install ffmpeg");
+        process.exit(1);
+    }
+
+    const bgFiles = readdirSync(backgroundDir).filter(f =>
+        f.endsWith(".mp3") || f.endsWith(".wav") || f.endsWith(".ogg")
+    );
+
+    if (bgFiles.length === 0) {
+        console.warn("\nNo background files found in", backgroundDir);
+        console.warn("  Add .mp3/.wav/.ogg files (e.g. cafe.mp3, office.mp3, street.mp3)");
+    } else {
+        console.log(`\nMixing with ${bgFiles.length} background(s): ${bgFiles.join(", ")}`);
+        const bgOutputDir = join(outputDir, "..", "samples-with-background");
+
+        for (const item of plan) {
+            if (!existsSync(item.outPath)) continue;
+
+            for (const bgFile of bgFiles) {
+                const bgName = bgFile.replace(/\.[^.]+$/, "");
+                const bgPath = join(backgroundDir, bgFile);
+                const mixedDir = join(bgOutputDir, bgName, item.lang);
+                const mixedPath = join(mixedDir, item.filename);
+
+                if (existsSync(mixedPath)) continue;
+
+                mkdirSync(mixedDir, { recursive: true });
+
+                try {
+                    // Mix: voice at full volume, background at -15dB (volume=0.18)
+                    execSync(
+                        `ffmpeg -y -i "${item.outPath}" -i "${bgPath}" ` +
+                        `-filter_complex "[1]volume=0.18[bg];[0][bg]amix=inputs=2:duration=shortest" ` +
+                        `"${mixedPath}" 2>/dev/null`
+                    );
+                    mixed++;
+                } catch {
+                    console.error(`  ✗ Mix failed: ${item.lang}/${item.filename} + ${bgFile}`);
+                }
+            }
+        }
+        console.log(`Mixed: ${mixed} samples with background noise`);
+    }
+} else if (withBackground) {
+    console.warn(`\nNo backgrounds directory found at ${backgroundDir}`);
+    console.warn("  Create it and add background audio files:");
+    console.warn("  mkdir -p tests/audio-integration/backgrounds");
+    console.warn("  # Add files like cafe.mp3, office.mp3, street.mp3");
+}
+
 // ── Generate manifest ──
+
+// Collect all clean samples
+const cleanSamples = plan
+    .filter(item => existsSync(item.outPath))
+    .map(item => ({
+        file: `samples/${item.lang}/${item.filename}`,
+        lang: item.lang,
+        expectedCommand: item.cmdId,
+        phrase: item.phrase,
+        priority: ["high", "medium", "low"][item.priority],
+        background: null,
+    }));
+
+// Collect background-mixed samples
+const bgSamples = [];
+const bgOutputDir = join(outputDir, "..", "samples-with-background");
+if (existsSync(bgOutputDir)) {
+    for (const bgName of readdirSync(bgOutputDir)) {
+        const bgLangDir = join(bgOutputDir, bgName);
+        if (!existsSync(bgLangDir)) continue;
+        for (const lang of readdirSync(bgLangDir)) {
+            const bgLangFiles = join(bgLangDir, lang);
+            if (!existsSync(bgLangFiles)) continue;
+            for (const file of readdirSync(bgLangFiles)) {
+                const clean = cleanSamples.find(
+                    s => s.file === `samples/${lang}/${file}`
+                );
+                if (clean) {
+                    bgSamples.push({
+                        ...clean,
+                        file: `samples-with-background/${bgName}/${lang}/${file}`,
+                        background: bgName,
+                    });
+                }
+            }
+        }
+    }
+}
 
 const manifest = {
     generated: new Date().toISOString(),
     model: "eleven_multilingual_v2",
-    samples: plan
-        .filter(item => existsSync(item.outPath))
-        .map(item => ({
-            file: `${item.lang}/${item.filename}`,
-            lang: item.lang,
-            expectedCommand: item.cmdId,
-            phrase: item.phrase,
-            priority: ["high", "medium", "low"][item.priority],
-        })),
+    samples: [...cleanSamples, ...bgSamples],
 };
 
 const manifestPath = join(outputDir, "..", "manifest.json");
