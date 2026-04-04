@@ -36,6 +36,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install shared dependencies
+        working-directory: shared
+        run: npm ci
+
       - name: Bump version to ${{ inputs.version }}
         run: |
           node scripts/bump-version.mjs "${{ inputs.version }}"
@@ -48,7 +52,11 @@ jobs:
       - name: TypeScript check
         run: npx tsc -noEmit -skipLibCheck
 
-      - name: Test
+      - name: Test shared modules
+        working-directory: shared
+        run: npm test
+
+      - name: Test plugin
         run: npm test
 
       - name: Build
@@ -116,21 +124,52 @@ jobs:
       - name: Clone target repo
         run: git clone git@github.com:maxonamission/obsidian-voxtral.git target
 
+      - name: Clean old layout from target
+        run: |
+          # Remove old flat-layout files (pre-shared-extraction)
+          # that are now under obsidian-plugin/ or shared/
+          rm -rf target/src target/esbuild.config.mjs target/eslint.config.mjs \
+                 target/tsconfig.json target/package.json target/package-lock.json \
+                 target/vitest.config.ts target/scripts target/node_modules 2>/dev/null || true
+          # Keep: main.js, manifest.json, styles.css, versions.json, README.md, .github/, .git/
+
       - name: Copy plugin files to target
         run: |
-          # Copy build artifacts and config
+          # Mirror the monorepo layout so relative imports (../../shared/src/)
+          # resolve correctly in the standalone repo.
+          #
+          # Target layout:
+          #   target/obsidian-plugin/  ← plugin source, config, build artifacts
+          #   target/shared/           ← platform-independent shared modules
+
+          # ── obsidian-plugin/ ──
+          mkdir -p target/obsidian-plugin
+          cp source/obsidian-plugin/main.js target/obsidian-plugin/
+          cp source/obsidian-plugin/manifest.json target/obsidian-plugin/
+          cp source/obsidian-plugin/styles.css target/obsidian-plugin/
+          cp source/obsidian-plugin/versions.json target/obsidian-plugin/
+          cp source/obsidian-plugin/package.json target/obsidian-plugin/
+          cp source/obsidian-plugin/package-lock.json target/obsidian-plugin/
+          cp source/obsidian-plugin/tsconfig.json target/obsidian-plugin/
+          cp source/obsidian-plugin/esbuild.config.mjs target/obsidian-plugin/
+          cp source/obsidian-plugin/eslint.config.mjs target/obsidian-plugin/
+          cp -r source/obsidian-plugin/src target/obsidian-plugin/
+          cp -r source/obsidian-plugin/scripts target/obsidian-plugin/ 2>/dev/null || true
+
+          # ── shared/ ──
+          mkdir -p target/shared
+          cp -r source/shared/src target/shared/
+          cp source/shared/package.json target/shared/
+          cp source/shared/tsconfig.json target/shared/
+          cp source/shared/vitest.config.ts target/shared/
+
+          # ── Root-level files ──
+          # Keep release artifacts at root for Obsidian community plugin compatibility
+          # (Obsidian expects main.js, manifest.json, styles.css at repo root)
           cp source/obsidian-plugin/main.js target/
           cp source/obsidian-plugin/manifest.json target/
           cp source/obsidian-plugin/styles.css target/
           cp source/obsidian-plugin/versions.json target/
-
-          # Copy source and config for development
-          cp source/obsidian-plugin/package.json target/
-          cp source/obsidian-plugin/package-lock.json target/
-          cp source/obsidian-plugin/tsconfig.json target/
-          cp source/obsidian-plugin/esbuild.config.mjs target/
-          cp source/obsidian-plugin/eslint.config.mjs target/
-          cp -r source/obsidian-plugin/src target/
 
           # Copy docs
           cp source/obsidian-plugin/README.md target/ 2>/dev/null || true
