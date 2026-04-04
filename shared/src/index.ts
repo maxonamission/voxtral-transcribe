@@ -4,7 +4,7 @@
 
 /**
  * @voxtral/shared — Platform-independent core utilities shared
- * between the Obsidian plugin and the webapp.
+ * between the Obsidian plugin and the VS Code extension.
  */
 
 export { levenshtein, normalizeCommand } from "./similarity";
@@ -25,3 +25,32 @@ export {
 	stripLlmCommentary,
 	isLikelyHallucination,
 } from "./correction";
+
+export {
+	SUPPORTED_LANGUAGES,
+	type LangCode,
+	LANGUAGE_NAMES,
+	type CommandId,
+	PATTERNS,
+	LABELS,
+	MISHEARINGS,
+	getPatternsForCommand,
+	getLabel,
+	getMishearings,
+} from "./lang";
+
+export {
+	phoneticNormalize,
+	stripArticles,
+	stripTrailingFillers,
+	trySplitCompound,
+} from "./phonetics";
+
+export { vlog, getLogText, getLogCount } from "./plugin-logger";
+
+export {
+	type AuthenticatedWsConnection,
+	type AuthenticatedWsCallbacks,
+	WS_OPEN,
+	createAuthenticatedWebSocket,
+} from "./authenticated-websocket";

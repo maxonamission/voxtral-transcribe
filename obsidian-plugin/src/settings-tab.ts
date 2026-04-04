@@ -8,7 +8,7 @@ import { listModels } from "./mistral-api";
 import type { MistralModel, } from "./mistral-api";
 import { getDefaultBuiltInCommands } from "./types";
 import type { FocusBehavior, CustomCommand } from "./types";
-import { SUPPORTED_LANGUAGES, LANGUAGE_NAMES } from "./lang";
+import { SUPPORTED_LANGUAGES, LANGUAGE_NAMES } from "../../shared/src/lang";
 
 export class VoxtralSettingTab extends PluginSettingTab {
 	plugin: VoxtralPlugin;

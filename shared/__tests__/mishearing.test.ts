@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MISHEARINGS } from "../lang";
+import { MISHEARINGS } from "../src/lang";
 
 describe("Mishearing corrections — Dutch", () => {
 	const nlRules = MISHEARINGS.nl!;

@@ -38,7 +38,7 @@ import {
 	matchTemplate,
 	insertTemplate,
 } from "./templates";
-import { vlog, getLogText, getLogCount } from "./plugin-logger";
+import { vlog, getLogText, getLogCount } from "../../shared/src/plugin-logger";
 import { DictationTracker } from "./dictation-tracker";
 import { RealtimeSession, type SessionCallbacks } from "./realtime-session";
 import { DualDelaySession } from "./dual-delay-session";

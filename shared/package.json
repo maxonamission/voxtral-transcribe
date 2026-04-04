@@ -1,0 +1,16 @@
+{
+	"name": "@voxtral/shared",
+	"version": "0.8.10",
+	"description": "Platform-independent core utilities shared between the Obsidian plugin and VS Code extension.",
+	"private": true,
+	"scripts": {
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"license": "GPL-3.0",
+	"devDependencies": {
+		"@types/node": "^22.0.0",
+		"typescript": "5.7.2",
+		"vitest": "^4.1.0"
+	}
+}

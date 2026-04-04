@@ -7,12 +7,12 @@ import {
 	DEFAULT_CORRECT_PROMPT,
 	buildCustomCommandGuard as buildGuard,
 	stripLlmCommentary,
-} from "./shared";
+} from "../../shared/src";
 import {
 	createAuthenticatedWebSocket,
 	WS_OPEN,
 	type AuthenticatedWsConnection,
-} from "./authenticated-websocket";
+} from "../../shared/src/authenticated-websocket";
 
 const BASE_URL = "https://api.mistral.ai";
 
@@ -105,7 +105,7 @@ export async function listModels(
 }
 
 // Re-export shared functions so existing imports from mistral-api keep working
-export { isLikelyHallucination } from "./shared";
+export { isLikelyHallucination } from "../../shared/src";
 
 // ── Batch transcription ──
 

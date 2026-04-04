@@ -8,7 +8,7 @@ import {
 } from "./voice-commands";
 import { VoxtralSettings } from "./types";
 import { DictationTracker } from "./dictation-tracker";
-import { vlog } from "./plugin-logger";
+import { vlog } from "../../shared/src/plugin-logger";
 
 /** Callbacks from the session back to the plugin orchestrator. */
 export interface SessionCallbacks {

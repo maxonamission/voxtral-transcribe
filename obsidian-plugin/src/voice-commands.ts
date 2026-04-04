@@ -7,13 +7,13 @@ import {
 	getPatternsForCommand,
 	getLabel,
 	getMishearings,
-} from "./lang";
+} from "../../shared/src/lang";
 import {
 	phoneticNormalize,
 	stripArticles,
 	stripTrailingFillers,
 	trySplitCompound,
-} from "./phonetics";
+} from "../../shared/src/phonetics";
 import type { CustomCommand } from "./types";
 import {
 	levenshtein,
@@ -24,7 +24,7 @@ import {
 	shouldLowercase,
 	lowercaseFirstLetter,
 	stripTrailingPunctuation,
-} from "./shared";
+} from "../../shared/src";
 
 /**
  * Voice command processing — recognizes voice commands at the end of
@@ -141,7 +141,7 @@ export function openSlot(commandId: string, def: SlotDef, startPos?: { line: num
 }
 
 // Re-export shared functions so existing imports from voice-commands keep working
-export { normalizeCommand, lowercaseFirstLetter, type InsertionContext } from "./shared";
+export { normalizeCommand, lowercaseFirstLetter, type InsertionContext } from "../../shared/src";
 
 // Apply language-specific mishearing corrections
 function fixMishearings(text: string): string {

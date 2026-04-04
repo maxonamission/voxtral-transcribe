@@ -9,7 +9,7 @@ import {
 } from "./voice-commands";
 import { VoxtralSettings } from "./types";
 import { DictationTracker } from "./dictation-tracker";
-import { vlog } from "./plugin-logger";
+import { vlog } from "../../shared/src/plugin-logger";
 import type { SessionCallbacks } from "./realtime-session";
 
 /**

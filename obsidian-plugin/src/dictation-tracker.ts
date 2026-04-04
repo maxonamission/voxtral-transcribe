@@ -5,7 +5,7 @@ import { Editor } from "obsidian";
 import { processText, isSlotActive } from "./voice-commands";
 import { correctText } from "./mistral-api";
 import { VoxtralSettings } from "./types";
-import { vlog } from "./plugin-logger";
+import { vlog } from "../../shared/src/plugin-logger";
 
 /**
  * Tracks which ranges of text were inserted by dictation,
