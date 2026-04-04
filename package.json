@@ -1,0 +1,10 @@
+{
+	"name": "voxtral-transcribe",
+	"private": true,
+	"scripts": {
+		"test": "cd shared && npm test && cd ../obsidian-plugin && npm test && cd ../vscode-extension && npm test",
+		"test:shared": "cd shared && npm test",
+		"test:obsidian": "cd obsidian-plugin && npm test",
+		"test:vscode": "cd vscode-extension && npm test"
+	}
+}

@@ -1,17 +1,42 @@
-name: Plugin CI
+name: CI
 
 on:
   push:
     paths:
       - 'obsidian-plugin/**'
       - 'shared/**'
+      - 'vscode-extension/**'
   pull_request:
     paths:
       - 'obsidian-plugin/**'
       - 'shared/**'
+      - 'vscode-extension/**'
 
 jobs:
-  validate:
+  test-shared:
+    name: Test shared modules
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: shared
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: shared/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+  test-obsidian:
+    name: Test Obsidian plugin
+    needs: test-shared
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -25,26 +50,21 @@ jobs:
           cache: 'npm'
           cache-dependency-path: obsidian-plugin/package-lock.json
 
+      - name: Install shared dependencies
+        working-directory: shared
+        run: npm ci
+
       - name: Install dependencies
         run: npm ci
 
       - name: ESLint
         run: npx eslint src/
 
-      - name: TypeScript check
-        run: npx tsc -noEmit -skipLibCheck
-
-      - name: Test shared modules
-        working-directory: shared
-        run: |
-          npm ci
-          npm test
-
-      - name: Test plugin
+      - name: Test
         run: npm test
 
       - name: Build
-        run: npm run build
+        run: node esbuild.config.mjs production
 
       - name: Verify version consistency
         run: |
@@ -67,3 +87,32 @@ jobs:
           fi
 
           echo "All versions consistent at $MANIFEST_VERSION"
+
+  test-vscode:
+    name: Test VS Code extension
+    needs: test-shared
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vscode-extension
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Install shared dependencies
+        working-directory: shared
+        run: npm ci
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
