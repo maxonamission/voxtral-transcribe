@@ -13,12 +13,18 @@ const mockStatusBarItem = {
 vi.mock("vscode", () => ({
 	window: {
 		createStatusBarItem: vi.fn(() => mockStatusBarItem),
+		createWebviewPanel: vi.fn(() => ({
+			webview: { html: "", postMessage: vi.fn(), onDidReceiveMessage: vi.fn() },
+			onDidDispose: vi.fn(),
+			dispose: vi.fn(),
+		})),
 		activeTextEditor: undefined,
 		showInformationMessage: vi.fn(),
 		showErrorMessage: vi.fn(),
 		showWarningMessage: vi.fn(),
 	},
 	StatusBarAlignment: { Right: 2 },
+	ViewColumn: { Beside: 2 },
 	ThemeColor: class ThemeColor {
 		constructor(public id: string) {}
 	},
@@ -48,6 +54,7 @@ describe("extension", () => {
 		mockSubscriptions.length = 0;
 		context = {
 			subscriptions: mockSubscriptions,
+			extensionPath: "/mock/extension/path",
 		};
 	});
 
@@ -59,10 +66,10 @@ describe("extension", () => {
 		expect(mockStatusBarItem.command).toBe("voxtral.toggleRecording");
 		expect(mockStatusBarItem.text).toContain("Voxtral");
 
-		// Status bar + 4 commands = 5 subscriptions
-		expect(context.subscriptions.length).toBe(5);
+		// Status bar + 5 commands + 1 dispose = 7 subscriptions
+		expect(context.subscriptions.length).toBe(7);
 
-		// Verify all 4 commands were registered
+		// Verify all 5 commands were registered
 		expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
 			"voxtral.toggleRecording",
 			expect.any(Function),
@@ -73,6 +80,10 @@ describe("extension", () => {
 		);
 		expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
 			"voxtral.stopRecording",
+			expect.any(Function),
+		);
+		expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
+			"voxtral.sendChunk",
 			expect.any(Function),
 		);
 		expect(vscode.commands.registerCommand).toHaveBeenCalledWith(

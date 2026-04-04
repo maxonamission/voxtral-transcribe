@@ -30,6 +30,10 @@
 			{
 				"command": "voxtral.correctText",
 				"title": "Voxtral: Correct Selected Text"
+			},
+			{
+				"command": "voxtral.sendChunk",
+				"title": "Voxtral: Send Audio Chunk (Tap-to-Send)"
 			}
 		],
 		"keybindings": [
