@@ -1,0 +1,145 @@
+{
+	"name": "voxtral-transcribe",
+	"displayName": "Voxtral Transcribe",
+	"description": "Speech-to-text dictation using Mistral Voxtral. Supports real-time streaming, voice commands, and automatic text correction.",
+	"version": "0.1.0",
+	"publisher": "maxonamission",
+	"license": "GPL-3.0",
+	"engines": {
+		"vscode": "^1.85.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [],
+	"main": "./dist/extension.js",
+	"contributes": {
+		"commands": [
+			{
+				"command": "voxtral.toggleRecording",
+				"title": "Voxtral: Toggle Recording"
+			},
+			{
+				"command": "voxtral.startRecording",
+				"title": "Voxtral: Start Recording"
+			},
+			{
+				"command": "voxtral.stopRecording",
+				"title": "Voxtral: Stop Recording"
+			},
+			{
+				"command": "voxtral.correctText",
+				"title": "Voxtral: Correct Selected Text"
+			}
+		],
+		"keybindings": [
+			{
+				"command": "voxtral.toggleRecording",
+				"key": "ctrl+shift+;",
+				"mac": "cmd+shift+;"
+			}
+		],
+		"configuration": {
+			"title": "Voxtral Transcribe",
+			"properties": {
+				"voxtral.apiKey": {
+					"type": "string",
+					"default": "",
+					"description": "Mistral API key for Voxtral transcription.",
+					"order": 1
+				},
+				"voxtral.language": {
+					"type": "string",
+					"default": "nl",
+					"enum": ["ar", "de", "en", "es", "fr", "hi", "it", "ja", "ko", "nl", "pt", "ru", "zh"],
+					"enumDescriptions": [
+						"Arabic", "German", "English", "Spanish", "French",
+						"Hindi", "Italian", "Japanese", "Korean", "Dutch",
+						"Portuguese", "Russian", "Chinese"
+					],
+					"description": "Language for speech recognition.",
+					"order": 2
+				},
+				"voxtral.mode": {
+					"type": "string",
+					"default": "realtime",
+					"enum": ["realtime", "batch"],
+					"enumDescriptions": [
+						"Realtime streaming transcription (lower latency)",
+						"Batch transcription (higher accuracy)"
+					],
+					"description": "Transcription mode.",
+					"order": 3
+				},
+				"voxtral.realtimeModel": {
+					"type": "string",
+					"default": "voxtral-mini-transcribe-realtime-2602",
+					"description": "Mistral model for realtime transcription."
+				},
+				"voxtral.batchModel": {
+					"type": "string",
+					"default": "voxtral-mini-latest",
+					"description": "Mistral model for batch transcription."
+				},
+				"voxtral.correctModel": {
+					"type": "string",
+					"default": "mistral-small-latest",
+					"description": "Mistral model for text correction."
+				},
+				"voxtral.autoCorrect": {
+					"type": "boolean",
+					"default": true,
+					"description": "Automatically correct transcribed text using LLM."
+				},
+				"voxtral.streamingDelayMs": {
+					"type": "number",
+					"default": 480,
+					"description": "Delay in milliseconds for streaming mode."
+				},
+				"voxtral.dualDelay": {
+					"type": "boolean",
+					"default": false,
+					"description": "Enable dual-delay mode: fast stream for immediate feedback, slow stream for accuracy."
+				},
+				"voxtral.dualDelayFastMs": {
+					"type": "number",
+					"default": 240,
+					"description": "Fast stream delay in milliseconds (dual-delay mode)."
+				},
+				"voxtral.dualDelaySlowMs": {
+					"type": "number",
+					"default": 2400,
+					"description": "Slow stream delay in milliseconds (dual-delay mode)."
+				},
+				"voxtral.systemPrompt": {
+					"type": "string",
+					"default": "",
+					"description": "Custom system prompt for text correction."
+				},
+				"voxtral.noiseSuppression": {
+					"type": "boolean",
+					"default": false,
+					"description": "Enable browser-level noise suppression, echo cancellation, and AGC."
+				},
+				"voxtral.typingCooldownMs": {
+					"type": "number",
+					"default": 800,
+					"description": "Milliseconds of silence before mic unmutes after typing."
+				}
+			}
+		}
+	},
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "node esbuild.config.mjs production",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"devDependencies": {
+		"@types/node": "^22.0.0",
+		"@types/vscode": "^1.85.0",
+		"esbuild": "^0.24.0",
+		"typescript": "5.7.2",
+		"vitest": "^4.1.0"
+	}
+}
