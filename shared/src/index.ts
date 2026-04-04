@@ -54,3 +54,22 @@ export {
 	WS_OPEN,
 	createAuthenticatedWebSocket,
 } from "./authenticated-websocket";
+
+export {
+	type FocusBehavior,
+	type CustomCommand,
+	type VoxtralSettings,
+	DEFAULT_SETTINGS,
+} from "./types";
+
+export {
+	type EditorPosition,
+	type EditorAdapter,
+	type NotifyFn,
+} from "./editor-adapter";
+
+export {
+	type HttpRequestOptions,
+	type HttpResponse,
+	type HttpRequestFn,
+} from "./http-adapter";

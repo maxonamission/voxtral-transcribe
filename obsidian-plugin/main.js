@@ -22,7 +22,33 @@ __export(main_exports, {
   default: () => VoxtralPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian7 = require("obsidian");
+var import_obsidian4 = require("obsidian");
+
+// ../shared/src/types.ts
+var DEFAULT_SETTINGS = {
+  settingsVersion: 1,
+  apiKey: "",
+  language: "nl",
+  realtimeModel: "voxtral-mini-transcribe-realtime-2602",
+  batchModel: "voxtral-mini-latest",
+  correctModel: "mistral-small-latest",
+  autoCorrect: true,
+  streamingDelayMs: 480,
+  dualDelay: false,
+  dualDelayFastMs: 240,
+  dualDelaySlowMs: 2400,
+  systemPrompt: "",
+  mode: "realtime",
+  microphoneDeviceId: "",
+  focusBehavior: "pause",
+  focusPauseDelaySec: 30,
+  dismissMobileBatchNotice: false,
+  enterToSend: false,
+  typingCooldownMs: 800,
+  noiseSuppression: false,
+  customCommands: [],
+  templatesFolder: ""
+};
 
 // ../shared/src/similarity.ts
 function levenshtein(a, b) {
@@ -1405,7 +1431,7 @@ function createAuthenticatedWebSocket(url, headers, callbacks) {
   return conn;
 }
 
-// src/types.ts
+// src/default-commands.ts
 function getDefaultBuiltInCommands() {
   return [
     {
@@ -1554,30 +1580,6 @@ function getDefaultBuiltInCommands() {
     }
   ];
 }
-var DEFAULT_SETTINGS = {
-  settingsVersion: 1,
-  apiKey: "",
-  language: "nl",
-  realtimeModel: "voxtral-mini-transcribe-realtime-2602",
-  batchModel: "voxtral-mini-latest",
-  correctModel: "mistral-small-latest",
-  autoCorrect: true,
-  streamingDelayMs: 480,
-  dualDelay: false,
-  dualDelayFastMs: 240,
-  dualDelaySlowMs: 2400,
-  systemPrompt: "",
-  mode: "realtime",
-  microphoneDeviceId: "",
-  focusBehavior: "pause",
-  focusPauseDelaySec: 30,
-  dismissMobileBatchNotice: false,
-  enterToSend: false,
-  typingCooldownMs: 800,
-  noiseSuppression: false,
-  customCommands: [],
-  templatesFolder: ""
-};
 
 // src/settings-migration.ts
 var CURRENT_VERSION = 1;
@@ -1598,7 +1600,7 @@ function migrateSettings(data) {
 }
 
 // src/settings-tab.ts
-var import_obsidian2 = require("obsidian");
+var import_obsidian = require("obsidian");
 
 // src/audio-recorder.ts
 var WORKLET_SOURCE = `
@@ -1854,8 +1856,7 @@ var AudioRecorder = class {
   }
 };
 
-// src/mistral-api.ts
-var import_obsidian = require("obsidian");
+// ../shared/src/mistral-api.ts
 var BASE_URL = "https://api.mistral.ai";
 function sanitizeApiError(status, rawBody) {
   var _a;
@@ -1886,10 +1887,10 @@ function sanitizeApiError(status, rawBody) {
       return `HTTP ${status}: Request failed`;
   }
 }
-async function listModels(apiKey) {
+async function listModels(apiKey, httpRequest) {
   if (!apiKey) return [];
   try {
-    const response = await (0, import_obsidian.requestUrl)({
+    const response = await httpRequest({
       url: `${BASE_URL}/v1/models`,
       method: "GET",
       headers: {
@@ -1917,7 +1918,7 @@ async function listModels(apiKey) {
     return [];
   }
 }
-async function transcribeBatch(audioBlob, settings, diarize = false) {
+async function transcribeBatch(audioBlob, settings, httpRequest, diarize = false) {
   var _a;
   const ext = audioBlob.type.includes("mp4") ? "m4a" : audioBlob.type.includes("ogg") ? "ogg" : "webm";
   const mimeType = audioBlob.type || `audio/${ext}`;
@@ -1962,7 +1963,7 @@ true\r
   body.set(headerBuf, 0);
   body.set(fileBytes, headerBuf.length);
   body.set(tailBuf, headerBuf.length + fileBytes.length);
-  const response = await (0, import_obsidian.requestUrl)({
+  const response = await httpRequest({
     url: `${BASE_URL}/v1/audio/transcriptions`,
     method: "POST",
     headers: {
@@ -1982,7 +1983,7 @@ function buildCustomCommandGuard2(settings) {
   var _a;
   return buildCustomCommandGuard((_a = settings.customCommands) != null ? _a : []);
 }
-async function correctText(text, settings) {
+async function correctText(text, settings, httpRequest) {
   var _a, _b, _c, _d;
   const basePrompt = settings.systemPrompt || DEFAULT_CORRECT_PROMPT;
   const systemPrompt = basePrompt + buildCustomCommandGuard2(settings);
@@ -1994,7 +1995,7 @@ async function correctText(text, settings) {
     ],
     temperature: 0.1
   };
-  const response = await (0, import_obsidian.requestUrl)({
+  const response = await httpRequest({
     url: `${BASE_URL}/v1/chat/completions`,
     method: "POST",
     headers: {
@@ -2180,7 +2181,7 @@ function arrayBufferToBase64(buffer) {
 }
 
 // src/settings-tab.ts
-var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
+var VoxtralSettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.cachedModels = null;
@@ -2190,7 +2191,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     ;
-    new import_obsidian2.Setting(containerEl).setName("Mistral API key").setDesc("Your API key from platform.mistral.ai. Stored in Obsidian\u2019s plugin data folder (data.json), unencrypted. Do not share your data.json file.").addText(
+    new import_obsidian.Setting(containerEl).setName("Mistral API key").setDesc("Your API key from platform.mistral.ai. Stored in Obsidian\u2019s plugin data folder (data.json), unencrypted. Do not share your data.json file.").addText(
       (text) => text.setPlaceholder("Enter your API key").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
         this.plugin.settings.apiKey = value.trim();
         await this.plugin.saveSettings();
@@ -2199,7 +2200,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
       const input = setting.controlEl.querySelector("input");
       if (input) input.type = "password";
     });
-    const micSetting = new import_obsidian2.Setting(containerEl).setName("Microphone").setDesc("Select which microphone to use");
+    const micSetting = new import_obsidian.Setting(containerEl).setName("Microphone").setDesc("Select which microphone to use");
     micSetting.addDropdown((drop) => {
       drop.addOption("", "System default");
       drop.setValue(this.plugin.settings.microphoneDeviceId);
@@ -2216,9 +2217,9 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    const modeDesc = import_obsidian2.Platform.isMobile ? "Only batch mode is available on mobile. Use tap-to-send to submit chunks while you keep talking." : "Realtime: text appears as you speak. Batch: audio is transcribed after you stop recording.";
-    const modeSetting = new import_obsidian2.Setting(containerEl).setName("Mode").setDesc(modeDesc);
-    if (import_obsidian2.Platform.isMobile) {
+    const modeDesc = import_obsidian.Platform.isMobile ? "Only batch mode is available on mobile. Use tap-to-send to submit chunks while you keep talking." : "Realtime: text appears as you speak. Batch: audio is transcribed after you stop recording.";
+    const modeSetting = new import_obsidian.Setting(containerEl).setName("Mode").setDesc(modeDesc);
+    if (import_obsidian.Platform.isMobile) {
       modeSetting.addDropdown(
         (drop) => drop.addOption("batch", "Batch (after recording)").setValue("batch").setDisabled(true)
       );
@@ -2231,8 +2232,8 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         })
       );
     }
-    const isBatch = this.plugin.settings.mode === "batch" || import_obsidian2.Platform.isMobile;
-    new import_obsidian2.Setting(containerEl).setName("Enter = tap-to-send").setDesc(
+    const isBatch = this.plugin.settings.mode === "batch" || import_obsidian.Platform.isMobile;
+    new import_obsidian.Setting(containerEl).setName("Enter = tap-to-send").setDesc(
       isBatch ? "In batch mode, pressing Enter sends the current audio chunk when the mic is live. While typing, Enter inserts a normal newline." : "Only available in batch mode. Switch to batch mode to change this setting."
     ).addToggle(
       (toggle) => toggle.setValue(isBatch ? this.plugin.settings.enterToSend : false).setDisabled(!isBatch).onChange(async (value) => {
@@ -2240,7 +2241,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Typing cooldown").setDesc(
+    new import_obsidian.Setting(containerEl).setName("Typing cooldown").setDesc(
       "How long after you stop typing before the mic unmutes again"
     ).addDropdown((drop) => {
       const options = {
@@ -2261,7 +2262,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian2.Setting(containerEl).setName("On focus loss").setDesc(
+    new import_obsidian.Setting(containerEl).setName("On focus loss").setDesc(
       "What should happen when you switch apps while recording?"
     ).addDropdown((drop) => {
       drop.addOption("pause", "Pause immediately");
@@ -2279,7 +2280,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
       );
     });
     if (this.plugin.settings.focusBehavior === "pause-after-delay") {
-      new import_obsidian2.Setting(containerEl).setName("Pause delay (seconds)").setDesc(
+      new import_obsidian.Setting(containerEl).setName("Pause delay (seconds)").setDesc(
         "How long to wait in the background before pausing the recording"
       ).addDropdown((drop) => {
         const options = {
@@ -2300,7 +2301,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         });
       });
     }
-    new import_obsidian2.Setting(containerEl).setName("Language").setDesc("Language for transcription and voice commands").addDropdown((dropdown) => {
+    new import_obsidian.Setting(containerEl).setName("Language").setDesc("Language for transcription and voice commands").addDropdown((dropdown) => {
       for (const code of SUPPORTED_LANGUAGES) {
         dropdown.addOption(code, `${LANGUAGE_NAMES[code]} (${code})`);
       }
@@ -2310,7 +2311,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian2.Setting(containerEl).setName("Auto-correct").setDesc(
+    new import_obsidian.Setting(containerEl).setName("Auto-correct").setDesc(
       "Automatically correct spelling, capitalization, and punctuation after recording"
     ).addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.autoCorrect).onChange(async (value) => {
@@ -2318,7 +2319,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Noise suppression").setDesc(
+    new import_obsidian.Setting(containerEl).setName("Noise suppression").setDesc(
       "Enable browser-level noise suppression, echo cancellation, and auto gain control. Useful in noisy environments."
     ).addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.noiseSuppression).onChange(async (value) => {
@@ -2326,9 +2327,9 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    const isRealtime = !isBatch && !import_obsidian2.Platform.isMobile;
-    new import_obsidian2.Setting(containerEl).setName("Dual-delay mode (experimental)").setDesc(
-      import_obsidian2.Platform.isMobile ? "Not available on mobile (requires realtime streaming)." : !isRealtime ? "Only available in realtime mode." : "Experimental: run two parallel streams (fast preview + slow accuracy). Uses 2x API bandwidth and may produce unexpected results. Overrides the streaming delay setting."
+    const isRealtime = !isBatch && !import_obsidian.Platform.isMobile;
+    new import_obsidian.Setting(containerEl).setName("Dual-delay mode (experimental)").setDesc(
+      import_obsidian.Platform.isMobile ? "Not available on mobile (requires realtime streaming)." : !isRealtime ? "Only available in realtime mode." : "Experimental: run two parallel streams (fast preview + slow accuracy). Uses 2x API bandwidth and may produce unexpected results. Overrides the streaming delay setting."
     ).addToggle((toggle) => {
       toggle.setValue(this.plugin.settings.dualDelay).setDisabled(!isRealtime).onChange(async (value) => {
         this.plugin.settings.dualDelay = value;
@@ -2337,7 +2338,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
       });
     });
     if (isRealtime && !this.plugin.settings.dualDelay) {
-      new import_obsidian2.Setting(containerEl).setName("Streaming delay").setDesc(
+      new import_obsidian.Setting(containerEl).setName("Streaming delay").setDesc(
         "Delay in ms for realtime mode. Lower = faster but less accurate."
       ).addDropdown((drop) => {
         const options = {
@@ -2360,8 +2361,8 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         });
       });
     }
-    new import_obsidian2.Setting(containerEl).setName("Keyboard shortcuts").setHeading();
-    new import_obsidian2.Setting(containerEl).setName("Customize hotkeys").setDesc(
+    new import_obsidian.Setting(containerEl).setName("Keyboard shortcuts").setHeading();
+    new import_obsidian.Setting(containerEl).setName("Customize hotkeys").setDesc(
       `You can assign keyboard shortcuts to all Voxtral commands (start/stop recording, correct selection, correct note, etc.) via Obsidian's Settings \u2192 Hotkeys. Search for "Voxtral".`
     ).addButton(
       (btn) => btn.setButtonText("Open hotkeys").onClick(() => {
@@ -2375,14 +2376,14 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Support this project").setHeading();
-    new import_obsidian2.Setting(containerEl).setName("Buy me a coffee").setDesc("Find this plugin useful? Consider a donation!").addButton(
+    new import_obsidian.Setting(containerEl).setName("Support this project").setHeading();
+    new import_obsidian.Setting(containerEl).setName("Buy me a coffee").setDesc("Find this plugin useful? Consider a donation!").addButton(
       (btn) => btn.setButtonText("Buy me a coffee").onClick(() => {
         window.open("https://buymeacoffee.com/maxonamission");
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Templates").setHeading();
-    new import_obsidian2.Setting(containerEl).setName("Templates folder").setDesc(
+    new import_obsidian.Setting(containerEl).setName("Templates").setHeading();
+    new import_obsidian.Setting(containerEl).setName("Templates folder").setDesc(
       'Path to your templates folder (e.g. "Templates"). Say "template {name}" or "sjabloon {name}" to insert. Leave empty to disable.'
     ).addText(
       (text) => text.setPlaceholder("Templates").setValue(this.plugin.settings.templatesFolder).onChange(async (value) => {
@@ -2390,9 +2391,9 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Custom voice commands").setHeading();
+    new import_obsidian.Setting(containerEl).setName("Custom voice commands").setHeading();
     this.renderCustomCommands(containerEl);
-    new import_obsidian2.Setting(containerEl).setName("Advanced").setHeading();
+    new import_obsidian.Setting(containerEl).setName("Advanced").setHeading();
     const isRealtimeModel = (m) => m.id.includes("realtime");
     const isBatchModel = (m) => {
       var _a;
@@ -2435,7 +2436,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
       },
       isTextChatModel
     );
-    new import_obsidian2.Setting(containerEl).setName("Correction system prompt").setDesc("Leave empty to use the default prompt").addTextArea(
+    new import_obsidian.Setting(containerEl).setName("Correction system prompt").setDesc("Leave empty to use the default prompt").addTextArea(
       (text) => text.setPlaceholder("Default correction prompt will be used...").setValue(this.plugin.settings.systemPrompt).onChange(async (value) => {
         this.plugin.settings.systemPrompt = value;
         await this.plugin.saveSettings();
@@ -2459,7 +2460,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
       const namePrefix = cmd.builtIn ? "\u2699 " : "";
       const displayLabel = (_i = (_h = (_f = cmd.labels) == null ? void 0 : _f[lang]) != null ? _h : (_g = cmd.labels) == null ? void 0 : _g["en"]) != null ? _i : "";
       const displayName = displayLabel || triggers.join(", ") || cmd.id;
-      new import_obsidian2.Setting(containerEl).setName(namePrefix + displayName).setDesc(`${cmd.type === "slot" ? "Slot" : "Insert"}: ${typeLabel}`).addButton(
+      new import_obsidian.Setting(containerEl).setName(namePrefix + displayName).setDesc(`${cmd.type === "slot" ? "Slot" : "Insert"}: ${typeLabel}`).addButton(
         (btn) => btn.setButtonText("Edit").onClick(() => {
           this.openCommandEditor(cmd, i);
         })
@@ -2471,7 +2472,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         })
       );
     }
-    new import_obsidian2.Setting(containerEl).setDesc("Add a custom voice command for inserting text or opening a slot").addButton(
+    new import_obsidian.Setting(containerEl).setDesc("Add a custom voice command for inserting text or opening a slot").addButton(
       (btn) => btn.setButtonText("Add command").setCta().onClick(() => {
         const newCmd = {
           id: `custom-${Date.now()}`,
@@ -2483,7 +2484,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         this.openCommandEditor(newCmd, commands.length - 1);
       })
     );
-    new import_obsidian2.Setting(containerEl).setDesc(
+    new import_obsidian.Setting(containerEl).setDesc(
       "Restore the built-in commands (table, callout, etc.) to their defaults. Your own custom commands are not affected."
     ).addButton(
       (btn) => btn.setButtonText("Reset built-ins").onClick(async () => {
@@ -2502,13 +2503,13 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
     const redisplay = () => this.display();
     const lang = this.plugin.settings.language;
     let removeVVListener;
-    const editorModal = new class extends import_obsidian2.Modal {
+    const editorModal = new class extends import_obsidian.Modal {
       onOpen() {
         var _a;
         const { contentEl } = this;
         this.containerEl.addClass("voxtral-cmd-editor-overlay");
         this.modalEl.addClass("voxtral-cmd-editor-modal");
-        if (import_obsidian2.Platform.isMobile && window.visualViewport) {
+        if (import_obsidian.Platform.isMobile && window.visualViewport) {
           const vv = window.visualViewport;
           const adjustHeight = () => {
             this.modalEl.style.maxHeight = `${vv.height - 32}px`;
@@ -2522,21 +2523,21 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         contentEl.addEventListener("keydown", stopLeak, true);
         contentEl.addEventListener("keyup", stopLeak, true);
         contentEl.addEventListener("keypress", stopLeak, true);
-        new import_obsidian2.Setting(contentEl).setName("Custom voice command").setHeading();
+        new import_obsidian.Setting(contentEl).setName("Custom voice command").setHeading();
         let triggerInput;
-        new import_obsidian2.Setting(contentEl).setName("Trigger phrases (comma-separated)").addText((text) => {
+        new import_obsidian.Setting(contentEl).setName("Trigger phrases (comma-separated)").addText((text) => {
           var _a2;
           triggerInput = text.inputEl;
           text.setValue(((_a2 = cmd.triggers[lang]) != null ? _a2 : []).join(", "));
         });
         let labelInput;
-        new import_obsidian2.Setting(contentEl).setName("Label (name in help panel)").setDesc("Leave empty to use trigger phrase").addText((text) => {
+        new import_obsidian.Setting(contentEl).setName("Label (name in help panel)").setDesc("Leave empty to use trigger phrase").addText((text) => {
           var _a2, _b;
           labelInput = text.inputEl;
           text.setValue((_b = (_a2 = cmd.labels) == null ? void 0 : _a2[lang]) != null ? _b : "");
         });
         let typeValue = cmd.type;
-        new import_obsidian2.Setting(contentEl).setName("Type").addDropdown((drop) => {
+        new import_obsidian.Setting(contentEl).setName("Type").addDropdown((drop) => {
           drop.addOption("insert", "Insert text");
           drop.addOption("slot", "Slot (type between prefix/suffix)");
           drop.setValue(cmd.type);
@@ -2547,7 +2548,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         });
         const insertContainer = contentEl.createDiv();
         let insertInput;
-        new import_obsidian2.Setting(insertContainer).setName("Text to insert").setDesc("Use \\n for newline").addText((text) => {
+        new import_obsidian.Setting(insertContainer).setName("Text to insert").setDesc("Use \\n for newline").addText((text) => {
           var _a2;
           insertInput = text.inputEl;
           text.setValue(((_a2 = cmd.insertText) != null ? _a2 : "").replace(/\n/g, "\\n"));
@@ -2556,17 +2557,17 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
         let prefixInput;
         let suffixInput;
         let exitValue = (_a = cmd.slotExit) != null ? _a : "enter";
-        new import_obsidian2.Setting(slotContainer).setName("Prefix (e.g. [[ or **)").addText((text) => {
+        new import_obsidian.Setting(slotContainer).setName("Prefix (e.g. [[ or **)").addText((text) => {
           var _a2;
           prefixInput = text.inputEl;
           text.setValue((_a2 = cmd.slotPrefix) != null ? _a2 : "");
         });
-        new import_obsidian2.Setting(slotContainer).setName("Suffix (e.g. ]] or **)").addText((text) => {
+        new import_obsidian.Setting(slotContainer).setName("Suffix (e.g. ]] or **)").addText((text) => {
           var _a2;
           suffixInput = text.inputEl;
           text.setValue((_a2 = cmd.slotSuffix) != null ? _a2 : "");
         });
-        new import_obsidian2.Setting(slotContainer).setName("Close slot on").addDropdown((drop) => {
+        new import_obsidian.Setting(slotContainer).setName("Close slot on").addDropdown((drop) => {
           drop.addOption("voice", "Voice command only");
           drop.addOption("enter", "Enter");
           drop.addOption("space", "Space");
@@ -2581,10 +2582,10 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
           slotContainer.toggle(typeValue === "slot");
         };
         updateVisibility();
-        if (import_obsidian2.Platform.isMobile) {
+        if (import_obsidian.Platform.isMobile) {
           setTimeout(() => triggerInput == null ? void 0 : triggerInput.focus(), 100);
         }
-        new import_obsidian2.Setting(contentEl).addButton(
+        new import_obsidian.Setting(contentEl).addButton(
           (btn) => btn.setButtonText("Cancel").onClick(() => {
             this.close();
           })
@@ -2635,7 +2636,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
    * The current value is always shown, even if not in the fetched list.
    */
   addModelDropdown(containerEl, name, desc, currentValue, onChange, filter) {
-    const setting = new import_obsidian2.Setting(containerEl).setName(name).setDesc(desc);
+    const setting = new import_obsidian.Setting(containerEl).setName(name).setDesc(desc);
     setting.addDropdown((drop) => {
       if (currentValue) {
         drop.addOption(currentValue, currentValue);
@@ -2664,7 +2665,7 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
   }
   async getModels() {
     if (this.cachedModels) return this.cachedModels;
-    const models = await listModels(this.plugin.settings.apiKey);
+    const models = await listModels(this.plugin.settings.apiKey, this.plugin.httpRequest);
     if (models.length > 0) {
       this.cachedModels = models;
     }
@@ -2673,9 +2674,9 @@ var VoxtralSettingTab = class extends import_obsidian2.PluginSettingTab {
 };
 
 // src/help-view.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian2 = require("obsidian");
 
-// src/voice-commands.ts
+// ../shared/src/voice-commands.ts
 var activeLang = "nl";
 function setLanguage(lang) {
   activeLang = lang;
@@ -3403,7 +3404,7 @@ function getStrings(lang) {
   var _a;
   return (_a = UI_STRINGS[lang]) != null ? _a : UI_STRINGS.en;
 }
-var VoxtralHelpView = class extends import_obsidian3.ItemView {
+var VoxtralHelpView = class extends import_obsidian2.ItemView {
   constructor(leaf) {
     super(leaf);
     this.lang = "nl";
@@ -3473,7 +3474,7 @@ function renderHelpContent(container, lang) {
 }
 
 // src/templates.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 var templateCommands = [];
 function scanTemplates(app, folderPath) {
   templateCommands = [];
@@ -3484,14 +3485,14 @@ function scanTemplates(app, folderPath) {
 }
 function scanFolder(folder) {
   for (const child of folder.children) {
-    if (child instanceof import_obsidian4.TFile && child.extension === "md") {
+    if (child instanceof import_obsidian3.TFile && child.extension === "md") {
       const displayName = child.basename;
       templateCommands.push({
         name: normalizeCommand(displayName),
         displayName,
         path: child.path
       });
-    } else if (child instanceof import_obsidian4.TFolder) {
+    } else if (child instanceof import_obsidian3.TFolder) {
       scanFolder(child);
     }
   }
@@ -3567,7 +3568,7 @@ async function insertTemplate(app, editor, template) {
   editor.setCursor({ line: newLine, ch: newCh });
 }
 
-// src/dictation-tracker.ts
+// ../shared/src/dictation-tracker.ts
 var DictationTracker = class _DictationTracker {
   constructor() {
     this.dictatedRanges = [];
@@ -3675,7 +3676,7 @@ var DictationTracker = class _DictationTracker {
    * independently, processed from end to start so that earlier
    * offsets remain valid after replacements.
    */
-  async autoCorrectAfterStop(editor, settings) {
+  async autoCorrectAfterStop(editor, settings, httpRequest) {
     if (this.dictatedRanges.length === 0) return;
     const merged = _DictationTracker.mergeRanges(this.dictatedRanges);
     merged.sort((a, b) => b.from - a.from);
@@ -3695,7 +3696,7 @@ var DictationTracker = class _DictationTracker {
     }
     for (const c of corrections) {
       try {
-        const corrected = await correctText(c.text, settings);
+        const corrected = await correctText(c.text, settings, httpRequest);
         if (corrected && corrected !== c.text) {
           editor.replaceRange(corrected, c.from, c.to);
         }
@@ -3724,8 +3725,7 @@ var DictationTracker = class _DictationTracker {
   }
 };
 
-// src/realtime-session.ts
-var import_obsidian5 = require("obsidian");
+// ../shared/src/realtime-session.ts
 var RealtimeSession = class {
   constructor(settings, tracker, callbacks) {
     this.settings = settings;
@@ -3794,7 +3794,7 @@ var RealtimeSession = class {
       },
       onError: (message) => {
         vlog.error("Voxtral: Realtime error:", message);
-        new import_obsidian5.Notice(`Streaming error: ${message}`);
+        this.callbacks.notify(`Streaming error: ${message}`);
       },
       onDisconnect: () => {
         void this.handleDisconnect();
@@ -3834,7 +3834,7 @@ var RealtimeSession = class {
         e
       );
       if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
-        new import_obsidian5.Notice(
+        this.callbacks.notify(
           "Cannot connect to the API. Recording stopped.",
           6e3
         );
@@ -3908,8 +3908,7 @@ var RealtimeSession = class {
   }
 };
 
-// src/dual-delay-session.ts
-var import_obsidian6 = require("obsidian");
+// ../shared/src/dual-delay-session.ts
 var _DualDelaySession = class _DualDelaySession {
   constructor(settings, tracker, callbacks) {
     this.settings = settings;
@@ -4107,7 +4106,7 @@ var _DualDelaySession = class _DualDelaySession {
         e
       );
       if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
-        new import_obsidian6.Notice(
+        this.callbacks.notify(
           "Cannot reconnect. Recording stopped.",
           6e3
         );
@@ -4419,7 +4418,7 @@ _DualDelaySession.REMAINDER_DEBOUNCE_MS = 400;
 var DualDelaySession = _DualDelaySession;
 
 // src/main.ts
-var VoxtralPlugin = class extends import_obsidian7.Plugin {
+var VoxtralPlugin = class extends import_obsidian4.Plugin {
   constructor() {
     super(...arguments);
     this.realtimeSession = null;
@@ -4438,10 +4437,24 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
     this.maxConsecutiveFailures = 5;
     this.currentEditor = null;
     this.keydownHandler = null;
+    /** Platform adapter: wraps Obsidian's requestUrl as HttpRequestFn */
+    this.httpRequest = async (options) => {
+      const response = await (0, import_obsidian4.requestUrl)({
+        url: options.url,
+        method: options.method,
+        headers: options.headers,
+        body: options.body
+      });
+      return {
+        status: response.status,
+        json: response.json,
+        text: response.text
+      };
+    };
   }
   /** Whether realtime mode is available on this platform */
   get canRealtime() {
-    return !import_obsidian7.Platform.isMobile;
+    return !import_obsidian4.Platform.isMobile;
   }
   /** Effective mode: fall back to batch on mobile */
   get effectiveMode() {
@@ -4460,8 +4473,9 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
       isRecording: () => this.isRecording,
       getEditor: () => {
         var _a;
-        return this.currentEditor || ((_a = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView)) == null ? void 0 : _a.editor) || null;
-      }
+        return this.currentEditor || ((_a = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView)) == null ? void 0 : _a.editor) || null;
+      },
+      notify: (msg, dur) => new import_obsidian4.Notice(msg, dur)
     };
   }
   async onload() {
@@ -4474,7 +4488,7 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
     this.addRibbonIcon("mic", "Voxtral: start/stop recording", () => {
       void this.toggleRecording();
     });
-    if (!import_obsidian7.Platform.isMobile) {
+    if (!import_obsidian4.Platform.isMobile) {
       this.statusBarEl = this.addStatusBarItem();
       this.updateStatusBar("idle");
     }
@@ -4621,8 +4635,8 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
       }
     );
     this.sendRibbonEl.addClass("voxtral-send-button");
-    if (import_obsidian7.Platform.isMobile) {
-      const view = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
+    if (import_obsidian4.Platform.isMobile) {
+      const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
       if (view) {
         this.mobileActionEl = view.addAction(
           "send",
@@ -4683,7 +4697,7 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
     this.isPaused = false;
     this.recorder.resume();
     this.updateStatusBar("recording");
-    new import_obsidian7.Notice("Recording resumed");
+    new import_obsidian4.Notice("Recording resumed");
     vlog.debug("Voxtral: Recording resumed (app foregrounded)");
   }
   clearFocusPauseTimer() {
@@ -4709,7 +4723,7 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
       const isSpaceExit = (slot == null ? void 0 : slot.def.exitTrigger) === "space" || (slot == null ? void 0 : slot.def.exitTrigger) === "enter-or-space";
       if (e.key === "Enter" && isEnterExit || e.key === " " && isSpaceExit) {
         e.preventDefault();
-        const view = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
         if (view) {
           closeSlot(view.editor);
           if (this.realtimeSession) {
@@ -4771,12 +4785,12 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
   }
   async startRecording() {
     if (!this.settings.apiKey) {
-      new import_obsidian7.Notice("Please set your API key in the plugin settings.");
+      new import_obsidian4.Notice("Please set your API key in the plugin settings.");
       return;
     }
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
     if (!view) {
-      new import_obsidian7.Notice("Open a note first to start dictating.");
+      new import_obsidian4.Notice("Open a note first to start dictating.");
       return;
     }
     const editor = view.editor;
@@ -4796,7 +4810,7 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
       const micName = this.recorder.activeMicLabel;
       if (this.effectiveMode === "batch") {
         const enterHint = this.settings.enterToSend ? " Press Enter (when not typing) or tap send to transcribe chunks." : " Tap send to transcribe chunks while you keep talking.";
-        if (import_obsidian7.Platform.isMobile && !this.settings.dismissMobileBatchNotice) {
+        if (import_obsidian4.Platform.isMobile && !this.settings.dismissMobileBatchNotice) {
           const frag = document.createDocumentFragment();
           frag.createSpan({
             text: `Recording started (${micName}). Tap the send button (\u2191) to transcribe chunks while you keep talking.`
@@ -4812,20 +4826,20 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
             this.settings.dismissMobileBatchNotice = true;
             void this.saveSettings();
           });
-          new import_obsidian7.Notice(frag, 8e3);
+          new import_obsidian4.Notice(frag, 8e3);
         } else {
-          new import_obsidian7.Notice(
+          new import_obsidian4.Notice(
             `Voxtral: Recording started (${micName})
 ` + enterHint.trim(),
             6e3
           );
         }
       } else {
-        new import_obsidian7.Notice(`Recording started (${micName})`);
+        new import_obsidian4.Notice(`Recording started (${micName})`);
       }
     } catch (e) {
       vlog.error("Voxtral: Failed to start recording", e);
-      new import_obsidian7.Notice(`Could not start recording: ${e}`);
+      new import_obsidian4.Notice(`Could not start recording: ${e}`);
       this.updateStatusBar("idle");
     }
   }
@@ -4848,21 +4862,21 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
       }
     } catch (e) {
       vlog.error("Voxtral: Failed to stop recording", e);
-      new import_obsidian7.Notice(`Error stopping recording: ${e}`);
+      new import_obsidian4.Notice(`Error stopping recording: ${e}`);
     }
     this.currentEditor = null;
     if (this.settings.autoCorrect) {
       this.tracker.reset();
     }
     this.updateStatusBar("idle");
-    new import_obsidian7.Notice("Recording stopped");
+    new import_obsidian4.Notice("Recording stopped");
   }
   // ── Tap-to-send: flush current audio chunk without stopping ──
   async sendChunk() {
     if (!this.isRecording || this.effectiveMode !== "batch") {
       return;
     }
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
     if (!view) return;
     const editor = view.editor;
     this.chunkIndex++;
@@ -4873,7 +4887,7 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
         this.updateStatusBar("recording");
         return;
       }
-      let text = await transcribeBatch(blob, this.settings);
+      let text = await transcribeBatch(blob, this.settings, this.httpRequest);
       if (text && isLikelyHallucination(
         text,
         this.recorder.lastChunkDurationSec
@@ -4884,7 +4898,7 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
       }
       const hasCommand = text ? matchCommand(text) !== null : false;
       if (this.settings.autoCorrect && text && !hasCommand) {
-        text = await correctText(text, this.settings);
+        text = await correctText(text, this.settings, this.httpRequest);
       }
       this.updateStatusBar("recording");
       if (text) {
@@ -4902,7 +4916,7 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
     } catch (e) {
       vlog.error("Voxtral: Chunk transcription failed", e);
       this.updateStatusBar("recording");
-      new import_obsidian7.Notice(`Chunk failed: ${e}`);
+      new import_obsidian4.Notice(`Chunk failed: ${e}`);
     }
   }
   // ── Realtime recording (delegates to session classes) ──
@@ -4932,11 +4946,11 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
       }
     }, this.settings.noiseSuppression);
     if (this.recorder.fallbackUsed) {
-      new import_obsidian7.Notice("Selected mic unavailable \u2014 using default");
+      new import_obsidian4.Notice("Selected mic unavailable \u2014 using default");
     }
   }
   async stopRealtimeRecording() {
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
     if (this.dualDelaySession) {
       await this.dualDelaySession.stop();
       this.dualDelaySession = null;
@@ -4949,7 +4963,7 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
     }
     await this.recorder.stop();
     if (this.settings.autoCorrect && view) {
-      await this.tracker.autoCorrectAfterStop(view.editor, this.settings);
+      await this.tracker.autoCorrectAfterStop(view.editor, this.settings, this.httpRequest);
     }
   }
   // ── Batch recording ──
@@ -4957,23 +4971,23 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
     const deviceId = this.settings.microphoneDeviceId || void 0;
     await this.recorder.start(deviceId, void 0, this.settings.noiseSuppression);
     if (this.recorder.fallbackUsed) {
-      new import_obsidian7.Notice("Selected mic unavailable \u2014 using default");
+      new import_obsidian4.Notice("Selected mic unavailable \u2014 using default");
     }
   }
   async stopBatchRecording() {
     const blob = await this.recorder.stop();
     if (blob.size === 0) {
-      new import_obsidian7.Notice("No audio recorded");
+      new import_obsidian4.Notice("No audio recorded");
       return;
     }
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
     if (!view) {
-      new import_obsidian7.Notice("No active note found");
+      new import_obsidian4.Notice("No active note found");
       return;
     }
     const editor = view.editor;
     try {
-      let text = await transcribeBatch(blob, this.settings);
+      let text = await transcribeBatch(blob, this.settings, this.httpRequest);
       if (text && isLikelyHallucination(
         text,
         this.recorder.lastChunkDurationSec
@@ -4983,64 +4997,64 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
       }
       const hasCommand = text ? matchCommand(text) !== null : false;
       if (this.settings.autoCorrect && text && !hasCommand) {
-        text = await correctText(text, this.settings);
+        text = await correctText(text, this.settings, this.httpRequest);
       }
       if (text) {
         processText(editor, text);
       }
     } catch (e) {
       vlog.error("Voxtral: Batch transcription failed", e);
-      new import_obsidian7.Notice(`Transcription failed: ${e}`);
+      new import_obsidian4.Notice(`Transcription failed: ${e}`);
     }
   }
   // ── Text correction ──
   async correctSelection(editor) {
     const selection = editor.getSelection();
     if (!selection) {
-      new import_obsidian7.Notice("Select text first to correct it");
+      new import_obsidian4.Notice("Select text first to correct it");
       return;
     }
     if (!this.settings.apiKey) {
-      new import_obsidian7.Notice("Please set your API key first");
+      new import_obsidian4.Notice("Please set your API key first");
       return;
     }
     try {
-      new import_obsidian7.Notice("Correcting...");
-      const corrected = await correctText(selection, this.settings);
+      new import_obsidian4.Notice("Correcting...");
+      const corrected = await correctText(selection, this.settings, this.httpRequest);
       if (corrected) {
         editor.replaceSelection(corrected);
-        new import_obsidian7.Notice("Selection corrected");
+        new import_obsidian4.Notice("Selection corrected");
       }
     } catch (e) {
-      new import_obsidian7.Notice(`Correction failed: ${e}`);
+      new import_obsidian4.Notice(`Correction failed: ${e}`);
     }
   }
   async correctAll(editor) {
     if (!this.tracker.hasRanges()) {
-      new import_obsidian7.Notice("No dictated text to correct");
+      new import_obsidian4.Notice("No dictated text to correct");
       return;
     }
     if (!this.settings.apiKey) {
-      new import_obsidian7.Notice("Please set your API key first");
+      new import_obsidian4.Notice("Please set your API key first");
       return;
     }
     try {
-      new import_obsidian7.Notice("Correcting...");
-      await this.tracker.autoCorrectAfterStop(editor, this.settings);
+      new import_obsidian4.Notice("Correcting...");
+      await this.tracker.autoCorrectAfterStop(editor, this.settings, this.httpRequest);
       this.tracker.reset();
-      new import_obsidian7.Notice("Dictated text corrected");
+      new import_obsidian4.Notice("Dictated text corrected");
     } catch (e) {
-      new import_obsidian7.Notice(`Correction failed: ${e}`);
+      new import_obsidian4.Notice(`Correction failed: ${e}`);
     }
   }
   // ── Logs ──
   async exportLogs() {
     if (getLogCount() === 0) {
-      new import_obsidian7.Notice("No logs to export");
+      new import_obsidian4.Notice("No logs to export");
       return;
     }
     await navigator.clipboard.writeText(getLogText());
-    new import_obsidian7.Notice(`${getLogCount()} log entries copied to clipboard`);
+    new import_obsidian4.Notice(`${getLogCount()} log entries copied to clipboard`);
   }
   // ── Help panel ──
   async openHelpPanel() {
@@ -5057,7 +5071,7 @@ var VoxtralPlugin = class extends import_obsidian7.Plugin {
         type: VIEW_TYPE_VOXTRAL_HELP,
         active: true
       });
-      if (!import_obsidian7.Platform.isMobile) {
+      if (!import_obsidian4.Platform.isMobile) {
         void this.app.workspace.revealLeaf(leaf);
       }
     }

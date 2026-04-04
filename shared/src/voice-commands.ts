@@ -1,30 +1,32 @@
 // Voxtral Transcribe — Copyright (c) 2026 Max Kloosterman
 // Licensed under GPL-3.0 — see LICENSE for details
 // https://github.com/maxonamission/voxtral-transcribe
-import { Editor } from "obsidian";
+import type { EditorAdapter } from "./editor-adapter";
 import {
 	CommandId,
 	getPatternsForCommand,
 	getLabel,
 	getMishearings,
-} from "../../shared/src/lang";
+} from "./lang";
 import {
 	phoneticNormalize,
 	stripArticles,
 	stripTrailingFillers,
 	trySplitCompound,
-} from "../../shared/src/phonetics";
+} from "./phonetics";
 import type { CustomCommand } from "./types";
 import {
 	levenshtein,
 	normalizeCommand,
+} from "./similarity";
+import {
 	type InsertionContext,
 	detectContext,
 	shouldStripTrailingPunctuation,
 	shouldLowercase,
 	lowercaseFirstLetter,
 	stripTrailingPunctuation,
-} from "../../shared/src";
+} from "./text-context";
 
 /**
  * Voice command processing — recognizes voice commands at the end of
@@ -42,7 +44,7 @@ export function setLanguage(lang: string): void {
 
 interface CommandDef {
 	id: CommandId;
-	action: (editor: Editor) => void;
+	action: (editor: EditorAdapterAdapter) => void;
 	/** If true, trailing punctuation is stripped from preceding text before inserting */
 	punctuation?: boolean;
 	/** If set, this command opens a slot (voice pauses, user types, exit closes) */
@@ -81,7 +83,7 @@ export function getActiveSlot(): ActiveSlot | null {
  * Close the active slot: insert the suffix at the cursor.
  * Returns true if a slot was closed, false if none was active.
  */
-export function closeSlot(editor: Editor): boolean {
+export function closeSlot(editor: EditorAdapterAdapter): boolean {
 	if (!activeSlot) return false;
 	let pos = editor.getCursor();
 	const suffix = activeSlot.def.suffix;
@@ -141,7 +143,8 @@ export function openSlot(commandId: string, def: SlotDef, startPos?: { line: num
 }
 
 // Re-export shared functions so existing imports from voice-commands keep working
-export { normalizeCommand, lowercaseFirstLetter, type InsertionContext } from "../../shared/src";
+export { normalizeCommand } from "./similarity";
+export { lowercaseFirstLetter, type InsertionContext } from "./text-context";
 
 // Apply language-specific mishearing corrections
 function fixMishearings(text: string): string {
@@ -152,17 +155,17 @@ function fixMishearings(text: string): string {
 }
 
 /**
- * Detect insertion context using the Obsidian Editor API.
+ * Detect insertion context using the editor adapter.
  * Delegates to the shared detectContext() with the line text.
  */
-export function detectInsertionContext(editor: Editor): InsertionContext {
+export function detectInsertionContext(editor: EditorAdapter): InsertionContext {
 	const cursor = editor.getCursor();
 	if (cursor.ch === 0) return "new-line";
 	const lineBefore = editor.getRange({ line: cursor.line, ch: 0 }, cursor);
 	return detectContext(lineBefore);
 }
 
-function insertAtCursor(editor: Editor, text: string): void {
+function insertAtCursor(editor: EditorAdapter, text: string): void {
 	const cursor = editor.getCursor();
 	const context = detectInsertionContext(editor);
 
@@ -204,7 +207,7 @@ function insertAtCursor(editor: Editor, text: string): void {
 	editor.setCursor({ line: newLine, ch: newCh });
 }
 
-function deleteLastParagraph(editor: Editor): void {
+function deleteLastParagraph(editor: EditorAdapter): void {
 	const cursor = editor.getCursor();
 	const fullText = editor.getValue();
 	const offset = editor.posToOffset(cursor);
@@ -219,7 +222,7 @@ function deleteLastParagraph(editor: Editor): void {
 	}
 }
 
-function deleteLastSentence(editor: Editor): void {
+function deleteLastSentence(editor: EditorAdapter): void {
 	const cursor = editor.getCursor();
 	const fullText = editor.getValue();
 	const offset = editor.posToOffset(cursor);
@@ -242,7 +245,7 @@ function deleteLastSentence(editor: Editor): void {
 	}
 }
 
-function colonAction(editor: Editor): void {
+function colonAction(editor: EditorAdapter): void {
 	// Strip any trailing punctuation before the cursor
 	const cursor = editor.getCursor();
 	if (cursor.ch > 0) {
@@ -264,7 +267,7 @@ function colonAction(editor: Editor): void {
  * Close the active slot (if it matches the expected open command) and add
  * a trailing space so the user can continue dictating after the marker.
  */
-function closeSlotAndSpace(editor: Editor, expectedOpenId: CommandId): void {
+function closeSlotAndSpace(editor: EditorAdapter, expectedOpenId: CommandId): void {
 	if (activeSlot?.commandId === expectedOpenId) {
 		closeSlot(editor);
 	} else {
@@ -491,7 +494,7 @@ export function loadCustomCommands(commands: CustomCommand[]): void {
 			return {
 				id: cmd.id as CommandId,
 				slot: { prefix, suffix, exitTrigger: exit },
-				action: (editor: Editor) => {
+				action: (editor: EditorAdapter) => {
 					const cursor = editor.getCursor();
 					editor.replaceRange(prefix, cursor);
 					editor.setCursor({ line: cursor.line, ch: cursor.ch + prefix.length });
@@ -510,7 +513,7 @@ export function loadCustomCommands(commands: CustomCommand[]): void {
 		customCommandLabels.set(cmd.id, insertLabel);
 		return {
 			id: cmd.id as CommandId,
-			action: (editor: Editor) => insertAtCursor(editor, text),
+			action: (editor: EditorAdapter) => insertAtCursor(editor, text),
 		};
 	});
 }
@@ -742,7 +745,7 @@ export function matchCommand(rawText: string): CommandMatch | null {
  * Returns true if the text was handled (template inserted), false otherwise.
  * Used by main.ts to integrate template matching (which needs App access).
  */
-type PreMatchHook = (editor: Editor, normalizedText: string, rawText: string) => boolean;
+type PreMatchHook = (editor: EditorAdapter, normalizedText: string, rawText: string) => boolean;
 let preMatchHook: PreMatchHook | null = null;
 
 /** Register a pre-match hook (called before built-in command matching) */
@@ -754,7 +757,7 @@ export function setPreMatchHook(hook: PreMatchHook | null): void {
  * Process transcribed text: split into sentences, check each for voice
  * commands, and execute them or insert the text as-is.
  */
-export function processText(editor: Editor, text: string): boolean {
+export function processText(editor: EditorAdapter, text: string): boolean {
 	let stopRequested = false;
 	const segments = text.match(/[^.!?]+[.!?]+\s*/g);
 
@@ -779,7 +782,7 @@ export function processText(editor: Editor, text: string): boolean {
 	return stopRequested;
 }
 
-function processSegment(editor: Editor, text: string): boolean {
+function processSegment(editor: EditorAdapter, text: string): boolean {
 	// Try pre-match hook (templates) first
 	if (preMatchHook) {
 		const normalized = fixMishearings(normalizeCommand(text));

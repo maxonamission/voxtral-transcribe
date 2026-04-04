@@ -1,18 +1,14 @@
 // Voxtral Transcribe — Copyright (c) 2026 Max Kloosterman
 // Licensed under GPL-3.0 — see LICENSE for details
 // https://github.com/maxonamission/voxtral-transcribe
-import { requestUrl } from "obsidian";
+import type { HttpRequestFn } from "./http-adapter";
 import type { VoxtralSettings } from "./types";
-import {
-	DEFAULT_CORRECT_PROMPT,
-	buildCustomCommandGuard as buildGuard,
-	stripLlmCommentary,
-} from "../../shared/src";
+import { DEFAULT_CORRECT_PROMPT, buildCustomCommandGuard as buildGuard, stripLlmCommentary } from "./correction";
 import {
 	createAuthenticatedWebSocket,
 	WS_OPEN,
 	type AuthenticatedWsConnection,
-} from "../../shared/src/authenticated-websocket";
+} from "./authenticated-websocket";
 
 const BASE_URL = "https://api.mistral.ai";
 
@@ -67,12 +63,13 @@ export interface MistralModel {
  * Returns model IDs sorted alphabetically.
  */
 export async function listModels(
-	apiKey: string
+	apiKey: string,
+	httpRequest: HttpRequestFn,
 ): Promise<MistralModel[]> {
 	if (!apiKey) return [];
 
 	try {
-		const response = await requestUrl({
+		const response = await httpRequest({
 			url: `${BASE_URL}/v1/models`,
 			method: "GET",
 			headers: {
@@ -105,14 +102,15 @@ export async function listModels(
 }
 
 // Re-export shared functions so existing imports from mistral-api keep working
-export { isLikelyHallucination } from "../../shared/src";
+export { isLikelyHallucination } from "./correction";
 
 // ── Batch transcription ──
 
 export async function transcribeBatch(
 	audioBlob: Blob,
 	settings: VoxtralSettings,
-	diarize = false
+	httpRequest: HttpRequestFn,
+	diarize = false,
 ): Promise<string> {
 	// Derive filename extension from the blob's actual mime type
 	const ext = audioBlob.type.includes("mp4")
@@ -152,7 +150,7 @@ export async function transcribeBatch(
 	body.set(fileBytes, headerBuf.length);
 	body.set(tailBuf, headerBuf.length + fileBytes.length);
 
-	const response = await requestUrl({
+	const response = await httpRequest({
 		url: `${BASE_URL}/v1/audio/transcriptions`,
 		method: "POST",
 		headers: {
@@ -182,7 +180,8 @@ export function buildCustomCommandGuard(settings: VoxtralSettings): string {
 
 export async function correctText(
 	text: string,
-	settings: VoxtralSettings
+	settings: VoxtralSettings,
+	httpRequest: HttpRequestFn,
 ): Promise<string> {
 	const basePrompt = settings.systemPrompt || DEFAULT_CORRECT_PROMPT;
 	const systemPrompt = basePrompt + buildCustomCommandGuard(settings);
@@ -196,7 +195,7 @@ export async function correctText(
 		temperature: 0.1,
 	};
 
-	const response = await requestUrl({
+	const response = await httpRequest({
 		url: `${BASE_URL}/v1/chat/completions`,
 		method: "POST",
 		headers: {

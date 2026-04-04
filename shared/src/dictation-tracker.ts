@@ -1,11 +1,12 @@
 // Voxtral Transcribe — Copyright (c) 2026 Max Kloosterman
 // Licensed under GPL-3.0 — see LICENSE for details
 // https://github.com/maxonamission/voxtral-transcribe
-import { Editor } from "obsidian";
+import type { EditorAdapter } from "./editor-adapter";
+import type { HttpRequestFn } from "./http-adapter";
 import { processText, isSlotActive } from "./voice-commands";
 import { correctText } from "./mistral-api";
 import { VoxtralSettings } from "./types";
-import { vlog } from "../../shared/src/plugin-logger";
+import { vlog } from "./plugin-logger";
 
 /**
  * Tracks which ranges of text were inserted by dictation,
@@ -28,7 +29,7 @@ export class DictationTracker {
 	 * @param onSlotActive — optional callback when a slot becomes active
 	 */
 	trackProcessText(
-		editor: Editor,
+		editor: EditorAdapter,
 		text: string,
 		onSlotActive?: () => void,
 	): void {
@@ -85,7 +86,7 @@ export class DictationTracker {
 	 * Insert text at cursor and track the range for auto-correct.
 	 * Handles auto-spacing between existing text and new text.
 	 */
-	trackInsertAtCursor(editor: Editor, text: string): void {
+	trackInsertAtCursor(editor: EditorAdapter, text: string): void {
 		const cursor = editor.getCursor();
 
 		// Never start a line with spaces from auto-transcription
@@ -149,8 +150,9 @@ export class DictationTracker {
 	 * offsets remain valid after replacements.
 	 */
 	async autoCorrectAfterStop(
-		editor: Editor,
+		editor: EditorAdapter,
 		settings: VoxtralSettings,
+		httpRequest: HttpRequestFn,
 	): Promise<void> {
 		if (this.dictatedRanges.length === 0) return;
 
@@ -185,7 +187,7 @@ export class DictationTracker {
 		// Correct each range and replace (end-to-start preserves offsets)
 		for (const c of corrections) {
 			try {
-				const corrected = await correctText(c.text, settings);
+				const corrected = await correctText(c.text, settings, httpRequest);
 				if (corrected && corrected !== c.text) {
 					editor.replaceRange(corrected, c.from, c.to);
 				}

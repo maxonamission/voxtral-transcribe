@@ -4,8 +4,8 @@
 import { App, Modal, Platform, PluginSettingTab, Setting } from "obsidian";
 import type VoxtralPlugin from "./main";
 import { AudioRecorder } from "./audio-recorder";
-import { listModels } from "./mistral-api";
-import type { MistralModel, } from "./mistral-api";
+import { listModels } from "../../shared/src/mistral-api";
+import type { MistralModel, } from "../../shared/src/mistral-api";
 import { getDefaultBuiltInCommands } from "./types";
 import type { FocusBehavior, CustomCommand } from "./types";
 import { SUPPORTED_LANGUAGES, LANGUAGE_NAMES } from "../../shared/src/lang";
@@ -746,7 +746,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 	private async getModels(): Promise<MistralModel[]> {
 		if (this.cachedModels) return this.cachedModels;
 
-		const models = await listModels(this.plugin.settings.apiKey);
+		const models = await listModels(this.plugin.settings.apiKey, this.plugin.httpRequest);
 		if (models.length > 0) {
 			this.cachedModels = models;
 		}
