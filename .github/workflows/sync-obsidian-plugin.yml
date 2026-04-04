@@ -124,48 +124,20 @@ jobs:
       - name: Clone target repo
         run: git clone git@github.com:maxonamission/obsidian-voxtral.git target
 
-      - name: Clean old layout from target
+      - name: Clean old source files from target
         run: |
-          # Remove old flat-layout files (pre-shared-extraction)
-          # that are now under obsidian-plugin/ or shared/
+          # Remove old development files — target is now distribution-only.
+          # Source code lives exclusively in voxtral-transcribe.
           rm -rf target/src target/esbuild.config.mjs target/eslint.config.mjs \
                  target/tsconfig.json target/package.json target/package-lock.json \
-                 target/vitest.config.ts target/scripts target/node_modules 2>/dev/null || true
-          # Keep: main.js, manifest.json, styles.css, versions.json, README.md, .github/, .git/
+                 target/vitest.config.ts target/scripts target/node_modules \
+                 target/obsidian-plugin target/shared 2>/dev/null || true
+          # Keep: .git/, .github/, README.md
 
-      - name: Copy plugin files to target
+      - name: Copy pre-built plugin to target
         run: |
-          # Mirror the monorepo layout so relative imports (../../shared/src/)
-          # resolve correctly in the standalone repo.
-          #
-          # Target layout:
-          #   target/obsidian-plugin/  ← plugin source, config, build artifacts
-          #   target/shared/           ← platform-independent shared modules
-
-          # ── obsidian-plugin/ ──
-          mkdir -p target/obsidian-plugin
-          cp source/obsidian-plugin/main.js target/obsidian-plugin/
-          cp source/obsidian-plugin/manifest.json target/obsidian-plugin/
-          cp source/obsidian-plugin/styles.css target/obsidian-plugin/
-          cp source/obsidian-plugin/versions.json target/obsidian-plugin/
-          cp source/obsidian-plugin/package.json target/obsidian-plugin/
-          cp source/obsidian-plugin/package-lock.json target/obsidian-plugin/
-          cp source/obsidian-plugin/tsconfig.json target/obsidian-plugin/
-          cp source/obsidian-plugin/esbuild.config.mjs target/obsidian-plugin/
-          cp source/obsidian-plugin/eslint.config.mjs target/obsidian-plugin/
-          cp -r source/obsidian-plugin/src target/obsidian-plugin/
-          cp -r source/obsidian-plugin/scripts target/obsidian-plugin/ 2>/dev/null || true
-
-          # ── shared/ ──
-          mkdir -p target/shared
-          cp -r source/shared/src target/shared/
-          cp source/shared/package.json target/shared/
-          cp source/shared/tsconfig.json target/shared/
-          cp source/shared/vitest.config.ts target/shared/
-
-          # ── Root-level files ──
-          # Keep release artifacts at root for Obsidian community plugin compatibility
-          # (Obsidian expects main.js, manifest.json, styles.css at repo root)
+          # Distribution-only: copy pre-built artifacts and metadata.
+          # Source code and build tooling stay in voxtral-transcribe.
           cp source/obsidian-plugin/main.js target/
           cp source/obsidian-plugin/manifest.json target/
           cp source/obsidian-plugin/styles.css target/
@@ -174,7 +146,7 @@ jobs:
           # Copy docs
           cp source/obsidian-plugin/README.md target/ 2>/dev/null || true
 
-          # Copy workflow for standalone releases
+          # Copy release workflow (creates GitHub Release from pre-built files)
           mkdir -p target/.github/workflows
           cp source/obsidian-plugin/.github/workflows/release.yml target/.github/workflows/
 

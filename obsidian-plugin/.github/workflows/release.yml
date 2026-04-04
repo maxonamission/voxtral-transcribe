@@ -6,26 +6,12 @@ on:
       - "*"
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - name: Install and build
-        working-directory: obsidian-plugin
-        run: |
-          npm install
-          npm run build
-      - name: Copy build artifacts to root
-        run: |
-          cp obsidian-plugin/main.js .
-          cp obsidian-plugin/manifest.json .
-          cp obsidian-plugin/styles.css .
-          cp obsidian-plugin/versions.json .
       - uses: softprops/action-gh-release@v2
         with:
           files: |
