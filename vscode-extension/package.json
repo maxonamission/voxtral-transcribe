@@ -5,11 +5,24 @@
 	"version": "0.1.0",
 	"publisher": "maxonamission",
 	"license": "GPL-3.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/maxonamission/voxtral-transcribe"
+	},
 	"engines": {
 		"vscode": "^1.85.0"
 	},
 	"categories": [
-		"Other"
+		"Other",
+		"Machine Learning"
+	],
+	"keywords": [
+		"speech-to-text",
+		"dictation",
+		"transcription",
+		"voice",
+		"mistral",
+		"voxtral"
 	],
 	"activationEvents": [],
 	"main": "./dist/extension.js",
