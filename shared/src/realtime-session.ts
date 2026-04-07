@@ -1,7 +1,8 @@
 // Voxtral Transcribe — Copyright (c) 2026 Max Kloosterman
 // Licensed under GPL-3.0 — see LICENSE for details
 // https://github.com/maxonamission/voxtral-transcribe
-import { Editor, Notice } from "obsidian";
+import type { EditorAdapter } from "./editor-adapter";
+import type { NotifyFn } from "./editor-adapter";
 import { RealtimeTranscriber } from "./mistral-api";
 import {
 	normalizeCommand,
@@ -15,7 +16,8 @@ export interface SessionCallbacks {
 	updateStatusBar(state: "recording" | "slot"): void;
 	stopRecording(): void;
 	isRecording(): boolean;
-	getEditor(): Editor | null;
+	getEditor(): EditorAdapter | null;
+	notify: NotifyFn;
 }
 
 /**
@@ -39,7 +41,7 @@ export class RealtimeSession {
 	) {}
 
 	/** Connect the WebSocket and start receiving transcription. */
-	async start(editor: Editor): Promise<void> {
+	async start(editor: EditorAdapter): Promise<void> {
 		this.pendingText = "";
 		this.prevRaw = "";
 		this.turnDelta = 0;
@@ -55,7 +57,7 @@ export class RealtimeSession {
 	}
 
 	/** Signal end of audio and finalize any pending text. */
-	async stop(editor: Editor): Promise<void> {
+	async stop(editor: EditorAdapter): Promise<void> {
 		this.transcriber?.endAudio();
 
 		await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -74,7 +76,7 @@ export class RealtimeSession {
 	}
 
 	/** Flush any remaining pending text (called after slot close). */
-	flushAfterSlot(editor: Editor): void {
+	flushAfterSlot(editor: EditorAdapter): void {
 		if (this.pendingText.trim()) {
 			this.tracker.trackProcessText(
 				editor,
@@ -87,7 +89,7 @@ export class RealtimeSession {
 
 	// ── WebSocket lifecycle ──
 
-	private async connectWebSocket(editor: Editor): Promise<void> {
+	private async connectWebSocket(editor: EditorAdapter): Promise<void> {
 		this.transcriber = new RealtimeTranscriber(this.settings, {
 			onSessionCreated: () => {
 				vlog.debug("Voxtral: Realtime session created");
@@ -100,7 +102,7 @@ export class RealtimeSession {
 			},
 			onError: (message) => {
 				vlog.error("Voxtral: Realtime error:", message);
-				new Notice(`Streaming error: ${message}`);
+				this.callbacks.notify(`Streaming error: ${message}`);
 			},
 			onDisconnect: () => {
 				void this.handleDisconnect();
@@ -151,7 +153,7 @@ export class RealtimeSession {
 			if (
 				this.consecutiveFailures >= this.maxConsecutiveFailures
 			) {
-				new Notice(
+				this.callbacks.notify(
 					"Cannot connect to the API. Recording stopped.",
 					6000,
 				);
@@ -176,7 +178,7 @@ export class RealtimeSession {
 
 	// ── Delta / Done text processing ──
 
-	private handleDelta(editor: Editor, text: string): void {
+	private handleDelta(editor: EditorAdapter, text: string): void {
 		// Handle both cumulative and incremental deltas from the API
 		const isCumulative =
 			this.prevRaw && text.startsWith(this.prevRaw);
@@ -225,7 +227,7 @@ export class RealtimeSession {
 		}
 	}
 
-	private handleDone(editor: Editor, doneText: string): void {
+	private handleDone(editor: EditorAdapter, doneText: string): void {
 		// The done event contains the COMPLETE transcription for this turn.
 		// If the API sent final word(s) only in the done event (not as deltas),
 		// append the missing portion to pendingText before flushing.

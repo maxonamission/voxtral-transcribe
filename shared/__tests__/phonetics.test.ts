@@ -4,7 +4,7 @@ import {
 	stripArticles,
 	stripTrailingFillers,
 	trySplitCompound,
-} from "../phonetics";
+} from "../src/phonetics";
 
 // ── phoneticNormalize ──
 
@@ -92,7 +92,7 @@ describe("phoneticNormalize — French", () => {
 
 describe("phoneticNormalize — German", () => {
 	it("normalizes sch → sh", () => {
-		// sch→sh then ei→ai: "schreiben" → "shraiben"
+		// sch→sh then ei→ai: "schreiben" ��� "shraiben"
 		expect(phoneticNormalize("schreiben", "de")).toBe("shraiben");
 	});
 

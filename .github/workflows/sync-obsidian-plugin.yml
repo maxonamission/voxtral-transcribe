@@ -36,6 +36,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install shared dependencies
+        working-directory: shared
+        run: npm ci
+
       - name: Bump version to ${{ inputs.version }}
         run: |
           node scripts/bump-version.mjs "${{ inputs.version }}"
@@ -48,7 +52,11 @@ jobs:
       - name: TypeScript check
         run: npx tsc -noEmit -skipLibCheck
 
-      - name: Test
+      - name: Test shared modules
+        working-directory: shared
+        run: npm test
+
+      - name: Test plugin
         run: npm test
 
       - name: Build
@@ -116,26 +124,29 @@ jobs:
       - name: Clone target repo
         run: git clone git@github.com:maxonamission/obsidian-voxtral.git target
 
-      - name: Copy plugin files to target
+      - name: Clean old source files from target
         run: |
-          # Copy build artifacts and config
+          # Remove old development files — target is now distribution-only.
+          # Source code lives exclusively in voxtral-transcribe.
+          rm -rf target/src target/esbuild.config.mjs target/eslint.config.mjs \
+                 target/tsconfig.json target/package.json target/package-lock.json \
+                 target/vitest.config.ts target/scripts target/node_modules \
+                 target/obsidian-plugin target/shared 2>/dev/null || true
+          # Keep: .git/, .github/, README.md
+
+      - name: Copy pre-built plugin to target
+        run: |
+          # Distribution-only: copy pre-built artifacts and metadata.
+          # Source code and build tooling stay in voxtral-transcribe.
           cp source/obsidian-plugin/main.js target/
           cp source/obsidian-plugin/manifest.json target/
           cp source/obsidian-plugin/styles.css target/
           cp source/obsidian-plugin/versions.json target/
 
-          # Copy source and config for development
-          cp source/obsidian-plugin/package.json target/
-          cp source/obsidian-plugin/package-lock.json target/
-          cp source/obsidian-plugin/tsconfig.json target/
-          cp source/obsidian-plugin/esbuild.config.mjs target/
-          cp source/obsidian-plugin/eslint.config.mjs target/
-          cp -r source/obsidian-plugin/src target/
-
           # Copy docs
           cp source/obsidian-plugin/README.md target/ 2>/dev/null || true
 
-          # Copy workflow for standalone releases
+          # Copy release workflow (creates GitHub Release from pre-built files)
           mkdir -p target/.github/workflows
           cp source/obsidian-plugin/.github/workflows/release.yml target/.github/workflows/
 

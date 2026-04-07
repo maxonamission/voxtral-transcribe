@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; media-src *;">
+	<style>
+		body { display: none; }
+	</style>
+</head>
+<body>
+<script>
+// @ts-nocheck
+(function () {
+	const vscode = acquireVsCodeApi();
+
+	/** AudioWorklet source: Float32 → PCM 16-bit */
+	const WORKLET_SOURCE = `
+		class PcmProcessor extends AudioWorkletProcessor {
+			process(inputs) {
+				const input = inputs[0];
+				if (!input || input.length === 0) return true;
+				const channelData = input[0];
+				if (!channelData || channelData.length === 0) return true;
+				const pcm16 = new Int16Array(channelData.length);
+				for (let i = 0; i < channelData.length; i++) {
+					const s = Math.max(-1, Math.min(1, channelData[i]));
+					pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+				}
+				this.port.postMessage(pcm16.buffer, [pcm16.buffer]);
+				return true;
+			}
+		}
+		registerProcessor("pcm-processor", PcmProcessor);
+	`;
+
+	let stream = null;
+	let audioContext = null;
+	let sourceNode = null;
+	let workletNode = null;
+	let workletUrl = null;
+	let mediaRecorder = null;
+	let chunks = [];
+	let lastFlushTime = 0;
+
+	function getSupportedMimeType() {
+		const types = [
+			"audio/webm;codecs=opus",
+			"audio/webm",
+			"audio/ogg;codecs=opus",
+			"audio/mp4",
+		];
+		for (const type of types) {
+			if (MediaRecorder.isTypeSupported(type)) return type;
+		}
+		return "audio/webm";
+	}
+
+	async function blobToArray(blob) {
+		const buffer = await blob.arrayBuffer();
+		return Array.from(new Uint8Array(buffer));
+	}
+
+	async function start(deviceId, noiseSuppression, mode) {
+		try {
+			const audioConstraints = { channelCount: 1 };
+			if (noiseSuppression) {
+				audioConstraints.noiseSuppression = { ideal: true };
+				audioConstraints.echoCancellation = { ideal: true };
+				audioConstraints.autoGainControl = { ideal: true };
+			}
+			if (deviceId) audioConstraints.deviceId = { exact: deviceId };
+
+			let fallbackUsed = false;
+			try {
+				stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+			} catch (err) {
+				if (deviceId) {
+					const fallbackConstraints = { channelCount: 1 };
+					if (noiseSuppression) {
+						fallbackConstraints.noiseSuppression = { ideal: true };
+						fallbackConstraints.echoCancellation = { ideal: true };
+						fallbackConstraints.autoGainControl = { ideal: true };
+					}
+					stream = await navigator.mediaDevices.getUserMedia({ audio: fallbackConstraints });
+					fallbackUsed = true;
+				} else {
+					throw err;
+				}
+			}
+
+			const audioTrack = stream.getAudioTracks()[0];
+			const micLabel = audioTrack ? audioTrack.label : "Unknown microphone";
+
+			audioContext = new AudioContext({ sampleRate: 16000 });
+			sourceNode = audioContext.createMediaStreamSource(stream);
+
+			// AudioWorklet for realtime PCM capture
+			if (mode === "realtime") {
+				const blob = new Blob([WORKLET_SOURCE], { type: "application/javascript" });
+				workletUrl = URL.createObjectURL(blob);
+				await audioContext.audioWorklet.addModule(workletUrl);
+
+				workletNode = new AudioWorkletNode(audioContext, "pcm-processor");
+				workletNode.port.onmessage = (e) => {
+					// Send PCM data as plain number array (transferable not available via postMessage to extension)
+					const pcm16 = new Int16Array(e.data);
+					vscode.postMessage({ type: "pcm-chunk", data: Array.from(pcm16) });
+				};
+				sourceNode.connect(workletNode);
+				workletNode.connect(audioContext.destination);
+			}
+
+			// MediaRecorder for batch mode
+			chunks = [];
+			const mimeType = getSupportedMimeType();
+			mediaRecorder = new MediaRecorder(stream, { mimeType });
+			mediaRecorder.ondataavailable = (e) => {
+				if (e.data.size > 0) chunks.push(e.data);
+			};
+			mediaRecorder.start(1000);
+			lastFlushTime = Date.now();
+
+			vscode.postMessage({ type: "started", micLabel, fallbackUsed });
+		} catch (err) {
+			cleanup();
+			vscode.postMessage({ type: "error", message: err.message || String(err) });
+		}
+	}
+
+	async function flush() {
+		if (!mediaRecorder || mediaRecorder.state !== "recording") {
+			vscode.postMessage({ type: "flushed", data: [], mimeType: "audio/webm", durationSec: 0 });
+			return;
+		}
+
+		return new Promise((resolve) => {
+			const timeout = setTimeout(() => {
+				const mimeType = getSupportedMimeType();
+				const blob = new Blob(chunks, { type: mimeType });
+				chunks = [];
+				blobToArray(blob).then((data) => {
+					vscode.postMessage({ type: "flushed", data, mimeType, durationSec: 0 });
+					resolve();
+				});
+			}, 5000);
+
+			mediaRecorder.onstop = async () => {
+				clearTimeout(timeout);
+				const now = Date.now();
+				const durationSec = (now - lastFlushTime) / 1000;
+				lastFlushTime = now;
+
+				const mimeType = getSupportedMimeType();
+				const blob = new Blob(chunks, { type: mimeType });
+				chunks = [];
+				const data = await blobToArray(blob);
+
+				// Restart MediaRecorder for next chunk
+				if (stream) {
+					mediaRecorder = new MediaRecorder(stream, { mimeType });
+					mediaRecorder.ondataavailable = (e) => {
+						if (e.data.size > 0) chunks.push(e.data);
+					};
+					mediaRecorder.start(1000);
+				}
+
+				vscode.postMessage({ type: "flushed", data, mimeType, durationSec });
+				resolve();
+			};
+			mediaRecorder.stop();
+		});
+	}
+
+	async function stop() {
+		if (mediaRecorder && mediaRecorder.state !== "inactive") {
+			return new Promise((resolve) => {
+				mediaRecorder.onstop = async () => {
+					const durationSec = (Date.now() - lastFlushTime) / 1000;
+					const mimeType = getSupportedMimeType();
+					const blob = new Blob(chunks, { type: mimeType });
+					const data = await blobToArray(blob);
+					cleanup();
+					vscode.postMessage({ type: "stopped", data, mimeType, durationSec });
+					resolve();
+				};
+				mediaRecorder.stop();
+			});
+		} else {
+			cleanup();
+			vscode.postMessage({ type: "stopped", data: [], mimeType: "audio/webm", durationSec: 0 });
+		}
+	}
+
+	function cleanup() {
+		if (workletNode) { workletNode.disconnect(); workletNode = null; }
+		if (workletUrl) { URL.revokeObjectURL(workletUrl); workletUrl = null; }
+		if (sourceNode) { sourceNode.disconnect(); sourceNode = null; }
+		if (audioContext) { audioContext.close(); audioContext = null; }
+		if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
+		mediaRecorder = null;
+		chunks = [];
+	}
+
+	function pause() {
+		if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.pause();
+		if (stream) stream.getAudioTracks().forEach((t) => (t.enabled = false));
+	}
+
+	function resume() {
+		if (stream) stream.getAudioTracks().forEach((t) => (t.enabled = true));
+		if (mediaRecorder && mediaRecorder.state === "paused") mediaRecorder.resume();
+	}
+
+	function mute() {
+		if (stream) stream.getAudioTracks().forEach((t) => (t.enabled = false));
+	}
+
+	function unmute() {
+		if (stream) stream.getAudioTracks().forEach((t) => (t.enabled = true));
+	}
+
+	// Listen for commands from extension host
+	window.addEventListener("message", (event) => {
+		const msg = event.data;
+		switch (msg.type) {
+			case "start":
+				start(msg.deviceId, msg.noiseSuppression, msg.mode);
+				break;
+			case "stop":
+				stop();
+				break;
+			case "flush":
+				flush();
+				break;
+			case "pause":
+				pause();
+				break;
+			case "resume":
+				resume();
+				break;
+			case "mute":
+				mute();
+				break;
+			case "unmute":
+				unmute();
+				break;
+		}
+	});
+
+	// Signal that webview is ready
+	vscode.postMessage({ type: "ready" });
+})();
+</script>
+</body>
+</html>

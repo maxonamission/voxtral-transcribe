@@ -1,20 +1,16 @@
 // Voxtral Transcribe — Copyright (c) 2026 Max Kloosterman
 // Licensed under GPL-3.0 — see LICENSE for details
 // https://github.com/maxonamission/voxtral-transcribe
-import { requestUrl } from "obsidian";
+import type { HttpRequestFn } from "./http-adapter";
 import type { VoxtralSettings } from "./types";
-import {
-	DEFAULT_CORRECT_PROMPT,
-	buildCustomCommandGuard as buildGuard,
-	stripLlmCommentary,
-} from "./shared";
+import { DEFAULT_CORRECT_PROMPT, buildCustomCommandGuard as buildGuard, stripLlmCommentary } from "./correction";
 import {
 	createAuthenticatedWebSocket,
 	WS_OPEN,
 	type AuthenticatedWsConnection,
 } from "./authenticated-websocket";
 
-const BASE_URL = "https://api.mistral.ai";
+const DEFAULT_BASE_URL = "https://api.mistral.ai";
 
 /**
  * Extract a user-friendly error message from an API response.
@@ -67,13 +63,16 @@ export interface MistralModel {
  * Returns model IDs sorted alphabetically.
  */
 export async function listModels(
-	apiKey: string
+	apiKey: string,
+	httpRequest: HttpRequestFn,
+	baseUrl?: string,
 ): Promise<MistralModel[]> {
 	if (!apiKey) return [];
+	const base = baseUrl || DEFAULT_BASE_URL;
 
 	try {
-		const response = await requestUrl({
-			url: `${BASE_URL}/v1/models`,
+		const response = await httpRequest({
+			url: `${base}/v1/models`,
 			method: "GET",
 			headers: {
 				Authorization: `Bearer ${apiKey}`,
@@ -105,14 +104,15 @@ export async function listModels(
 }
 
 // Re-export shared functions so existing imports from mistral-api keep working
-export { isLikelyHallucination } from "./shared";
+export { isLikelyHallucination } from "./correction";
 
 // ── Batch transcription ──
 
 export async function transcribeBatch(
 	audioBlob: Blob,
 	settings: VoxtralSettings,
-	diarize = false
+	httpRequest: HttpRequestFn,
+	diarize = false,
 ): Promise<string> {
 	// Derive filename extension from the blob's actual mime type
 	const ext = audioBlob.type.includes("mp4")
@@ -152,8 +152,9 @@ export async function transcribeBatch(
 	body.set(fileBytes, headerBuf.length);
 	body.set(tailBuf, headerBuf.length + fileBytes.length);
 
-	const response = await requestUrl({
-		url: `${BASE_URL}/v1/audio/transcriptions`,
+	const base = settings.apiBaseUrl || DEFAULT_BASE_URL;
+	const response = await httpRequest({
+		url: `${base}/v1/audio/transcriptions`,
 		method: "POST",
 		headers: {
 			Authorization: `Bearer ${settings.apiKey}`,
@@ -182,7 +183,8 @@ export function buildCustomCommandGuard(settings: VoxtralSettings): string {
 
 export async function correctText(
 	text: string,
-	settings: VoxtralSettings
+	settings: VoxtralSettings,
+	httpRequest: HttpRequestFn,
 ): Promise<string> {
 	const basePrompt = settings.systemPrompt || DEFAULT_CORRECT_PROMPT;
 	const systemPrompt = basePrompt + buildCustomCommandGuard(settings);
@@ -196,8 +198,9 @@ export async function correctText(
 		temperature: 0.1,
 	};
 
-	const response = await requestUrl({
-		url: `${BASE_URL}/v1/chat/completions`,
+	const base = settings.apiBaseUrl || DEFAULT_BASE_URL;
+	const response = await httpRequest({
+		url: `${base}/v1/chat/completions`,
 		method: "POST",
 		headers: {
 			Authorization: `Bearer ${settings.apiKey}`,
@@ -266,7 +269,10 @@ export class RealtimeTranscriber {
 			model: this.settings.realtimeModel,
 		});
 
-		const url = `wss://api.mistral.ai/v1/audio/transcriptions/realtime?${params}`;
+		// Derive WebSocket URL from the HTTP base URL
+		const httpBase = this.settings.apiBaseUrl || DEFAULT_BASE_URL;
+		const wsBase = httpBase.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
+		const url = `${wsBase}/v1/audio/transcriptions/realtime?${params}`;
 
 		return new Promise((resolve, reject) => {
 			const timeout = setTimeout(() => {

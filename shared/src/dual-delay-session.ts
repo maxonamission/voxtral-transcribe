@@ -1,7 +1,7 @@
 // Voxtral Transcribe — Copyright (c) 2026 Max Kloosterman
 // Licensed under GPL-3.0 — see LICENSE for details
 // https://github.com/maxonamission/voxtral-transcribe
-import { Editor, Notice } from "obsidian";
+import type { EditorAdapter } from "./editor-adapter";
 import { RealtimeTranscriber } from "./mistral-api";
 import {
 	matchCommand,
@@ -162,7 +162,7 @@ export class DualDelaySession {
 	}
 
 	/** Connect both WebSocket streams and initialize state. */
-	async start(editor: Editor): Promise<void> {
+	async start(editor: EditorAdapter): Promise<void> {
 		this.setState(SessionState.Connecting);
 		this.fastText = "";
 		this.slowText = "";
@@ -185,7 +185,7 @@ export class DualDelaySession {
 
 	/** Update insert offset after a slot closes so subsequent text
 	 *  continues at the correct cursor position. */
-	flushAfterSlot(editor: Editor): void {
+	flushAfterSlot(editor: EditorAdapter): void {
 		this.insertOffset = editor.posToOffset(editor.getCursor());
 	}
 
@@ -251,7 +251,7 @@ export class DualDelaySession {
 
 	// ── WebSocket lifecycle ──
 
-	private async connectWebSockets(editor: Editor): Promise<void> {
+	private async connectWebSockets(editor: EditorAdapter): Promise<void> {
 		const fastDelay = this.settings.dualDelayFastMs;
 		const slowDelay = this.settings.dualDelaySlowMs;
 
@@ -355,7 +355,7 @@ export class DualDelaySession {
 				this.consecutiveFailures >=
 				this.maxConsecutiveFailures
 			) {
-				new Notice(
+				this.callbacks.notify(
 					"Cannot reconnect. Recording stopped.",
 					6000,
 				);
@@ -375,7 +375,7 @@ export class DualDelaySession {
 		}
 	}
 
-	private async reconnectFastStream(editor: Editor): Promise<void> {
+	private async reconnectFastStream(editor: EditorAdapter): Promise<void> {
 		const fastDelay = this.settings.dualDelayFastMs;
 		this.fastTranscriber = new RealtimeTranscriber(
 			this.settings,
@@ -402,7 +402,7 @@ export class DualDelaySession {
 		await this.fastTranscriber.connect();
 	}
 
-	private async reconnectSlowStream(editor: Editor): Promise<void> {
+	private async reconnectSlowStream(editor: EditorAdapter): Promise<void> {
 		// Cancel pending remainder command — turn is ending
 		if (this.remainderTimer) {
 			clearTimeout(this.remainderTimer);
@@ -515,7 +515,7 @@ export class DualDelaySession {
 	 * Update the editor with the current dual-delay text.
 	 * Shows slow (confirmed) text + any fast text beyond slow.
 	 */
-	private renderText(editor: Editor): void {
+	private renderText(editor: EditorAdapter): void {
 		// Detect if user has manually repositioned cursor (e.g. pressed Enter,
 		// clicked elsewhere).  When this happens, commit the confirmed slow
 		// text at the old position and start fresh at the new cursor location.
@@ -603,7 +603,7 @@ export class DualDelaySession {
 	 * Process voice commands from the slow stream (more accurate).
 	 * Checks completed sentences in slowText for voice commands.
 	 */
-	private processSlowCommands(editor: Editor): void {
+	private processSlowCommands(editor: EditorAdapter): void {
 		if (!this.slowText) return;
 
 		// Discard orphaned punctuation/whitespace that trails a previously
@@ -744,7 +744,7 @@ export class DualDelaySession {
 	 * Called after the debounce timer fires (no new deltas arrived).
 	 * Re-checks the match in case text changed before the timer fired.
 	 */
-	private executeRemainderCommand(editor: Editor): void {
+	private executeRemainderCommand(editor: EditorAdapter): void {
 		if (!this.slowText) return;
 
 		// Re-check: text may have changed or segments may have formed
