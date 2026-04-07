@@ -65,6 +65,12 @@
 					"description": "Mistral API key for Voxtral transcription.",
 					"order": 1
 				},
+				"voxtral.apiBaseUrl": {
+					"type": "string",
+					"default": "https://api.mistral.ai",
+					"description": "Base URL for Mistral-compatible API. Use 'http://localhost:8000' for local vLLM.",
+					"order": 1
+				},
 				"voxtral.language": {
 					"type": "string",
 					"default": "nl",

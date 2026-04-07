@@ -29,6 +29,7 @@ export interface CustomCommand {
 export interface VoxtralSettings {
 	settingsVersion: number;
 	apiKey: string;
+	apiBaseUrl: string; // base URL for Mistral-compatible API (e.g. "https://api.mistral.ai" or "http://localhost:8000" for local vLLM)
 	language: string;
 	realtimeModel: string;
 	batchModel: string;
@@ -54,6 +55,7 @@ export interface VoxtralSettings {
 export const DEFAULT_SETTINGS: VoxtralSettings = {
 	settingsVersion: 1,
 	apiKey: "",
+	apiBaseUrl: "https://api.mistral.ai",
 	language: "nl",
 	realtimeModel: "voxtral-mini-transcribe-realtime-2602",
 	batchModel: "voxtral-mini-latest",

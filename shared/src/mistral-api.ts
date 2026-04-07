@@ -10,7 +10,7 @@ import {
 	type AuthenticatedWsConnection,
 } from "./authenticated-websocket";
 
-const BASE_URL = "https://api.mistral.ai";
+const DEFAULT_BASE_URL = "https://api.mistral.ai";
 
 /**
  * Extract a user-friendly error message from an API response.
@@ -65,12 +65,14 @@ export interface MistralModel {
 export async function listModels(
 	apiKey: string,
 	httpRequest: HttpRequestFn,
+	baseUrl?: string,
 ): Promise<MistralModel[]> {
 	if (!apiKey) return [];
+	const base = baseUrl || DEFAULT_BASE_URL;
 
 	try {
 		const response = await httpRequest({
-			url: `${BASE_URL}/v1/models`,
+			url: `${base}/v1/models`,
 			method: "GET",
 			headers: {
 				Authorization: `Bearer ${apiKey}`,
@@ -150,8 +152,9 @@ export async function transcribeBatch(
 	body.set(fileBytes, headerBuf.length);
 	body.set(tailBuf, headerBuf.length + fileBytes.length);
 
+	const base = settings.apiBaseUrl || DEFAULT_BASE_URL;
 	const response = await httpRequest({
-		url: `${BASE_URL}/v1/audio/transcriptions`,
+		url: `${base}/v1/audio/transcriptions`,
 		method: "POST",
 		headers: {
 			Authorization: `Bearer ${settings.apiKey}`,
@@ -195,8 +198,9 @@ export async function correctText(
 		temperature: 0.1,
 	};
 
+	const base = settings.apiBaseUrl || DEFAULT_BASE_URL;
 	const response = await httpRequest({
-		url: `${BASE_URL}/v1/chat/completions`,
+		url: `${base}/v1/chat/completions`,
 		method: "POST",
 		headers: {
 			Authorization: `Bearer ${settings.apiKey}`,
@@ -265,7 +269,10 @@ export class RealtimeTranscriber {
 			model: this.settings.realtimeModel,
 		});
 
-		const url = `wss://api.mistral.ai/v1/audio/transcriptions/realtime?${params}`;
+		// Derive WebSocket URL from the HTTP base URL
+		const httpBase = this.settings.apiBaseUrl || DEFAULT_BASE_URL;
+		const wsBase = httpBase.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
+		const url = `${wsBase}/v1/audio/transcriptions/realtime?${params}`;
 
 		return new Promise((resolve, reject) => {
 			const timeout = setTimeout(() => {

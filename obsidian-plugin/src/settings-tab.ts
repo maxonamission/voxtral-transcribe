@@ -42,6 +42,20 @@ export class VoxtralSettingTab extends PluginSettingTab {
 				if (input) input.type = "password";
 			});
 
+		new Setting(containerEl)
+			.setName("API base URL")
+			.setDesc("Base URL for Mistral-compatible API. Use \u2018http://localhost:8000\u2019 for local vLLM.")
+			.addText((text) =>
+				text
+					.setPlaceholder("https://api.mistral.ai")
+					.setValue(this.plugin.settings.apiBaseUrl)
+					.onChange(async (value) => {
+						this.plugin.settings.apiBaseUrl = value.trim();
+						this.cachedModels = null;
+						await this.plugin.saveSettings();
+					})
+			);
+
 		// Microphone selection
 		const micSetting = new Setting(containerEl)
 			.setName("Microphone")
@@ -746,7 +760,7 @@ export class VoxtralSettingTab extends PluginSettingTab {
 	private async getModels(): Promise<MistralModel[]> {
 		if (this.cachedModels) return this.cachedModels;
 
-		const models = await listModels(this.plugin.settings.apiKey, this.plugin.httpRequest);
+		const models = await listModels(this.plugin.settings.apiKey, this.plugin.httpRequest, this.plugin.settings.apiBaseUrl);
 		if (models.length > 0) {
 			this.cachedModels = models;
 		}

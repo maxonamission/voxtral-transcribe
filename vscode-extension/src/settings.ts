@@ -15,6 +15,7 @@ export function getSettings(): VoxtralSettings {
 	return {
 		settingsVersion: DEFAULT_SETTINGS.settingsVersion,
 		apiKey: config.get<string>("apiKey", DEFAULT_SETTINGS.apiKey),
+		apiBaseUrl: config.get<string>("apiBaseUrl", DEFAULT_SETTINGS.apiBaseUrl),
 		language: config.get<string>("language", DEFAULT_SETTINGS.language),
 		realtimeModel: config.get<string>("realtimeModel", DEFAULT_SETTINGS.realtimeModel),
 		batchModel: config.get<string>("batchModel", DEFAULT_SETTINGS.batchModel),
