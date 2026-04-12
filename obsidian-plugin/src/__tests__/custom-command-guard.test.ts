@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { buildCustomCommandGuard } from "../../../shared/src/mistral-api";
 import { DEFAULT_SETTINGS, type VoxtralSettings } from "../types";
 
