@@ -264,7 +264,8 @@ export default class VoxtralPlugin extends Plugin {
 						editor.setCursor({ line: cursor.line, ch: newCh });
 					}
 				}
-				void insertTemplate(this.app, editor, tmplMatch.template);
+				// In Obsidian, EditorAdapter is the native Editor (no wrapper)
+				void insertTemplate(this.app, editor as Editor, tmplMatch.template);
 				return true;
 			}
 

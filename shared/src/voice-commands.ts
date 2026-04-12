@@ -44,7 +44,7 @@ export function setLanguage(lang: string): void {
 
 interface CommandDef {
 	id: CommandId;
-	action: (editor: EditorAdapterAdapter) => void;
+	action: (editor: EditorAdapter) => void;
 	/** If true, trailing punctuation is stripped from preceding text before inserting */
 	punctuation?: boolean;
 	/** If set, this command opens a slot (voice pauses, user types, exit closes) */
@@ -83,7 +83,7 @@ export function getActiveSlot(): ActiveSlot | null {
  * Close the active slot: insert the suffix at the cursor.
  * Returns true if a slot was closed, false if none was active.
  */
-export function closeSlot(editor: EditorAdapterAdapter): boolean {
+export function closeSlot(editor: EditorAdapter): boolean {
 	if (!activeSlot) return false;
 	let pos = editor.getCursor();
 	const suffix = activeSlot.def.suffix;
