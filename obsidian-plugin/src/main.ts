@@ -71,7 +71,7 @@ export default class VoxtralPlugin extends Plugin {
 			url: options.url,
 			method: options.method,
 			headers: options.headers,
-			body: options.body as string | ArrayBuffer | undefined,
+			body: options.body,
 		});
 		return {
 			status: response.status,
