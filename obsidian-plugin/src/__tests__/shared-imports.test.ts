@@ -90,7 +90,7 @@ describe("shared module imports from obsidian-plugin", () => {
 });
 
 describe("Obsidian Editor mock compatibility with EditorAdapter", () => {
-	it("mock editor implements all EditorAdapter methods", async () => {
+	it("mock editor implements all EditorAdapter methods", () => {
 		// Import the EditorAdapter interface shape
 		// We verify that the mock editor pattern used in tests provides all methods
 		const requiredMethods = [
@@ -115,7 +115,7 @@ describe("Obsidian Editor mock compatibility with EditorAdapter", () => {
 		};
 
 		for (const method of requiredMethods) {
-			expect(typeof (mockEditor as any)[method]).toBe("function");
+			expect(typeof (mockEditor as Record<string, unknown>)[method]).toBe("function");
 		}
 	});
 });

@@ -44,7 +44,12 @@ export class VoxtralSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("API base URL")
-			.setDesc("Base URL for Mistral-compatible API. Use \u2018http://localhost:8000\u2019 for local vLLM.")
+			.setDesc(createFragment((frag) => {
+				const exampleUrl = "http://localhost:8000";
+				frag.appendText("Base URL for Mistral-compatible API. Use ");
+				frag.createEl("code", { text: exampleUrl });
+				frag.appendText(" for local vLLM.");
+			}))
 			.addText((text) =>
 				text
 					.setPlaceholder("https://api.mistral.ai")
