@@ -205,3 +205,33 @@ Recommendation: **esbuild** with a simple build script in `package.json`.
 - [ ] New tests for shared modules cover both plugin and webapp use cases
 - [ ] `app.js` is split into ≤6 focused modules
 - [ ] No logic duplication between webapp and plugin for shared functionality
+
+## Prior exploration — `claude/voxtral-code-review-LvDiN` (geparkeerd 2026-04-12, opgeruimd 2026-05-18)
+
+Een eerdere poging in deze branch heeft een groot deel van het ontkoppelingswerk verkend, maar onder een andere architectuur (`obsidian-plugin/src/shared/` in plaats van het huidige top-level `shared/`-package). De technische invulling is daarmee achterhaald, maar de leerlessen blijven relevant. Bewaar dit als referentie voor wanneer deze story wordt opgepakt.
+
+### Wat werd uitgeprobeerd (6 commits, niet gemerged)
+
+**Esbuild voor de webapp + dedup van shared logic** (`82c0d6b`)
+Esbuild bundelde `static/src/main.js` → `static/app.js`. Imports gingen toen naar `obsidian-plugin/src/shared/`. Onder de huidige architectuur zou de webapp moeten consumeren uit het top-level `shared/`-package (eigen `package.json`), via een lokaal pad of als workspace.
+
+**Webapp gebruikt plugin-JSON's** (`4263e53`)
+Webapp las een eigen hardcoded kopie van taalpatronen. De parked branch loste dit op via `shared/lang-data.ts`. Op main is dit al opgelost: `shared/src/lang.ts` laadt de JSON's direct via esbuild JSON imports. De webapp zou dezelfde route kunnen volgen.
+
+**state.js + dom.js scaffolding** (`c58cbd4`)
+Voorbereidende lege modules voor het splitsen van `main.js`. Goedkoop om opnieuw te maken — niet de moeite waard om te cherry-picken.
+
+**Vitest-infra + voice-commands.js extractie** (`e53282f`)
+Vitest met jsdom voor webapp-tests werd opgezet. `voice-commands.js` werd geëxtraheerd als wrapper rond de toenmalige shared module met 5 tests. Onder de huidige architectuur kan de webapp direct testen tegen het top-level `shared/`-package, en is er waarschijnlijk geen webapp-eigen `voice-commands.js` wrapper meer nodig.
+
+**correction.js + queue.js extractie** (`95bfe94`)
+`correction.js` wrapt nu `correctText()`. Onder huidige architectuur: importeer direct uit `shared/src/correction.ts`. `queue.js` (IndexedDB offline queue) is webapp-specifiek en blijft als losse module zinvol.
+
+**audio.js (PCM helpers) extractie** (`d64b46a`)
+`floatTo16BitPCM` en `downsample` als pure functies met 9 tests. Geïsoleerd genoeg om vrijwel ongewijzigd over te nemen onder `static/src/`.
+
+### Aandachtspunten bij heroverweging
+
+- **`shared/` is nu een eigen package**, niet alleen een map. Webapp-consumptie vereist een keuze: workspace-link, lokaal `file:` pad in `package.json`, of een build-step die de gebundelde shared distrubeert.
+- **Webapp is sinds de parked branch verder gegroeid** (was 2500, nu 2853 regels op main). Een herhaalde inventarisatie is nodig voordat er gesplitst wordt.
+- **Vermijd dubbele wrappers**. De parked branch had een neiging om per shared module nog een webapp-laag te bouwen (`voice-commands.js` wrapt `command-matcher.ts`). Liever direct importeren.
