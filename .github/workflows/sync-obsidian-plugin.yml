@@ -136,7 +136,10 @@ jobs:
                  target/tsconfig.json target/package.json target/package-lock.json \
                  target/vitest.config.ts target/scripts target/node_modules \
                  target/obsidian-plugin target/shared 2>/dev/null || true
-          # Keep: .git/, .github/, README.md
+          # Legacy installer/docs files from when target was the full source repo.
+          rm -f target/install.bat target/install-plugin.bat target/INSTALL.md \
+                target/.gitignore 2>/dev/null || true
+          # Keep: .git/, .github/, README.md, LICENSE
 
       - name: Copy pre-built plugin to target
         run: |
@@ -149,6 +152,7 @@ jobs:
 
           # Copy docs
           cp source/obsidian-plugin/README.md target/ 2>/dev/null || true
+          cp source/obsidian-plugin/CONTRIBUTING.md target/ 2>/dev/null || true
 
           # Copy release workflow (creates GitHub Release from pre-built files)
           mkdir -p target/.github/workflows
