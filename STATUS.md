@@ -1,6 +1,6 @@
 # Project Status — Voxtral Transcribe
 
-**Laatste update:** 2026-04-12
+**Laatste update:** 2026-05-18
 
 ## Huidige staat: Werkende app (v20) + Obsidian Plugin (v0.8.10)
 
@@ -123,15 +123,21 @@ De app is volledig functioneel voor dagelijks gebruik. Alle kernfuncties werken 
 
 ## Geparkeerde branches
 
-### `claude/voxtral-code-review-LvDiN` (geparkeerd 2026-04-12)
+### `claude/voxtral-code-review-LvDiN` (geparkeerd 2026-04-12, opgeruimd 2026-05-18)
 
-Branch met 12 ongemergede commits, ver gedivergeerd van main. Bevat:
-- **Webapp module splitting**: extractie van state.js, dom.js, correction.js, queue.js, audio.js, voice-commands uit monolithisch app.js
-- **Shared language data convergentie**: webapp gebruikt nu dezelfde JSON-taalbestanden als de plugin
-- **Esbuild voor webapp**: bundler toegevoegd, dubbele code vervangen door shared imports
-- **Audio test infrastructure**: ElevenLabs TTS-script voor het genereren van testopnames, background noise mixing
+Branch had 13 ongemergede commits, ~236 commits gedivergeerd van main. Bij review op 2026-05-18 bleek het meeste werk achterhaald onder de huidige top-level `shared/`-architectuur.
 
-**Status:** Werk is inhoudelijk waardevol maar de branch loopt ~90 commits achter op main (o.a. shared module extractie, VS Code extension, review bot fixes). Rebase vereist conflictresolutie. Beoordelen of het werk nog past bij de huidige architectuur voordat een merge wordt geprobeerd.
+**Overgenomen op main:**
+- ElevenLabs TTS-generatiescript (`scripts/generate-test-audio.mjs`) met background-noise mixing
+- Recording guide generator (`scripts/generate-recording-guide.mjs`)
+- Stories 022 (audio integration tests) en 023 (audio test diversity)
+
+**Niet overgenomen, intent gedocumenteerd:**
+- Webapp module splitting (state.js, dom.js, voice-commands.js, correction.js, queue.js, audio.js) — heroverwegen onder huidige `shared/`-package architectuur. Intent en aandachtspunten staan in Story 018 onder "Prior exploration".
+- Esbuild voor webapp + shared imports — idem, deel van Story 018.
+- `shared/command-matcher.ts` en `shared/lang-data.ts` extracties — functioneel al gedekt door respectievelijk `shared/src/voice-commands.ts` en `shared/src/lang.ts` op main.
+
+De LvDiN-branch zelf blijft staan als referentie.
 
 ---
 
