@@ -152,6 +152,7 @@ jobs:
 
           # Copy docs
           cp source/obsidian-plugin/README.md target/ 2>/dev/null || true
+          cp source/obsidian-plugin/CONTRIBUTING.md target/ 2>/dev/null || true
 
           # Copy release workflow (creates GitHub Release from pre-built files)
           mkdir -p target/.github/workflows
