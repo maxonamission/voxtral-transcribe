@@ -1,6 +1,6 @@
 # Voxtral Transcribe
 
-Dictate directly into Markdown — insert headings, lists, and to-dos by voice, correct text on the fly, and keep talking while edits happen. Speech-to-text dictation for [Obsidian](https://obsidian.md) powered by [Mistral's Voxtral](https://mistral.ai/) models.
+Dictate directly into Markdown using [Mistral's Voxtral](https://mistral.ai/) speech-to-text. Insert headings, lists, to-dos and other elements by voice, correct text inline or on the fly, use real-time streaming or batch tap-to-send. Supports transcription in 13+ languages.
 
 ## Features
 
@@ -18,9 +18,7 @@ Dictate directly into Markdown — insert headings, lists, and to-dos by voice, 
 - **Configurable Enter-to-send** — optionally use Enter as tap-to-send when the mic is live (batch mode)
 - **Typing cooldown** — adjustable delay before the mic resumes after typing
 
-Need coffee to process all this? Me too.
-
-<a href="https://buymeacoffee.com/maxonamission" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"></a>
+Need coffee to process all this? Me too. [☕ Buy Me a Coffee](https://buymeacoffee.com/maxonamission)
 
 ## Requirements
 
