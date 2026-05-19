@@ -17,9 +17,7 @@ Local speech-to-text application with real-time streaming via the [Mistral](http
 - **Microphone status** — status indicator with stable assessment of your microphone level
 - **Smart scrolling** — scroll up to review while dictating, auto-scroll resumes when you scroll back down
 
-Need coffee to process all this? Me too.
-
-<a href="https://buymeacoffee.com/maxonamission" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"></a>
+Need coffee to process all this? Me too. [☕ Buy Me a Coffee](https://buymeacoffee.com/maxonamission)
 
 ## Requirements
 
