@@ -153,8 +153,8 @@ export default class VoxtralPlugin extends Plugin {
 
 		this.addCommand({
 			id: "export-logs",
-			name: "Export logs to clipboard",
-			icon: "clipboard-copy",
+			name: "Export logs to file",
+			icon: "file-text",
 			callback: () => { void this.exportLogs(); },
 		});
 
@@ -849,12 +849,19 @@ export default class VoxtralPlugin extends Plugin {
 	// ── Logs ──
 
 	private async exportLogs(): Promise<void> {
-		if (getLogCount() === 0) {
+		const count = getLogCount();
+		if (count === 0) {
 			new Notice("No logs to export");
 			return;
 		}
-		await navigator.clipboard.writeText(getLogText());
-		new Notice(`${getLogCount()} log entries copied to clipboard`);
+		const now = new Date();
+		const pad = (n: number) => String(n).padStart(2, "0");
+		const ts = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+		const fileName = `voxtral-logs-${ts}.md`;
+		const content = `# Voxtral Transcribe — Log Export\n\nExported: ${now.toISOString()}\nEntries: ${count}\n\n\`\`\`\n${getLogText()}\n\`\`\`\n`;
+		const file = await this.app.vault.create(fileName, content);
+		await this.app.workspace.getLeaf(true).openFile(file);
+		new Notice(`${count} log entries saved to ${file.path}`);
 	}
 
 	// ── Help panel ──
