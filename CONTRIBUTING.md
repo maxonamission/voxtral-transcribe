@@ -107,6 +107,20 @@ CI runs the same checks (`.github/workflows/plugin-ci.yml`).
 - Match the existing code style — no extra formatter config to wrestle
   with, just stay consistent with surrounding code.
 - Reference any related issue in the description.
+- Apply one of the labels below so the PR lands in the right section
+  of the auto-generated release notes:
+
+  | Label | Section |
+  |---|---|
+  | `feature`, `enhancement` | ✨ Features |
+  | `bug`, `fix` | 🐛 Bug fixes |
+  | `documentation` | 📚 Documentation |
+  | `internal`, `chore`, `refactor`, `ci`, `tests`, `dependencies` | 🧹 Internal |
+  | *(no label)* | 📦 Other changes |
+  | `skip-changelog` | *hidden from release notes* |
+
+  Labels are configured in `.github/release.yml`. The PR title is what
+  shows up in the notes — write it as you want users to read it.
 
 ## Releasing the Obsidian plugin
 

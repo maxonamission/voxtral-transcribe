@@ -1,0 +1,31 @@
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+      - ignore-for-release
+    authors:
+      - dependabot
+      - renovate
+  categories:
+    - title: ✨ Features
+      labels:
+        - feature
+        - enhancement
+    - title: 🐛 Bug fixes
+      labels:
+        - bug
+        - fix
+    - title: 📚 Documentation
+      labels:
+        - documentation
+    - title: 🧹 Internal
+      labels:
+        - internal
+        - chore
+        - refactor
+        - ci
+        - tests
+        - dependencies
+    - title: 📦 Other changes
+      labels:
+        - "*"
