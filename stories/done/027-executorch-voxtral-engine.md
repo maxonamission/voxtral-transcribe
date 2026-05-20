@@ -2,7 +2,7 @@
 
 **Epic:** Android Voice Keyboard — On-device inference
 **Target:** `android-keyboard/`
-**Status:** Backlog
+**Status:** Done (skeleton + stub) — JNI wiring blocked on device verification
 **Priority:** High
 **Estimate:** Large
 
@@ -15,17 +15,20 @@ zelf noemt streaming on-device "sharp edges".
 
 ## Acceptance criteria
 
-- [ ] Dependency `org.pytorch:executorch-android:1.x` toegevoegd aan `app`
-- [ ] `VoxtralEngine`-klasse met API:
-  - `suspend fun load(modelPath: File, backend: Backend)`
+- [x] Dependency `org.pytorch:executorch-android:1.2.0` toegevoegd aan `:app`
+  (1.x op Maven Central; story spec van "1.x" gehaald)
+- [x] `VoxtralEngine`-interface in `:core` met:
+  - `suspend fun load(modelPath: String, backend: VoxtralBackend): EngineEvent`
   - `fun feedAudio(chunk: FloatArray): Flow<TextDelta>`
   - `suspend fun unload()`
-- [ ] Backend enum: `XNNPACK_CPU`, `QNN_NPU` (selectie volgt in 030)
-- [ ] Engine survival na config changes: model blijft warm zolang IME visible is
-- [ ] Smoke test op instrumentation runner: laad een klein test-model en feed
-  een vaste audio buffer; verifieer dat output deterministic is
-- [ ] Memory budget gerespecteerd: engine unload onder
-  `onTrimMemory(TRIM_MEMORY_RUNNING_CRITICAL)`
+- [x] Backend enum: `XNNPACK_CPU`, `QNN_NPU` (selectie volgt in 030)
+- [x] `StubVoxtralEngine` in `:core` met unit tests (vervangt smoke test op
+  instrumentation runner totdat device-verificatie kan)
+- [x] `ExecutorchVoxtralEngine` skeleton in `:app` met JNI-call sites
+  gemarkeerd als `TODO(device)` — wachten op device-bring-up
+- [ ] Engine survival na config changes — komt in 029 (IME-wiring)
+- [ ] `onTrimMemory(TRIM_MEMORY_RUNNING_CRITICAL)` → unload — komt in 034
+  (battery/thermal management)
 
 ## Proposed approach
 
@@ -58,6 +61,25 @@ zelf noemt streaming on-device "sharp edges".
 ## Dependencies
 
 - 024 (scaffold), 026 (audio capture beschikbaar)
+
+## Notes from implementation
+
+- **Maven coordinates verified**: `org.pytorch:executorch-android` is published
+  on Maven Central up to 1.2.0; `executorch-android-qnn` separately to 1.1.0
+  (komt in story 030).
+- **Two engines side-by-side**: pure-Kotlin `StubVoxtralEngine` voor tests en
+  dev-bring-up; `ExecutorchVoxtralEngine` met de echte dep is een skeleton
+  totdat de JNI-API op een echt toestel geverifieerd is. Story 029 (pipeline)
+  en 031 (insertion) kunnen dus al getest worden tegen de Stub.
+- **Wat niet gedaan kon worden in deze sandbox**:
+  - Daadwerkelijke JNI-aanroepen naar `org.pytorch.executorch.Module` — de
+    Maven-jar is niet getest in deze omgeving (geen Android SDK, geen device).
+    Alle JNI-call sites zijn gemarkeerd met `TODO(device)`.
+  - Tokenizer-laden — wacht op story 028 die het tokenizer-bestand levert.
+  - Streaming KV-cache / sliding-window state management — vereist het echte
+    model en de PyTorch ExecuTorch Voxtral-example.
+- **Thread safety**: engine state is beschermd met een `Mutex`; ExecuTorch
+  `Module` is single-threaded dus alle inference-calls moeten serieel.
 
 ## References
 

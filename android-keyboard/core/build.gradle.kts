@@ -14,7 +14,9 @@ java {
 }
 
 dependencies {
+    api(libs.kotlinx.coroutines.core)
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
 
 tasks.test {
