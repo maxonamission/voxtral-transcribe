@@ -1,6 +1,7 @@
 package io.github.maxonamission.voxtral.keyboard.ime
 
 import android.inputmethodservice.InputMethodService
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.InputMethodManager
@@ -9,16 +10,27 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import io.github.maxonamission.voxtral.keyboard.R
 import io.github.maxonamission.voxtral.keyboard.audio.AudioCapture
+import io.github.maxonamission.voxtral.keyboard.core.CommitEvent
+import io.github.maxonamission.voxtral.keyboard.core.StubVoxtralEngine
+import io.github.maxonamission.voxtral.keyboard.core.TranscriptionPipeline
+import io.github.maxonamission.voxtral.keyboard.core.TranscriptionState
+import io.github.maxonamission.voxtral.keyboard.core.VoxtralBackend
+import io.github.maxonamission.voxtral.keyboard.core.VoxtralEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class KeyboardService : InputMethodService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val pipelineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     private lateinit var audio: AudioCapture
+    private lateinit var engine: VoxtralEngine
+    private var pipeline: TranscriptionPipeline? = null
     private var collectJobs: List<Job> = emptyList()
 
     private var rootView: View? = null
@@ -29,6 +41,10 @@ class KeyboardService : InputMethodService() {
     override fun onCreate() {
         super.onCreate()
         audio = AudioCapture(this)
+        // Default to StubVoxtralEngine while the ExecuTorch JNI wiring (027)
+        // is still device-only. Switch via build flavor / setting (030 + 033).
+        engine = StubVoxtralEngine()
+        scope.launch { engine.load(modelPath = "stub", backend = VoxtralBackend.XNNPACK_CPU) }
     }
 
     override fun onCreateInputView(): View {
@@ -44,34 +60,59 @@ class KeyboardService : InputMethodService() {
                 ?.showInputMethodPicker()
         }
 
+        val pipeline = TranscriptionPipeline(
+            scope = pipelineScope,
+            engine = engine,
+            audio = audio.audio,
+            level = audio.level,
+        )
+        this.pipeline = pipeline
+
         collectJobs = listOf(
-            scope.launch { audio.level.collect { onLevelChanged(it) } },
             scope.launch { audio.isCapturing.collect { onCapturingChanged(it) } },
+            scope.launch { pipeline.state.collect { onTranscriptionState(it) } },
+            scope.launch { pipeline.commits.collect { onCommit(it) } },
         )
         return view
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
+        pipeline?.stop()
         audio.stop()
     }
 
     override fun onDestroy() {
+        pipeline?.stop()
         audio.stop()
         collectJobs.forEach { it.cancel() }
+        pipelineScope.cancel()
+        scope.cancel()
         super.onDestroy()
     }
 
     private fun toggleMic() {
         if (audio.isCapturing.value) {
+            pipeline?.stop()
             audio.stop()
         } else {
             audio.start()
+            pipeline?.start()
         }
     }
 
-    private fun onLevelChanged(level: Float) {
-        levelMeter?.progress = (level * 1000f).toInt()
+    private fun onTranscriptionState(state: TranscriptionState) {
+        levelMeter?.progress = (state.level * 1000f).toInt()
+        if (state.preliminary.isNotEmpty()) {
+            candidateStrip?.text = state.preliminary
+        }
+    }
+
+    private fun onCommit(event: CommitEvent) {
+        // 031 will wire this to InputConnection.commitText(). For 029 we just log
+        // and clear the candidate strip so the user can see committed text moving on.
+        Log.i(TAG, "commit: ${event.text}")
+        candidateStrip?.setText(R.string.candidate_placeholder)
     }
 
     private fun onCapturingChanged(capturing: Boolean) {
@@ -86,5 +127,9 @@ class KeyboardService : InputMethodService() {
             candidateStrip?.setText(R.string.candidate_placeholder)
             levelMeter?.progress = 0
         }
+    }
+
+    private companion object {
+        const val TAG = "VoxtralIME"
     }
 }

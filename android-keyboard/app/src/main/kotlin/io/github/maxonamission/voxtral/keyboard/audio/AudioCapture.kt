@@ -12,7 +12,10 @@ import io.github.maxonamission.voxtral.keyboard.core.AudioLevel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.max
@@ -37,6 +40,17 @@ class AudioCapture(private val context: Context) {
 
     private val _isCapturing = MutableStateFlow(false)
     val isCapturing: StateFlow<Boolean> = _isCapturing
+
+    private val _audio = MutableSharedFlow<FloatArray>(
+        replay = 0,
+        extraBufferCapacity = 8, // up to ~800 ms of buffered chunks
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    /**
+     * 16 kHz mono float32 audio chunks (~100 ms each, samples in [-1, 1]).
+     * Backpressured with DROP_OLDEST to prevent OOM if the consumer falls behind.
+     */
+    val audio: SharedFlow<FloatArray> = _audio
 
     private var record: AudioRecord? = null
     private var job: Job? = null
@@ -73,6 +87,12 @@ class AudioCapture(private val context: Context) {
                 val rms = AudioLevel.rmsInt16(samples, read)
                 smoothed = AudioLevel.smooth(smoothed, rms, LEVEL_SMOOTH_ALPHA)
                 _level.value = smoothed
+
+                val floats = FloatArray(read)
+                for (i in 0 until read) {
+                    floats[i] = samples[i] / 32768f
+                }
+                _audio.tryEmit(floats)
             }
         }
     }
