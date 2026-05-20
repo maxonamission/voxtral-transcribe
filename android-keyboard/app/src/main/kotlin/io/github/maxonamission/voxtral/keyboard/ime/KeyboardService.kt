@@ -14,7 +14,9 @@ import io.github.maxonamission.voxtral.keyboard.R
 import io.github.maxonamission.voxtral.keyboard.audio.AudioCapture
 import io.github.maxonamission.voxtral.keyboard.core.BackendPreference
 import io.github.maxonamission.voxtral.keyboard.core.BackendResolver
+import io.github.maxonamission.voxtral.keyboard.core.CommandMatcher
 import io.github.maxonamission.voxtral.keyboard.core.CommitEvent
+import io.github.maxonamission.voxtral.keyboard.core.VoiceCommand
 import io.github.maxonamission.voxtral.keyboard.core.StubVoxtralEngine
 import io.github.maxonamission.voxtral.keyboard.core.TranscriptionPipeline
 import io.github.maxonamission.voxtral.keyboard.core.TranscriptionState
@@ -47,6 +49,7 @@ class KeyboardService : InputMethodService() {
     private var resolvedBackend: VoxtralBackend = VoxtralBackend.XNNPACK_CPU
     private var lastPreliminary: String = ""
     private var isSensitiveField: Boolean = false
+    private val commandMatcher = CommandMatcher(language = "nl")
 
     override fun onCreate() {
         super.onCreate()
@@ -154,10 +157,32 @@ class KeyboardService : InputMethodService() {
     private fun onCommit(event: CommitEvent) {
         val ic = currentInputConnection ?: return
         ic.finishComposingText()
-        ic.commitText(event.text, 1)
         lastPreliminary = ""
+
+        val match = commandMatcher.match(event.text)
+        if (match != null) {
+            if (match.residual.isNotEmpty()) {
+                ic.commitText(match.residual, 1)
+            }
+            executeCommand(match.command)
+        } else {
+            ic.commitText(event.text, 1)
+        }
         candidateStrip?.setText(R.string.candidate_placeholder)
-        Log.i(TAG, "commit: ${event.text}")
+        Log.i(TAG, "commit: ${event.text}${if (match != null) " [cmd=${match.command}]" else ""}")
+    }
+
+    private fun executeCommand(command: VoiceCommand) {
+        val ic = currentInputConnection ?: return
+        when (command) {
+            VoiceCommand.NEW_PARAGRAPH -> ic.commitText("\n\n", 1)
+            VoiceCommand.NEW_LINE -> ic.commitText("\n", 1)
+            VoiceCommand.UNDO -> ic.performContextMenuAction(android.R.id.undo)
+            VoiceCommand.STOP_RECORDING -> {
+                pipeline?.stop()
+                audio.stop()
+            }
+        }
     }
 
     private fun finishComposingIfNeeded() {
