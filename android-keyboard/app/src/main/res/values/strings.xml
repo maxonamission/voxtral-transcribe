@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Voxtral Voice</string>
+    <string name="ime_label">Voxtral Voice</string>
+    <string name="ime_subtype_label">Voxtral Voice (NL)</string>
+    <string name="placeholder_title">Voxtral Voice</string>
+    <string name="placeholder_subtitle">Scaffold — story 024</string>
+    <string name="smoke_button">Insert \"voxtral\"</string>
+</resources>

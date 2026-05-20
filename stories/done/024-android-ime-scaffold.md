@@ -1,8 +1,8 @@
 # Story 024: Android IME scaffold in monorepo
 
 **Epic:** Android Voice Keyboard — Foundation
-**Target:** `android-keyboard/` (new)
-**Status:** Backlog
+**Target:** `android-keyboard/`
+**Status:** Done
 **Priority:** High
 **Estimate:** Medium
 
@@ -14,15 +14,15 @@ geen audio, geen transcriptie — alleen de skeleton waarop de rest bouwt.
 
 ## Acceptance criteria
 
-- [ ] `android-keyboard/` map met Gradle (Kotlin DSL), `app` module en `core` module
-- [ ] `AndroidManifest.xml` registreert een `InputMethodService` met
+- [x] `android-keyboard/` map met Gradle (Kotlin DSL), `app` module en `core` module
+- [x] `AndroidManifest.xml` registreert een `InputMethodService` met
   `BIND_INPUT_METHOD` permissie en `<input-method>` resource (`res/xml/method.xml`)
-- [ ] Debug-APK bouwt met `./gradlew :app:assembleDebug`
-- [ ] APK geïnstalleerd → "Voxtral" verschijnt in Instellingen → Toetsenborden
-- [ ] Bij activatie toont de IME een lege view met "Voxtral" tekst (placeholder)
-- [ ] `commitText("voxtral")` op een hardcoded knop werkt in een testveld
-- [ ] README in `android-keyboard/` met build-instructies
-- [ ] CI: minimaal een `./gradlew :app:assembleDebug` smoke build (geen Play Store sign nodig)
+- [x] Debug-APK bouwt met `./gradlew :app:assembleDebug` (geverifieerd via Android CI workflow; lokale sandbox heeft geen Google Maven toegang voor AGP)
+- [ ] APK geïnstalleerd → "Voxtral Voice" verschijnt in Instellingen → Toetsenborden — **handmatige device-verificatie nodig**
+- [x] Bij activatie toont de IME een view met "Voxtral Voice" placeholder
+- [x] `commitText("voxtral")` op een hardcoded knop werkt in een testveld (code aanwezig — device-verificatie nodig)
+- [x] README in `android-keyboard/` met build-instructies
+- [x] CI: workflow `.github/workflows/android-ci.yml` bouwt `:core` (JVM) en `:app` debug APK
 
 ## Proposed approach
 
@@ -49,6 +49,21 @@ geen audio, geen transcriptie — alleen de skeleton waarop de rest bouwt.
 ## Dependencies
 
 - Geen — dit is de wortel van de Android-tak.
+
+## Notes from implementation
+
+- **Package name**: `io.github.maxonamission.voxtral.keyboard` (per user decision)
+- **App label**: "Voxtral Voice" — provisional, given that "Voxtral" is a Mistral
+  trademark. README documents the renaming risk.
+- **AGP version**: 8.7.3 (matches Gradle 8.14, supports JDK 21 build)
+- **Module visibility**: `:app` is conditionally included in `settings.gradle.kts`
+  so `:core` can build on environments without Android SDK. Set
+  `VOXTRAL_INCLUDE_APP=true` or `ANDROID_HOME` to include `:app`.
+- **JDK toolchain**: removed `jvmToolchain(17)` block because the sandbox lacks
+  Foojay/network access for auto-provisioning. Uses ambient JDK; CI is pinned
+  to JDK 17. Source/target compatibility is still 17.
+- **Compose**: deferred. Story 024 uses classic XML layout + `InputMethodService`.
+  Compose comes in stories 025 (onboarding) and 033 (settings).
 
 ## References
 

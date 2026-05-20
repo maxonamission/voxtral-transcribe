@@ -26,3 +26,10 @@ error.log
 .DS_Store
 Thumbs.db
 test-ws.mjs
+
+# Android / Gradle
+android-keyboard/.gradle/
+android-keyboard/**/build/
+android-keyboard/local.properties
+android-keyboard/**/*.iml
+android-keyboard/.kotlin/
