@@ -1,34 +1,100 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/keyboard_root"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="280dp"
     android:orientation="vertical"
-    android:padding="16dp"
-    android:background="#FAFAFA">
+    android:background="?android:attr/colorBackground"
+    android:padding="12dp">
 
+    <!-- Candidate strip: preliminary transcription text (populated in 029). -->
     <TextView
-        android:id="@+id/placeholder_title"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/placeholder_title"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:textColor="#0A0A0A" />
+        android:id="@+id/candidate_strip"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center_vertical|start"
+        android:textSize="16sp"
+        android:textColor="?android:attr/textColorPrimary"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:text="@string/candidate_placeholder" />
 
-    <TextView
-        android:id="@+id/placeholder_subtitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/placeholder_subtitle"
-        android:textSize="12sp"
-        android:textColor="#666666"
-        android:layout_marginTop="2dp" />
+    <!-- Mic level meter. -->
+    <ProgressBar
+        android:id="@+id/level_meter"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="6dp"
+        android:layout_marginTop="4dp"
+        android:max="1000"
+        android:progress="0" />
 
-    <Button
-        android:id="@+id/smoke_button"
-        android:layout_width="wrap_content"
+    <!-- Spacer keeps the mic button visually centred. -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- Big mic button. -->
+    <ImageButton
+        android:id="@+id/mic_button"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:layout_gravity="center_horizontal"
+        android:background="@drawable/mic_button_idle"
+        android:src="@drawable/ic_mic"
+        android:scaleType="center"
+        android:contentDescription="@string/mic_idle_content_description" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- Status row: language · backend · switch keyboard. -->
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/smoke_button"
-        android:layout_marginTop="16dp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/status_language"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="?android:attr/textColorSecondary"
+            android:text="@string/status_language_default" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="6dp"
+            android:textSize="12sp"
+            android:textColor="?android:attr/textColorSecondary"
+            android:text="·" />
+
+        <TextView
+            android:id="@+id/status_backend"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="?android:attr/textColorSecondary"
+            android:text="@string/status_backend_placeholder" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <ImageButton
+            android:id="@+id/switch_keyboard"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_globe"
+            android:contentDescription="@string/switch_keyboard_content_description" />
+
+    </LinearLayout>
 
 </LinearLayout>

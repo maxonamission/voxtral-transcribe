@@ -3,7 +3,12 @@
     <string name="app_name">Voxtral Voice</string>
     <string name="ime_label">Voxtral Voice</string>
     <string name="ime_subtype_label">Voxtral Voice (NL)</string>
-    <string name="placeholder_title">Voxtral Voice</string>
-    <string name="placeholder_subtitle">Scaffold — story 024</string>
-    <string name="smoke_button">Insert \"voxtral\"</string>
+
+    <string name="candidate_placeholder">Tap de microfoon om te dicteren…</string>
+    <string name="mic_idle_content_description">Start dicteren</string>
+    <string name="mic_listening_content_description">Stop dicteren</string>
+    <string name="switch_keyboard_content_description">Wissel toetsenbord</string>
+    <string name="status_language_default">NL</string>
+    <string name="status_backend_placeholder">CPU</string>
+    <string name="status_no_mic_permission">Geen microfoontoegang — open de Voxtral Voice-app om dit toe te kennen</string>
 </resources>

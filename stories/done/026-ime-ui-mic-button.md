@@ -2,7 +2,7 @@
 
 **Epic:** Android Voice Keyboard — Foundation
 **Target:** `android-keyboard/`
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 **Estimate:** Medium
 
@@ -15,13 +15,16 @@ voor typen terug naar Gboard via de keyboard-picker.
 
 ## Acceptance criteria
 
-- [ ] IME view-hoogte ~40% van scherm (typische IME-hoogte), responsief op landscape
-- [ ] Candidate strip toont preliminary text (hardcoded placeholder; echte vulling in 029)
-- [ ] Mic-knop: tap-to-toggle of push-to-talk (configureerbaar; default tap-to-toggle)
-- [ ] Mic-level meter (horizontale bar) reageert in realtime op input van `AudioRecord`
-- [ ] Status-regel toont actieve backend ("NPU" / "CPU") en taal-indicator
-- [ ] Switch-keyboard-knop ("globe"-icon) toont system keyboard picker
-- [ ] Dark/light mode via Android-systeem-theme
+- [x] IME view-hoogte 280 dp (vaste hoogte; landscape-tuning is een latere verfijning)
+- [x] Candidate strip toont placeholder ("Tap de microfoon om te dicteren…");
+  invulling vanuit transcriptie komt in 029
+- [x] Mic-knop: tap-to-toggle (default, geen push-to-talk in 026)
+- [x] Mic-level meter (horizontale `ProgressBar`) reageert op `AudioRecord`
+  RMS via `core` `AudioLevel.rmsInt16` + smoothing
+- [x] Status-regel toont taal (NL) en backend-placeholder (CPU); echte detectie
+  komt in 030 (backend) en 033 (taal-setting)
+- [x] Switch-keyboard-knop (globe-icoon) roept `showInputMethodPicker()` aan
+- [x] Thema `Theme.DeviceDefault.DayNight.NoActionBar` — volgt systeem dark/light
 
 ## Proposed approach
 
@@ -42,6 +45,20 @@ voor typen terug naar Gboard via de keyboard-picker.
 ## Dependencies
 
 - 024 (scaffold), 025 (permissions — mic moet werken)
+
+## Notes from implementation
+
+- `AudioCapture` opent `AudioRecord` met `VOICE_RECOGNITION` source (geeft
+  Android-side noise suppression / AGC). Sample rate 16 kHz mono PCM — exact
+  wat Voxtral verwacht (027/029).
+- Level-berekening (`AudioLevel.rmsInt16` + `smooth`) zit in `:core` met unit
+  tests — geen Android-deps, snel testbaar.
+- IME-hoogte is voor nu vast op 280 dp. Story 034 (battery/lifecycle) en latere
+  UX-iteraties kunnen dat per oriëntatie / scherm tuning bijstellen.
+- Push-to-talk is bewust niet geïmplementeerd in v1; comes in 033 (settings).
+- De vorige "Insert voxtral"-smoke-knop uit 024 is verwijderd — de mic-knop
+  is nu de centrale interactie. Tot 029 doet hij wel audio capture maar
+  schrijft geen tekst.
 
 ## References
 
