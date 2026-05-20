@@ -141,7 +141,7 @@ settings.
 |---|-------|--------|----------|
 | 031 | [Text insertion via InputConnection (preview + commit)](done/031-input-connection-insertion.md) | Done | High |
 | 032 | [Voice commands port to Kotlin](done/032-voice-commands-kotlin.md) | Done | Medium |
-| 033 | [Settings screen: language, delay, gain](todo/033-settings-screen.md) | Todo | Medium |
+| 033 | [Settings screen: language, delay, gain](done/033-settings-screen.md) | Done (mic-gain deferred) | Medium |
 
 ## Epic: Android Voice Keyboard — Reliability & distribution
 

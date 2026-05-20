@@ -20,6 +20,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".settings.SettingsActivity"
+            android:exported="false"
+            android:label="@string/settings_label" />
+
         <service
             android:name=".ime.KeyboardService"
             android:label="@string/ime_label"

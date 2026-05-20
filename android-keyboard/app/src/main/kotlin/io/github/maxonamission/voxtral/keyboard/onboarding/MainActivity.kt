@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import io.github.maxonamission.voxtral.keyboard.settings.SettingsActivity
 
 class MainActivity : ComponentActivity() {
 
@@ -138,6 +139,12 @@ private fun OnboardingScreen() {
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+
+            Button(onClick = {
+                context.startActivity(Intent(context, SettingsActivity::class.java))
+            }) {
+                Text("Open instellingen")
+            }
 
             if (state.isComplete) {
                 ModelDownloadSection()

@@ -1,5 +1,6 @@
 package io.github.maxonamission.voxtral.keyboard.ime
 
+import android.content.Intent
 import android.inputmethodservice.InputMethodService
 import android.text.InputType
 import android.util.Log
@@ -23,6 +24,9 @@ import io.github.maxonamission.voxtral.keyboard.core.TranscriptionState
 import io.github.maxonamission.voxtral.keyboard.core.VoxtralBackend
 import io.github.maxonamission.voxtral.keyboard.core.VoxtralEngine
 import io.github.maxonamission.voxtral.keyboard.engine.BackendDetector
+import io.github.maxonamission.voxtral.keyboard.settings.SettingsActivity
+import io.github.maxonamission.voxtral.keyboard.settings.SettingsRepository
+import io.github.maxonamission.voxtral.keyboard.settings.VoxtralSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -49,19 +53,30 @@ class KeyboardService : InputMethodService() {
     private var resolvedBackend: VoxtralBackend = VoxtralBackend.XNNPACK_CPU
     private var lastPreliminary: String = ""
     private var isSensitiveField: Boolean = false
-    private val commandMatcher = CommandMatcher(language = "nl")
+    @Volatile private var commandMatcher = CommandMatcher(language = "nl")
+    private lateinit var settingsRepo: SettingsRepository
 
     override fun onCreate() {
         super.onCreate()
         audio = AudioCapture(this)
-        resolvedBackend = BackendResolver.resolve(
-            preference = BackendPreference.AUTO, // tied to settings in 033
-            npuAvailable = BackendDetector.npuAvailable(),
-        )
+        settingsRepo = SettingsRepository(this)
         // Default to StubVoxtralEngine while the ExecuTorch JNI wiring (027)
-        // is still device-only. Switch via build flavor / setting (033).
+        // is still device-only. Switch via build flavor when 027 is real.
         engine = StubVoxtralEngine()
         scope.launch { engine.load(modelPath = "stub", backend = resolvedBackend) }
+        scope.launch { settingsRepo.settings.collect(::applySettings) }
+    }
+
+    private fun applySettings(s: VoxtralSettings) {
+        commandMatcher = CommandMatcher(language = s.language)
+        val newBackend = BackendResolver.resolve(s.backendPreference, BackendDetector.npuAvailable())
+        if (newBackend != resolvedBackend) {
+            resolvedBackend = newBackend
+            statusBackend?.text = when (resolvedBackend) {
+                VoxtralBackend.QNN_NPU -> "NPU"
+                VoxtralBackend.XNNPACK_CPU -> "CPU"
+            }
+        }
     }
 
     override fun onCreateInputView(): View {
@@ -77,6 +92,10 @@ class KeyboardService : InputMethodService() {
         }
         micButton = view.findViewById<ImageButton>(R.id.mic_button).apply {
             setOnClickListener { toggleMic() }
+            setOnLongClickListener {
+                openSettings()
+                true
+            }
         }
         view.findViewById<ImageButton>(R.id.switch_keyboard).setOnClickListener {
             (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)
@@ -126,6 +145,13 @@ class KeyboardService : InputMethodService() {
         pipelineScope.cancel()
         scope.cancel()
         super.onDestroy()
+    }
+
+    private fun openSettings() {
+        val intent = Intent(this, SettingsActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivity(intent)
     }
 
     private fun toggleMic() {

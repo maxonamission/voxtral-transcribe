@@ -11,4 +11,6 @@
     <string name="status_language_default">NL</string>
     <string name="status_backend_placeholder">CPU</string>
     <string name="status_no_mic_permission">Geen microfoontoegang — open de Voxtral Voice-app om dit toe te kennen</string>
+    <string name="settings_label">Voxtral Voice instellingen</string>
+    <string name="open_settings">Open instellingen</string>
 </resources>
