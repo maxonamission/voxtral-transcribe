@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "description": "Benchmark corpus for the on-device Voxtral engine. Audio files are 16 kHz mono PCM WAV. Replace the placeholder entries below with real recordings + transcripts before running the benchmark.",
+  "samples": [
+    {
+      "id": "nl-001",
+      "lang": "nl",
+      "audio": "nl/sample-001.wav",
+      "reference": "TODO: vervang door echte Nederlandse referentie-transcriptie"
+    },
+    {
+      "id": "en-001",
+      "lang": "en",
+      "audio": "en/sample-001.wav",
+      "reference": "TODO: replace with real English reference transcript"
+    }
+  ]
+}
