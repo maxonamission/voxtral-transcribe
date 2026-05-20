@@ -23,7 +23,12 @@ import io.github.maxonamission.voxtral.keyboard.core.TranscriptionPipeline
 import io.github.maxonamission.voxtral.keyboard.core.TranscriptionState
 import io.github.maxonamission.voxtral.keyboard.core.VoxtralBackend
 import io.github.maxonamission.voxtral.keyboard.core.VoxtralEngine
+import io.github.maxonamission.voxtral.keyboard.core.BatteryPolicy
+import io.github.maxonamission.voxtral.keyboard.core.ThermalLevel
+import io.github.maxonamission.voxtral.keyboard.core.ThermalPolicy
 import io.github.maxonamission.voxtral.keyboard.engine.BackendDetector
+import io.github.maxonamission.voxtral.keyboard.engine.BatteryMonitor
+import io.github.maxonamission.voxtral.keyboard.engine.ThermalMonitor
 import io.github.maxonamission.voxtral.keyboard.settings.SettingsActivity
 import io.github.maxonamission.voxtral.keyboard.settings.SettingsRepository
 import io.github.maxonamission.voxtral.keyboard.settings.VoxtralSettings
@@ -55,16 +60,34 @@ class KeyboardService : InputMethodService() {
     private var isSensitiveField: Boolean = false
     @Volatile private var commandMatcher = CommandMatcher(language = "nl")
     private lateinit var settingsRepo: SettingsRepository
+    private lateinit var thermalMonitor: ThermalMonitor
+    @Volatile private var thermalLevel: ThermalLevel = ThermalLevel.NONE
 
     override fun onCreate() {
         super.onCreate()
         audio = AudioCapture(this)
         settingsRepo = SettingsRepository(this)
+        thermalMonitor = ThermalMonitor(this).apply {
+            observe(::onThermalLevelChanged)
+            thermalLevel = currentLevel()
+        }
         // Default to StubVoxtralEngine while the ExecuTorch JNI wiring (027)
         // is still device-only. Switch via build flavor when 027 is real.
         engine = StubVoxtralEngine()
         scope.launch { engine.load(modelPath = "stub", backend = resolvedBackend) }
         scope.launch { settingsRepo.settings.collect(::applySettings) }
+    }
+
+    private fun onThermalLevelChanged(level: ThermalLevel) {
+        thermalLevel = level
+        if (ThermalPolicy.shouldUnload(level)) {
+            pipeline?.stop()
+            audio.stop()
+            scope.launch {
+                engine.unload()
+                candidateStrip?.setText(R.string.status_thermal_severe)
+            }
+        }
     }
 
     private fun applySettings(s: VoxtralSettings) {
@@ -141,6 +164,7 @@ class KeyboardService : InputMethodService() {
     override fun onDestroy() {
         pipeline?.stop()
         audio.stop()
+        if (::thermalMonitor.isInitialized) thermalMonitor.stop()
         collectJobs.forEach { it.cancel() }
         pipelineScope.cancel()
         scope.cancel()
@@ -156,13 +180,28 @@ class KeyboardService : InputMethodService() {
 
     private fun toggleMic() {
         if (isSensitiveField) return
+        if (ThermalPolicy.shouldUnload(thermalLevel)) {
+            candidateStrip?.setText(R.string.status_thermal_severe)
+            return
+        }
         if (audio.isCapturing.value) {
             pipeline?.stop()
             audio.stop()
             finishComposingIfNeeded()
         } else {
+            warnIfLowBattery()
             audio.start()
             pipeline?.start()
+        }
+    }
+
+    private fun warnIfLowBattery() {
+        if (BatteryPolicy.shouldWarnLowBattery(
+                percent = BatteryMonitor.percent(this),
+                isCharging = BatteryMonitor.isCharging(this),
+            )
+        ) {
+            candidateStrip?.setText(R.string.status_low_battery)
         }
     }
 

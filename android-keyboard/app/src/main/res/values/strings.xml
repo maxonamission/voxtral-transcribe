@@ -13,4 +13,6 @@
     <string name="status_no_mic_permission">Geen microfoontoegang — open de Voxtral Voice-app om dit toe te kennen</string>
     <string name="settings_label">Voxtral Voice instellingen</string>
     <string name="open_settings">Open instellingen</string>
+    <string name="status_thermal_severe">Toestel is warm — Voxtral gepauzeerd</string>
+    <string name="status_low_battery">Lage batterij — let op stroomverbruik</string>
 </resources>

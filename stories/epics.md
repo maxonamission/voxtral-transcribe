@@ -149,7 +149,7 @@ Energie, thermisch gedrag, kwaliteitsmeting en uitlevering.
 
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
-| 034 | [Battery & thermal management](todo/034-battery-thermal.md) | Todo | Medium |
+| 034 | [Battery & thermal management](done/034-battery-thermal.md) | Done (idle-unload deferred) | Medium |
 | 035 | [On-device benchmark suite (WER + latency)](todo/035-benchmark-suite.md) | Todo | Medium |
 | 036 | [APK release pipeline + sideload docs](todo/036-apk-release-pipeline.md) | Todo | Medium |
 
