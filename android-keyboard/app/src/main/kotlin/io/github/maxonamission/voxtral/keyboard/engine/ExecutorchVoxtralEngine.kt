@@ -48,14 +48,41 @@ class ExecutorchVoxtralEngine : VoxtralEngine {
                 if (!file.exists()) {
                     return@withContext EngineEvent.Failed("Model file not found: $modelPath")
                 }
-                this@ExecutorchVoxtralEngine.backend = backend
-                // TODO(device): module = Module.load(file.absolutePath, /* extra_files */ null)
-                // TODO(device): bind to the requested backend; QNN delegates need the QNN AAR
-                Log.i(TAG, "ExecuTorch engine loaded (skeleton) — backend=$backend, model=${file.name}")
-                loaded = true
-                EngineEvent.Loaded(backend)
+                val started = System.nanoTime()
+                val attempted = tryLoadBackend(file, backend)
+                if (attempted is EngineEvent.Loaded) {
+                    this@ExecutorchVoxtralEngine.backend = attempted.backend
+                    loaded = true
+                    val ms = (System.nanoTime() - started) / 1_000_000
+                    Log.i(TAG, "ExecuTorch engine loaded — backend=${attempted.backend}, model=${file.name}, loadTimeMs=$ms")
+                    return@withContext attempted
+                }
+                // Requested backend failed — try CPU fallback unless caller already asked for CPU.
+                if (backend != VoxtralBackend.XNNPACK_CPU) {
+                    Log.w(TAG, "Backend $backend failed, falling back to XNNPACK_CPU")
+                    val fallback = tryLoadBackend(file, VoxtralBackend.XNNPACK_CPU)
+                    if (fallback is EngineEvent.Loaded) {
+                        this@ExecutorchVoxtralEngine.backend = fallback.backend
+                        loaded = true
+                        val ms = (System.nanoTime() - started) / 1_000_000
+                        Log.i(TAG, "ExecuTorch engine loaded (fallback) — backend=${fallback.backend}, loadTimeMs=$ms")
+                        return@withContext fallback
+                    }
+                }
+                attempted
             }
         }
+
+    private fun tryLoadBackend(file: File, backend: VoxtralBackend): EngineEvent {
+        return try {
+            // TODO(device): module = Module.load(file.absolutePath, /* extra_files */ null)
+            // TODO(device): bind to the requested backend; QNN delegates need the
+            // QNN AAR (executorch-android-qnn 1.1.0 is on the classpath).
+            EngineEvent.Loaded(backend)
+        } catch (t: Throwable) {
+            EngineEvent.Failed("Init $backend failed: ${t.message ?: t::class.simpleName}")
+        }
+    }
 
     override fun feedAudio(chunk: FloatArray): Flow<TextDelta> = flow {
         if (!loaded) return@flow

@@ -10,12 +10,15 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import io.github.maxonamission.voxtral.keyboard.R
 import io.github.maxonamission.voxtral.keyboard.audio.AudioCapture
+import io.github.maxonamission.voxtral.keyboard.core.BackendPreference
+import io.github.maxonamission.voxtral.keyboard.core.BackendResolver
 import io.github.maxonamission.voxtral.keyboard.core.CommitEvent
 import io.github.maxonamission.voxtral.keyboard.core.StubVoxtralEngine
 import io.github.maxonamission.voxtral.keyboard.core.TranscriptionPipeline
 import io.github.maxonamission.voxtral.keyboard.core.TranscriptionState
 import io.github.maxonamission.voxtral.keyboard.core.VoxtralBackend
 import io.github.maxonamission.voxtral.keyboard.core.VoxtralEngine
+import io.github.maxonamission.voxtral.keyboard.engine.BackendDetector
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -37,14 +40,21 @@ class KeyboardService : InputMethodService() {
     private var micButton: ImageButton? = null
     private var levelMeter: ProgressBar? = null
     private var candidateStrip: TextView? = null
+    private var statusBackend: TextView? = null
+
+    private var resolvedBackend: VoxtralBackend = VoxtralBackend.XNNPACK_CPU
 
     override fun onCreate() {
         super.onCreate()
         audio = AudioCapture(this)
+        resolvedBackend = BackendResolver.resolve(
+            preference = BackendPreference.AUTO, // tied to settings in 033
+            npuAvailable = BackendDetector.npuAvailable(),
+        )
         // Default to StubVoxtralEngine while the ExecuTorch JNI wiring (027)
-        // is still device-only. Switch via build flavor / setting (030 + 033).
+        // is still device-only. Switch via build flavor / setting (033).
         engine = StubVoxtralEngine()
-        scope.launch { engine.load(modelPath = "stub", backend = VoxtralBackend.XNNPACK_CPU) }
+        scope.launch { engine.load(modelPath = "stub", backend = resolvedBackend) }
     }
 
     override fun onCreateInputView(): View {
@@ -52,6 +62,12 @@ class KeyboardService : InputMethodService() {
         rootView = view
         candidateStrip = view.findViewById(R.id.candidate_strip)
         levelMeter = view.findViewById(R.id.level_meter)
+        statusBackend = view.findViewById<TextView>(R.id.status_backend).also {
+            it.text = when (resolvedBackend) {
+                VoxtralBackend.QNN_NPU -> "NPU"
+                VoxtralBackend.XNNPACK_CPU -> "CPU"
+            }
+        }
         micButton = view.findViewById<ImageButton>(R.id.mic_button).apply {
             setOnClickListener { toggleMic() }
         }

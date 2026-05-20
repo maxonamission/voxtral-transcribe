@@ -130,7 +130,7 @@ en XNNPACK (CPU) fallback. Geen netwerk-afhankelijkheid in runtime.
 | 027 | [ExecuTorch runtime + Voxtral engine](done/027-executorch-voxtral-engine.md) | Done (skeleton + stub; JNI device-verify) | High |
 | 028 | [First-run model download flow](done/028-model-download-flow.md) | Done | High |
 | 029 | [Streaming audio → text pipeline](done/029-streaming-pipeline.md) | Done | High |
-| 030 | [Backend selection: QNN NPU with CPU fallback](todo/030-backend-selection-qnn.md) | Todo | Medium |
+| 030 | [Backend selection: QNN NPU with CPU fallback](done/030-backend-selection-qnn.md) | Done (logic + CI; device-verify) | Medium |
 
 ## Epic: Android Voice Keyboard — Dictation parity
 

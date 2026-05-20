@@ -8,6 +8,7 @@ core-ktx = "1.15.0"
 lifecycle-runtime-compose = "2.8.7"
 coroutines = "1.9.0"
 executorch = "1.2.0"
+executorch-qnn = "1.1.0"
 okhttp = "4.12.0"
 
 [libraries]
@@ -23,6 +24,7 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 executorch-android = { group = "org.pytorch", name = "executorch-android", version.ref = "executorch" }
+executorch-android-qnn = { group = "org.pytorch", name = "executorch-android-qnn", version.ref = "executorch-qnn" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 
 [plugins]

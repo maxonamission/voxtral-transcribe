@@ -57,5 +57,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.executorch.android)
+    implementation(libs.executorch.android.qnn)
     implementation(libs.okhttp)
 }
