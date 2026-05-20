@@ -2,7 +2,7 @@
 
 **Epic:** Android Voice Keyboard — On-device inference
 **Target:** `android-keyboard/`
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 **Estimate:** Medium
 
@@ -15,16 +15,16 @@ afdoende storage-checks.
 
 ## Acceptance criteria
 
-- [ ] First-launch detectie: model ontbreekt → toon download-scherm
-- [ ] Storage-check vóór download: minstens 2× modelgrootte vrij (download + verify)
-- [ ] Network-check: alleen downloaden op WiFi tenzij gebruiker "ook op mobiel"
-  expliciet aanvinkt
-- [ ] Progress (MB / totaal MB, percentage, snelheid, ETA)
-- [ ] Resumable: pauzeren en hervatten ondersteund (Range-header)
-- [ ] SHA256-verificatie na download tegen een meegeleverde hash-constant in code
-- [ ] Bij hash-mismatch: opgeslagen file verwijderen en duidelijke foutmelding
-- [ ] Model wordt opgeslagen in `Context.filesDir` (privé, niet `cacheDir`)
-- [ ] "Verwijder model"-knop in settings (033)
+- [x] First-launch detectie via `ModelStorage.isPresent()`; UI toont download-knop
+- [x] Storage-check vóór download (2× modelgrootte vrij)
+- [ ] WiFi-only optie — **niet in v1**, overweeg in 033 settings. INTERNET-
+  permissie is gedeclareerd; netwerk-type-check kan eenvoudig worden toegevoegd
+- [x] Progress: MB done / total, percentage, MB/s, ETA — in `ModelStatus.Downloading`
+- [x] Resumable via `Range`-header; valt netjes terug op restart bij HTTP 200
+- [x] SHA256 streaming-hash (geen RAM-blow); mismatch → partial file weggegooid
+- [x] Model in `Context.filesDir/models/` (privé, niet cacheDir)
+- [ ] "Verwijder model"-knop — komt in 033 (settings); helper
+  `ModelStorage.delete()` is al beschikbaar
 
 ## Proposed approach
 
@@ -49,6 +49,20 @@ afdoende storage-checks.
 ## Dependencies
 
 - 024 (scaffold), 027 (engine consumeert het model)
+
+## Notes from implementation
+
+- **OkHttp** in plaats van `HttpURLConnection` of `WorkManager`. Voor de
+  user-driven download in MainActivity is een gecancelbare Flow voldoende;
+  WorkManager voegt meer waarde toe als we de download mogen voortzetten
+  zonder UI (kan in een latere iteratie als gebruikers daar om vragen).
+- **Placeholder URL en SHA256** in `ModelRegistry` — moet vervangen worden
+  door de echte artefact-locatie wanneer story 036 de release-pipeline
+  oplevert.
+- **Verwijder model** zit in `ModelStorage.delete()` maar wordt nog niet
+  ontsloten in de UI — komt in 033.
+- **WiFi-only / mobile data**: gedragen v1 onafhankelijk van netwerktype. Een
+  toggle in settings (033) is een eenvoudige toevoeging.
 
 ## References
 

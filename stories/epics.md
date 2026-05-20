@@ -128,7 +128,7 @@ en XNNPACK (CPU) fallback. Geen netwerk-afhankelijkheid in runtime.
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
 | 027 | [ExecuTorch runtime + Voxtral engine](done/027-executorch-voxtral-engine.md) | Done (skeleton + stub; JNI device-verify) | High |
-| 028 | [First-run model download flow](todo/028-model-download-flow.md) | Todo | High |
+| 028 | [First-run model download flow](done/028-model-download-flow.md) | Done | High |
 | 029 | [Streaming audio → text pipeline](todo/029-streaming-pipeline.md) | Todo | High |
 | 030 | [Backend selection: QNN NPU with CPU fallback](todo/030-backend-selection-qnn.md) | Todo | Medium |
 

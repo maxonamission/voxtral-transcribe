@@ -140,6 +140,10 @@ private fun OnboardingScreen() {
             Spacer(modifier = Modifier.height(8.dp))
 
             if (state.isComplete) {
+                ModelDownloadSection()
+
+                Spacer(modifier = Modifier.height(8.dp))
+
                 Text(
                     "Klaar — probeer Voxtral Voice hieronder:",
                     style = MaterialTheme.typography.titleMedium,
