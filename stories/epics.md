@@ -108,6 +108,79 @@ Allow users to define their own voice commands, mishearing corrections, and dyna
 
 ---
 
+## Epic: Android Voice Keyboard — Foundation (target: `android-keyboard/`)
+
+Bare IME-module zichtbaar in Android's keyboard-picker met mic-knop, audio
+capture en correcte permissie-flow. Geen transcriptie in deze fase — alleen het
+toetsenbord-skelet. Zie [`android-keyboard-plan.md`](android-keyboard-plan.md).
+
+| # | Story | Status | Priority |
+|---|-------|--------|----------|
+| 024 | [Android IME scaffold in monorepo](backlog/024-android-ime-scaffold.md) | Backlog | High |
+| 025 | [IME enable + microphone permission UX](backlog/025-ime-permissions-ux.md) | Backlog | High |
+| 026 | [IME UI: mic button, level meter, candidate strip](backlog/026-ime-ui-mic-button.md) | Backlog | High |
+
+## Epic: Android Voice Keyboard — On-device inference
+
+Voxtral Mini 3B Realtime op het toestel via ExecuTorch, met QNN (Snapdragon NPU)
+en XNNPACK (CPU) fallback. Geen netwerk-afhankelijkheid in runtime.
+
+| # | Story | Status | Priority |
+|---|-------|--------|----------|
+| 027 | [ExecuTorch runtime + Voxtral engine](backlog/027-executorch-voxtral-engine.md) | Backlog | High |
+| 028 | [First-run model download flow](backlog/028-model-download-flow.md) | Backlog | High |
+| 029 | [Streaming audio → text pipeline](backlog/029-streaming-pipeline.md) | Backlog | High |
+| 030 | [Backend selection: QNN NPU with CPU fallback](backlog/030-backend-selection-qnn.md) | Backlog | Medium |
+
+## Epic: Android Voice Keyboard — Dictation parity
+
+Dicteer-ervaring op niveau van de webapp: streaming-insert, voicecommands,
+settings.
+
+| # | Story | Status | Priority |
+|---|-------|--------|----------|
+| 031 | [Text insertion via InputConnection (preview + commit)](backlog/031-input-connection-insertion.md) | Backlog | High |
+| 032 | [Voice commands port to Kotlin](backlog/032-voice-commands-kotlin.md) | Backlog | Medium |
+| 033 | [Settings screen: language, delay, gain](backlog/033-settings-screen.md) | Backlog | Medium |
+
+## Epic: Android Voice Keyboard — Reliability & distribution
+
+Energie, thermisch gedrag, kwaliteitsmeting en uitlevering.
+
+| # | Story | Status | Priority |
+|---|-------|--------|----------|
+| 034 | [Battery & thermal management](backlog/034-battery-thermal.md) | Backlog | Medium |
+| 035 | [On-device benchmark suite (WER + latency)](backlog/035-benchmark-suite.md) | Backlog | Medium |
+| 036 | [APK release pipeline + sideload docs](backlog/036-apk-release-pipeline.md) | Backlog | Medium |
+
+### Dependencies within these epics
+
+```
+024 (scaffold)
+ ├── 025 (permissions UX)
+ ├── 026 (IME UI)
+ └── 027 (ExecuTorch engine)
+      ├── 028 (model download)         — needed before engine can run
+      ├── 029 (streaming pipeline)     — needs engine + audio (026)
+      └── 030 (backend selection)      — refinement on top of 027
+
+029 → 031 (insertion)                  — engine output needs an insertion target
+031 → 032 (voice commands)             — commands need a working text channel first
+032 → 033 (settings)                   — settings tie all of above together
+
+034, 035, 036                          — depend on a working end-to-end build (post 031)
+```
+
+### Recommended execution order
+
+1. **024 → 025 → 026** — foundation: een werkende lege IME met mic en UI
+2. **027 → 028 → 029** — inference werkend, eerst met CPU/XNNPACK
+3. **031** — tekst in invoerveld; nu hebben we een minimaal levensvatbaar product
+4. **030 → 032 → 033** — performance + parity met webapp
+5. **034 → 035 → 036** — productie-rijp maken en uitleveren
+
+---
+
 ## Parallellisatie-advies: meerdere Claude Code sessies naast elkaar
 
 ### Kan het?
