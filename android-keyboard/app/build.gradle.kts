@@ -12,9 +12,21 @@ android {
         applicationId = "io.github.maxonamission.voxtral.keyboard"
         minSdk = 28
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0-dev"
+        versionCode = (System.getenv("VOXTRAL_VERSION_CODE")?.toIntOrNull()) ?: 1
+        versionName = System.getenv("VOXTRAL_VERSION_NAME") ?: "0.1.0-dev"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    val keystorePath = System.getenv("VOXTRAL_KEYSTORE_PATH")
+    if (!keystorePath.isNullOrBlank()) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("VOXTRAL_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("VOXTRAL_KEY_ALIAS")
+                keyPassword = System.getenv("VOXTRAL_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -24,6 +36,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (!keystorePath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

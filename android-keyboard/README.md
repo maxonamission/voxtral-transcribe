@@ -96,3 +96,44 @@ The reverse-domain package name above stays stable.
 
 See [`.github/workflows/android-ci.yml`](../.github/workflows/android-ci.yml).
 Two jobs: `:core` (JVM only) and `:app` (full APK, uploads as artifact).
+
+## Releasing
+
+Signed release builds are produced by [`.github/workflows/release-android.yml`](../.github/workflows/release-android.yml)
+when a tag matching `android-v*.*.*` is pushed.
+
+### One-time setup (repository owner)
+
+1. Generate a release keystore locally:
+
+   ```bash
+   keytool -genkeypair -v -keystore release.jks -keyalg RSA -keysize 2048 \
+     -validity 10000 -alias voxtral
+   ```
+
+2. Base64-encode it and add the following repository secrets:
+
+   | Secret | Value |
+   |---|---|
+   | `ANDROID_KEYSTORE_BASE64` | `base64 -w0 release.jks` |
+   | `ANDROID_KEYSTORE_PASSWORD` | keystore password |
+   | `ANDROID_KEY_ALIAS` | `voxtral` (or your alias) |
+   | `ANDROID_KEY_PASSWORD` | key password |
+
+   Keep the original `release.jks` somewhere safe (a password manager works).
+   **Losing it means future updates can't be signed by the same key — Android
+   refuses installs of differently-signed updates.**
+
+### Cutting a release
+
+```bash
+git tag android-v0.1.0
+git push origin android-v0.1.0
+```
+
+The workflow assembles `:app:assembleRelease`, signs the APK, generates
+`SHA256SUMS`, and publishes a GitHub Release with the artefacts.
+
+> No Play Store / F-Droid for v1 — distribution is sideload only. Users
+> must enable "Install unknown apps" for whatever app they install the APK
+> from (usually their browser or a file manager).

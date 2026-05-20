@@ -151,7 +151,7 @@ Energie, thermisch gedrag, kwaliteitsmeting en uitlevering.
 |---|-------|--------|----------|
 | 034 | [Battery & thermal management](done/034-battery-thermal.md) | Done (idle-unload deferred) | Medium |
 | 035 | [On-device benchmark suite (WER + latency)](done/035-benchmark-suite.md) | Done (WER + runner; corpus device-only) | Medium |
-| 036 | [APK release pipeline + sideload docs](todo/036-apk-release-pipeline.md) | Todo | Medium |
+| 036 | [APK release pipeline + sideload docs](done/036-apk-release-pipeline.md) | Done (awaiting first signing tag) | Medium |
 
 ### Dependencies within these epics
 
