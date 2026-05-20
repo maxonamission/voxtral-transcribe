@@ -41,16 +41,17 @@ export VOXTRAL_INCLUDE_APP=true    # or set ANDROID_HOME
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Then on the device:
+Then on the device, open the **Voxtral Voice** app from the launcher — the
+onboarding screen walks through three steps:
 
-1. **Instellingen → Toetsenborden** → enable **Voxtral Voice**
-2. Open any text field → tap the keyboard switcher (globe icon) → pick
-   **Voxtral Voice**
-3. Tap the **Insert "voxtral"** button — the literal text `voxtral` should
-   appear in the field.
+1. **Activeer Voxtral Voice in Instellingen** (opens system IME settings)
+2. **Kies Voxtral Voice als toetsenbord** (shows the input method picker)
+3. **Geef toegang tot de microfoon** (requests `RECORD_AUDIO`)
 
-This proves the IME is registered, visible in the picker, and that
-`InputConnection.commitText` works. Real transcription comes in stories 027–029.
+Each step shows a check mark when complete. When all three are done a test
+text field appears so you can try the IME — the **Insert "voxtral"** button
+in the keyboard inserts a placeholder. Real transcription comes in stories
+027–029.
 
 ## Layout
 
@@ -58,16 +59,20 @@ This proves the IME is registered, visible in the picker, and that
 android-keyboard/
 ├── app/                                    # Android IME application
 │   └── src/main/
-│       ├── AndroidManifest.xml             # IME service declaration
-│       ├── kotlin/io/.../ime/
-│       │   └── KeyboardService.kt          # InputMethodService entry point
+│       ├── AndroidManifest.xml             # IME service + launcher activity
+│       ├── kotlin/io/.../
+│       │   ├── ime/KeyboardService.kt      # InputMethodService entry point
+│       │   └── onboarding/
+│       │       ├── IMEStatus.kt            # Android-side status helpers
+│       │       └── MainActivity.kt         # Compose onboarding screen
 │       └── res/
 │           ├── layout/keyboard_view.xml    # Placeholder IME view
 │           ├── values/{strings,themes}.xml
 │           └── xml/method.xml              # IME subtype declaration
 ├── core/                                   # Pure Kotlin/JVM library
 │   └── src/main/kotlin/io/.../core/
-│       └── Voxtral.kt                      # Placeholder
+│       ├── Voxtral.kt                      # Placeholder constants
+│       └── Onboarding.kt                   # Step state machine (testable)
 ├── gradle/
 │   ├── libs.versions.toml                  # Version catalog
 │   └── wrapper/

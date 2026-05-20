@@ -117,7 +117,7 @@ toetsenbord-skelet. Zie [`android-keyboard-plan.md`](android-keyboard-plan.md).
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
 | 024 | [Android IME scaffold in monorepo](done/024-android-ime-scaffold.md) | Done | High |
-| 025 | [IME enable + microphone permission UX](todo/025-ime-permissions-ux.md) | Todo | High |
+| 025 | [IME enable + microphone permission UX](done/025-ime-permissions-ux.md) | Done | High |
 | 026 | [IME UI: mic button, level meter, candidate strip](todo/026-ime-ui-mic-button.md) | Todo | High |
 
 ## Epic: Android Voice Keyboard — On-device inference

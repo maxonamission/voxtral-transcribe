@@ -2,7 +2,7 @@
 
 **Epic:** Android Voice Keyboard — Foundation
 **Target:** `android-keyboard/`
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 **Estimate:** Small
 
@@ -15,17 +15,18 @@ detecteert en de gebruiker er stap-voor-stap doorheen leidt.
 
 ## Acceptance criteria
 
-- [ ] Host-app launcher activity met onboarding-stappen
-- [ ] Stap 1: "Activeer Voxtral in Instellingen" → opent
-  `Settings.ACTION_INPUT_METHOD_SETTINGS`, detecteert na terugkeer of de IME
-  enabled is via `InputMethodManager.getEnabledInputMethodList()`
-- [ ] Stap 2: "Kies Voxtral als toetsenbord" → toont `showInputMethodPicker()`,
-  detecteert na terugkeer of de IME default is
-- [ ] Stap 3: "Geef microfoon-toegang" → `RECORD_AUDIO`-permissie via
+- [x] Host-app launcher activity met onboarding-stappen (`MainActivity`, Compose)
+- [x] Stap 1: opent `Settings.ACTION_INPUT_METHOD_SETTINGS`, detecteert
+  enabled status via `InputMethodManager.enabledInputMethodList`
+- [x] Stap 2: toont `showInputMethodPicker()`, detecteert default IME via
+  `Settings.Secure.DEFAULT_INPUT_METHOD`
+- [x] Stap 3: `RECORD_AUDIO`-permissie via
   `ActivityResultContracts.RequestPermission`
-- [ ] Iedere stap toont status (✓ klaar / ✗ open)
-- [ ] Bij volledig klaar: testveld om in te dicteren (placeholder voor v1)
-- [ ] Als gebruiker permissie weigert: uitleg + knop "Open app-instellingen"
+- [x] Iedere stap toont status (✓ of stapnummer)
+- [x] Bij volledig klaar: testveld zichtbaar
+- [x] Permanent weigeren detecteren via `shouldShowRequestPermissionRationale`
+  → knop schakelt naar "Open app-instellingen"
+- [x] Pure-logica `OnboardingState` in `:core` met unit tests
 
 ## Proposed approach
 
@@ -48,6 +49,17 @@ detecteert en de gebruiker er stap-voor-stap doorheen leidt.
 ## Dependencies
 
 - 024 (scaffold)
+
+## Notes from implementation
+
+- `OnboardingState` lives in `:core` (pure Kotlin) and is unit-tested. The
+  Android-specific snapshot lives in `:app` (`IMEStatus.snapshot(context)`).
+- Compose adoption starts here: BOM 2024.12.01, Material 3, Activity Compose,
+  and `lifecycle-runtime-compose` for the (relocated) `LocalLifecycleOwner`.
+- Re-check on resume via `DisposableEffect` + `LifecycleEventObserver` — picks
+  up changes after returning from system settings.
+- Mic permission is requested in the host app, not from the IME. Android
+  doesn't reliably let an IME show permission dialogs.
 
 ## References
 
