@@ -139,7 +139,7 @@ settings.
 
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
-| 031 | [Text insertion via InputConnection (preview + commit)](todo/031-input-connection-insertion.md) | Todo | High |
+| 031 | [Text insertion via InputConnection (preview + commit)](done/031-input-connection-insertion.md) | Done | High |
 | 032 | [Voice commands port to Kotlin](todo/032-voice-commands-kotlin.md) | Todo | Medium |
 | 033 | [Settings screen: language, delay, gain](todo/033-settings-screen.md) | Todo | Medium |
 

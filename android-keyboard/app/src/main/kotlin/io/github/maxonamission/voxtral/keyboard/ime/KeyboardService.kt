@@ -1,9 +1,11 @@
 package io.github.maxonamission.voxtral.keyboard.ime
 
 import android.inputmethodservice.InputMethodService
+import android.text.InputType
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
+import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.ImageButton
 import android.widget.ProgressBar
@@ -43,6 +45,8 @@ class KeyboardService : InputMethodService() {
     private var statusBackend: TextView? = null
 
     private var resolvedBackend: VoxtralBackend = VoxtralBackend.XNNPACK_CPU
+    private var lastPreliminary: String = ""
+    private var isSensitiveField: Boolean = false
 
     override fun onCreate() {
         super.onCreate()
@@ -92,10 +96,24 @@ class KeyboardService : InputMethodService() {
         return view
     }
 
+    override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
+        super.onStartInput(attribute, restarting)
+        isSensitiveField = attribute?.let(::isSensitiveInputType) ?: false
+        applySensitivityToUi()
+    }
+
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
         pipeline?.stop()
         audio.stop()
+        finishComposingIfNeeded()
+    }
+
+    override fun onFinishInput() {
+        super.onFinishInput()
+        finishComposingIfNeeded()
+        lastPreliminary = ""
+        isSensitiveField = false
     }
 
     override fun onDestroy() {
@@ -108,9 +126,11 @@ class KeyboardService : InputMethodService() {
     }
 
     private fun toggleMic() {
+        if (isSensitiveField) return
         if (audio.isCapturing.value) {
             pipeline?.stop()
             audio.stop()
+            finishComposingIfNeeded()
         } else {
             audio.start()
             pipeline?.start()
@@ -119,16 +139,61 @@ class KeyboardService : InputMethodService() {
 
     private fun onTranscriptionState(state: TranscriptionState) {
         levelMeter?.progress = (state.level * 1000f).toInt()
-        if (state.preliminary.isNotEmpty()) {
+        if (state.preliminary == lastPreliminary) return
+
+        if (state.preliminary.isEmpty()) {
+            finishComposingIfNeeded()
+            candidateStrip?.setText(R.string.candidate_placeholder)
+        } else {
+            currentInputConnection?.setComposingText(state.preliminary, 1)
             candidateStrip?.text = state.preliminary
+            lastPreliminary = state.preliminary
         }
     }
 
     private fun onCommit(event: CommitEvent) {
-        // 031 will wire this to InputConnection.commitText(). For 029 we just log
-        // and clear the candidate strip so the user can see committed text moving on.
-        Log.i(TAG, "commit: ${event.text}")
+        val ic = currentInputConnection ?: return
+        ic.finishComposingText()
+        ic.commitText(event.text, 1)
+        lastPreliminary = ""
         candidateStrip?.setText(R.string.candidate_placeholder)
+        Log.i(TAG, "commit: ${event.text}")
+    }
+
+    private fun finishComposingIfNeeded() {
+        if (lastPreliminary.isNotEmpty()) {
+            currentInputConnection?.finishComposingText()
+            lastPreliminary = ""
+        }
+    }
+
+    private fun applySensitivityToUi() {
+        val button = micButton ?: return
+        if (isSensitiveField) {
+            button.alpha = 0.4f
+            button.contentDescription = getString(R.string.status_no_mic_permission)
+            candidateStrip?.setText(R.string.status_no_mic_permission)
+        } else {
+            button.alpha = 1f
+            button.contentDescription = getString(R.string.mic_idle_content_description)
+            candidateStrip?.setText(R.string.candidate_placeholder)
+        }
+    }
+
+    private fun isSensitiveInputType(info: EditorInfo): Boolean {
+        val inputType = info.inputType
+        val cls = inputType and InputType.TYPE_MASK_CLASS
+        val variation = inputType and InputType.TYPE_MASK_VARIATION
+        return when {
+            cls == InputType.TYPE_CLASS_TEXT && (
+                variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+                    variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
+                    variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+                ) -> true
+            cls == InputType.TYPE_CLASS_NUMBER &&
+                variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD -> true
+            else -> false
+        }
     }
 
     private fun onCapturingChanged(capturing: Boolean) {
