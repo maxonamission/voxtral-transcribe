@@ -4,6 +4,10 @@ Offline Android voice keyboard (Input Method Editor) for on-device Voxtral
 transcription. See [`../stories/android-keyboard-plan.md`](../stories/android-keyboard-plan.md)
 for the full plan.
 
+> **First time testing this?** Read [`TESTING.md`](TESTING.md) — a step-by-step
+> guide for someone new to Android development to install Android Studio,
+> sideload the IME on a phone, and try the current build.
+
 > **Status**: scaffold (story 024). No transcription yet — placeholder keyboard
 > with a smoke-test button that inserts the literal text `voxtral`.
 
