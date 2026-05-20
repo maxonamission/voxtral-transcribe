@@ -116,9 +116,9 @@ toetsenbord-skelet. Zie [`android-keyboard-plan.md`](android-keyboard-plan.md).
 
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
-| 024 | [Android IME scaffold in monorepo](backlog/024-android-ime-scaffold.md) | Backlog | High |
-| 025 | [IME enable + microphone permission UX](backlog/025-ime-permissions-ux.md) | Backlog | High |
-| 026 | [IME UI: mic button, level meter, candidate strip](backlog/026-ime-ui-mic-button.md) | Backlog | High |
+| 024 | [Android IME scaffold in monorepo](todo/024-android-ime-scaffold.md) | Todo | High |
+| 025 | [IME enable + microphone permission UX](todo/025-ime-permissions-ux.md) | Todo | High |
+| 026 | [IME UI: mic button, level meter, candidate strip](todo/026-ime-ui-mic-button.md) | Todo | High |
 
 ## Epic: Android Voice Keyboard — On-device inference
 
@@ -127,10 +127,10 @@ en XNNPACK (CPU) fallback. Geen netwerk-afhankelijkheid in runtime.
 
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
-| 027 | [ExecuTorch runtime + Voxtral engine](backlog/027-executorch-voxtral-engine.md) | Backlog | High |
-| 028 | [First-run model download flow](backlog/028-model-download-flow.md) | Backlog | High |
-| 029 | [Streaming audio → text pipeline](backlog/029-streaming-pipeline.md) | Backlog | High |
-| 030 | [Backend selection: QNN NPU with CPU fallback](backlog/030-backend-selection-qnn.md) | Backlog | Medium |
+| 027 | [ExecuTorch runtime + Voxtral engine](todo/027-executorch-voxtral-engine.md) | Todo | High |
+| 028 | [First-run model download flow](todo/028-model-download-flow.md) | Todo | High |
+| 029 | [Streaming audio → text pipeline](todo/029-streaming-pipeline.md) | Todo | High |
+| 030 | [Backend selection: QNN NPU with CPU fallback](todo/030-backend-selection-qnn.md) | Todo | Medium |
 
 ## Epic: Android Voice Keyboard — Dictation parity
 
@@ -139,9 +139,9 @@ settings.
 
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
-| 031 | [Text insertion via InputConnection (preview + commit)](backlog/031-input-connection-insertion.md) | Backlog | High |
-| 032 | [Voice commands port to Kotlin](backlog/032-voice-commands-kotlin.md) | Backlog | Medium |
-| 033 | [Settings screen: language, delay, gain](backlog/033-settings-screen.md) | Backlog | Medium |
+| 031 | [Text insertion via InputConnection (preview + commit)](todo/031-input-connection-insertion.md) | Todo | High |
+| 032 | [Voice commands port to Kotlin](todo/032-voice-commands-kotlin.md) | Todo | Medium |
+| 033 | [Settings screen: language, delay, gain](todo/033-settings-screen.md) | Todo | Medium |
 
 ## Epic: Android Voice Keyboard — Reliability & distribution
 
@@ -149,9 +149,9 @@ Energie, thermisch gedrag, kwaliteitsmeting en uitlevering.
 
 | # | Story | Status | Priority |
 |---|-------|--------|----------|
-| 034 | [Battery & thermal management](backlog/034-battery-thermal.md) | Backlog | Medium |
-| 035 | [On-device benchmark suite (WER + latency)](backlog/035-benchmark-suite.md) | Backlog | Medium |
-| 036 | [APK release pipeline + sideload docs](backlog/036-apk-release-pipeline.md) | Backlog | Medium |
+| 034 | [Battery & thermal management](todo/034-battery-thermal.md) | Todo | Medium |
+| 035 | [On-device benchmark suite (WER + latency)](todo/035-benchmark-suite.md) | Todo | Medium |
+| 036 | [APK release pipeline + sideload docs](todo/036-apk-release-pipeline.md) | Todo | Medium |
 
 ### Dependencies within these epics
 
